@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Opereta.Models
 {
-    public class Employee : IdentityUser
+    public class ApplicationUser : IdentityUser
     {
         [Required]
         public string FirstName { get; set; }
@@ -18,13 +18,14 @@ namespace Opereta.Models
 
         [Required]
         public string PersonalNumber { get; set; }
-
-        public string Gender { get; set; }
-
-        public string Rank { get; set; }
+        [Required]
+        public Gender Gender { get; set; }
+        [Required]
+        public Position Position { get; set; }
 
         public DateTime HireDate { get; set; }
         public DateTime? ReleaseDate { get; set; }
+
 
     }
 }
