@@ -9,6 +9,11 @@ namespace Opereta.Models
 {
     public class ApplicationUser : IdentityUser
     {
+        public ApplicationUser()
+        {
+            this.InvolvedTasks = new HashSet<TaskEmployee>();
+            this.MeetingsToParticipate = new HashSet<MeetingEmployee>();
+        }
         [Required]
         public string FirstName { get; set; }
 
@@ -23,9 +28,13 @@ namespace Opereta.Models
         [Required]
         public Position Position { get; set; }
 
-        public DateTime HireDate { get; set; }
+        public DateTime HireDate { get; set; } = DateTime.UtcNow;
         public DateTime? ReleaseDate { get; set; }
 
+        public int DepartmentId { get; set; }
+        public virtual Department Department { get; set; }
 
+        public ICollection<MeetingEmployee> MeetingsToParticipate { get; set; }
+        public ICollection<TaskEmployee> InvolvedTasks { get; set; }
     }
 }
