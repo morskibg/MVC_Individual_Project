@@ -152,15 +152,13 @@ namespace Opereta.Data.Migrations
 
                     b.Property<bool>("EmailConfirmed");
 
-                    b.Property<string>("FirstName")
-                        .IsRequired();
+                    b.Property<string>("FirstName");
 
                     b.Property<int>("Gender");
 
                     b.Property<DateTime>("HireDate");
 
-                    b.Property<string>("LastName")
-                        .IsRequired();
+                    b.Property<string>("LastName");
 
                     b.Property<bool>("LockoutEnabled");
 
@@ -174,8 +172,7 @@ namespace Opereta.Data.Migrations
 
                     b.Property<string>("PasswordHash");
 
-                    b.Property<string>("PersonalNumber")
-                        .IsRequired();
+                    b.Property<string>("PersonalNumber");
 
                     b.Property<string>("PhoneNumber");
 
@@ -218,8 +215,7 @@ namespace Opereta.Data.Migrations
 
                     b.Property<string>("HeadOfDepartmentId");
 
-                    b.Property<string>("Name")
-                        .IsRequired();
+                    b.Property<string>("Name");
 
                     b.HasKey("Id");
 
@@ -283,8 +279,7 @@ namespace Opereta.Data.Migrations
 
                     b.Property<bool>("IsOverdue");
 
-                    b.Property<string>("Name")
-                        .IsRequired();
+                    b.Property<string>("Name");
 
                     b.Property<DateTime>("PlanedEndTime");
 

@@ -14,18 +14,16 @@ namespace Opereta.Models
             this.InvolvedTasks = new HashSet<TaskEmployee>();
             this.MeetingsToParticipate = new HashSet<MeetingEmployee>();
         }
-        [Required]
+       
         public string FirstName { get; set; }
 
-        [Required]
         public string LastName { get; set; }
         public int Age { get; set; }
 
-        [Required]
         public string PersonalNumber { get; set; }
-        [Required]
+
         public Gender Gender { get; set; }
-        [Required]
+
         public Position Position { get; set; }
 
         public DateTime HireDate { get; set; } = DateTime.UtcNow;

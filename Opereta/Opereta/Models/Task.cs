@@ -16,7 +16,6 @@ namespace Opereta.Models
             
         }
 
-        [Required]
         public string Name { get; set; }
 
         public DateTime CreatedOn { get; set; } = DateTime.UtcNow;

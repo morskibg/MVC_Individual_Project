@@ -1,0 +1,103 @@
+.app {
+    width: 100%;
+    height: 100%;
+}
+
+nav a {
+    color: black;
+    font-weight: bold;
+}
+
+nav input {
+    color: black;
+    font-weight: bold;
+}
+
+.half-width {
+    width: 50%;
+}
+
+textarea {
+    resize: none;
+}
+
+.eventures-bg-color {
+    background-color: #AFEEEE;
+    color: black;
+}
+
+.margin-card {
+    margin-right: 10px;
+    margin-bottom: 10px;
+}
+
+.logout-button {
+    cursor: pointer;
+    border: none;
+}
+
+.nav-link-dark {
+    color: #0099cc;
+}
+
+.hr-black {
+    color: black;
+    background-color: black;
+    height: 2px;
+}
+
+.hr-blue {
+    color: #AFEEEE;
+    background-color: #AFEEEE;
+}
+
+.hr-grey {
+    color: #c0c0c0;
+    background-color: #c0c0c0;
+    height: 2px;
+}
+
+.hr-2 {
+    height: 2px;
+}
+
+.hr-1 {
+    height: 1px;
+}
+
+.table-hover > tbody > tr:hover {
+    background-color: #AFEEEE;
+    color: black;
+}
+
+footer {
+    margin-top: 5px;
+    bottom: 0;
+    border: 0;
+    width: 98%;
+}
+
+.h4-grey {
+    color: #c0c0c0;
+}
+
+.button-holder {
+    margin-bottom: 10px;
+}
+
+form label{
+    font-weight:bold;
+}
+
+.label-not-bold {
+    font-weight: normal;
+}
+
+.label-center {
+    display: block;
+    text-align: center;
+}
+
+.names {
+    font-weight: bold; 
+}

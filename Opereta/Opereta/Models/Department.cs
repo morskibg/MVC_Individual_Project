@@ -14,8 +14,7 @@ namespace Opereta.Models
             this.Members = new HashSet<ApplicationUser>();
         }
         public int Id { get; set; }
-
-        [Required]
+       
         public string Name { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
