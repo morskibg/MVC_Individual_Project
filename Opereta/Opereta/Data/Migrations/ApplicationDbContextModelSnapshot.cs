@@ -85,11 +85,9 @@ namespace Opereta.Data.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
                 {
-                    b.Property<string>("LoginProvider")
-                        .HasMaxLength(128);
+                    b.Property<string>("LoginProvider");
 
-                    b.Property<string>("ProviderKey")
-                        .HasMaxLength(128);
+                    b.Property<string>("ProviderKey");
 
                     b.Property<string>("ProviderDisplayName");
 
@@ -120,11 +118,9 @@ namespace Opereta.Data.Migrations
                 {
                     b.Property<string>("UserId");
 
-                    b.Property<string>("LoginProvider")
-                        .HasMaxLength(128);
+                    b.Property<string>("LoginProvider");
 
-                    b.Property<string>("Name")
-                        .HasMaxLength(128);
+                    b.Property<string>("Name");
 
                     b.Property<string>("Value");
 
@@ -204,6 +200,35 @@ namespace Opereta.Data.Migrations
                     b.ToTable("AspNetUsers");
                 });
 
+            modelBuilder.Entity("Opereta.Models.CompanyTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<DateTime>("ActualEndTime");
+
+                    b.Property<string>("ApplicationUserId");
+
+                    b.Property<DateTime>("CreatedOn");
+
+                    b.Property<bool>("IsInProgress");
+
+                    b.Property<bool>("IsOverdue");
+
+                    b.Property<string>("Name");
+
+                    b.Property<DateTime>("PlanedEndTime");
+
+                    b.Property<int>("Priority");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationUserId");
+
+                    b.ToTable("CompanyTasks");
+                });
+
             modelBuilder.Entity("Opereta.Models.Department", b =>
                 {
                     b.Property<int>("Id")
@@ -263,44 +288,17 @@ namespace Opereta.Data.Migrations
                     b.ToTable("MeetingEmployee");
                 });
 
-            modelBuilder.Entity("Opereta.Models.Task", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<DateTime>("ActualEndTime");
-
-                    b.Property<string>("ApplicationUserId");
-
-                    b.Property<DateTime>("CreatedOn");
-
-                    b.Property<bool>("IsInProgress");
-
-                    b.Property<bool>("IsOverdue");
-
-                    b.Property<string>("Name");
-
-                    b.Property<DateTime>("PlanedEndTime");
-
-                    b.Property<int>("Priority");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ApplicationUserId");
-
-                    b.ToTable("Tasks");
-                });
-
             modelBuilder.Entity("Opereta.Models.TaskEmployee", b =>
                 {
                     b.Property<string>("EmployeeId");
 
                     b.Property<int>("TaskId");
 
+                    b.Property<int?>("CompanyTaskId");
+
                     b.HasKey("EmployeeId", "TaskId");
 
-                    b.HasIndex("TaskId");
+                    b.HasIndex("CompanyTaskId");
 
                     b.ToTable("TaskEmployee");
                 });
@@ -358,6 +356,13 @@ namespace Opereta.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("Opereta.Models.CompanyTask", b =>
+                {
+                    b.HasOne("Opereta.Models.ApplicationUser", "Supervisor")
+                        .WithMany()
+                        .HasForeignKey("ApplicationUserId");
+                });
+
             modelBuilder.Entity("Opereta.Models.Department", b =>
                 {
                     b.HasOne("Opereta.Models.ApplicationUser", "HeadOfDepartment")
@@ -391,23 +396,15 @@ namespace Opereta.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
-            modelBuilder.Entity("Opereta.Models.Task", b =>
-                {
-                    b.HasOne("Opereta.Models.ApplicationUser", "Supervisor")
-                        .WithMany()
-                        .HasForeignKey("ApplicationUserId");
-                });
-
             modelBuilder.Entity("Opereta.Models.TaskEmployee", b =>
                 {
+                    b.HasOne("Opereta.Models.CompanyTask", "CompanyTask")
+                        .WithMany("Participants")
+                        .HasForeignKey("CompanyTaskId");
+
                     b.HasOne("Opereta.Models.ApplicationUser", "Employee")
                         .WithMany("InvolvedTasks")
                         .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("Opereta.Models.Task", "Task")
-                        .WithMany("Participants")
-                        .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 #pragma warning restore 612, 618

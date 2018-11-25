@@ -10,7 +10,7 @@ namespace Opereta.Data
     public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {
         public DbSet<ApplicationUser> Employees { get; set; }
-        public DbSet<Task> Tasks { get; set; }
+        public DbSet<CompanyTask> CompanyTasks { get; set; }
         public DbSet<Meeting> Meetings { get; set; }
         public DbSet<Department> Departments { get; set; }
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
