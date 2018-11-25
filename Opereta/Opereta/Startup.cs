@@ -12,6 +12,9 @@ using Microsoft.EntityFrameworkCore;
 using Opereta.Data;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Opereta.Extensions;
+using Opereta.Models;
+
 
 namespace Opereta
 {
@@ -37,8 +40,15 @@ namespace Opereta
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(
                     Configuration.GetConnectionString("DefaultConnection")));
-            services.AddDefaultIdentity<IdentityUser>()
-                .AddEntityFrameworkStores<ApplicationDbContext>();
+
+            services.AddIdentity<ApplicationUser, IdentityRole>()
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
+
+            //services.AddDefaultIdentity<IdentityUser>()
+            //    .AddEntityFrameworkStores<ApplicationDbContext>();
+
+            
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
         }
@@ -59,12 +69,19 @@ namespace Opereta
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
+            app.UseSeedRolesAndAdminMiddleware();
             app.UseCookiePolicy();
 
             app.UseAuthentication();
 
             app.UseMvc(routes =>
             {
+                
+                routes.MapRoute(
+                    name: "areas",
+                    template: "{area:exists}/{controller=Home}/{action=Index}/{id?}"
+                );
+
                 routes.MapRoute(
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
