@@ -235,11 +235,25 @@ def upload_itns():
         df = pd.read_excel(request.files.get('file_'))
         if all(elem in list(df.columns)  for elem in ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group', 'price', 'zko', 
                                                       'akciz', 'has_grid_services', 'has_spot_price', 'erp', 'address', 'description', 'is_virtual', 'virtual_parent_itn', 'forecast_montly_consumption']):
+            arr = []
+            for index,row in df.iterrows():
+                contract = Contract.query.filter(Contract.internal_id == row['internal_id']).first()
+                if contract is None :
+                    flash(f'Itn: {row.itn} has not got a contract !')
+                else:                    
+                    if contract.start_date is None:
+                        new_start_date =  __convert_date_to_utc__("Europe/Sofia",row.activation_date) 
+                        new_end_date = new_start_date + dt.timedelta(hours =contract.duration_in_days * 24 + 23)
+                        contract.update({'start_date':new_start_date, 'end_date':new_end_date})
+                        # flash(f'start_date : {contract.start_date}')
+                        # flash(f'end_date : {contract.end_date}')
 
+                        
+                # arr.append(contract.start_date)
        
 
-            flash('matched','info')
-            flash('github_proba','info')
+            # flash(arr,'info')
+            
         else:
             flash('Upload failed','danger') 
 
@@ -336,6 +350,8 @@ def table():
 def __convert_date_to_utc__(time_zone, dt_str, t_format = "%Y-%m-%d"):
     if(dt_str == ''):
         return None
+    if  isinstance(dt_str, dt.date):
+        dt_str = dt_str.strftime(t_format)
     naive = dt.datetime.strptime (dt_str, t_format)
     local = pytz.timezone (time_zone)
     local_date = local.localize(naive, is_dst=True)
