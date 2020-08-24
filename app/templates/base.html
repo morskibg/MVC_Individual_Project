@@ -1,0 +1,92 @@
+
+{% extends 'bootstrap/base.html' %}
+{% import "bootstrap/wtf.html" as wtf %}
+{% block styles %}
+{{super()}}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">     
+{% endblock %}
+
+
+
+
+{% block title %}
+    {% if title %}{{ title }} - EndUsersApp{% else %}Welcome to EndUsersApp{% endif %}
+    
+{% endblock %}
+
+
+<div class="container-fluid">
+    {% block navbar %}
+    
+        <nav class="navbar navbar-proba">
+            <div class="container-fluid">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="{{ url_for('index') }}">EndUsersApp</a>
+                </div>
+                <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                    <ul class="nav navbar-nav">
+                        <li><a class="nav-link"  href="{{ url_for('index') }}">Home</a></li>
+                        
+                    </ul>
+                    <ul class="nav navbar-nav navbar-right">
+                        {% if current_user.is_anonymous %}
+                        <li><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                        {% else %}
+                        <li><a class="nav-link" href="{{ url_for('add_contract') }}">Add Contract</a></li>
+                        <li><a class="nav-link" href="{{ url_for('add_invoicing_group') }}">Add Invoicing Group</a></li>
+                        <li><a class="nav-link" href="{{ url_for('add_itn') }}">Add ITN</a></li>                        
+                        <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    {% endblock %}
+    {% block content %}
+        <div class="container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                <!-- Categories: success (green), info (blue), warning (yellow), danger (red) -->
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible" role="alert">
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                            <strong>{{ message }}</strong> 
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+    
+            <div class = 'row'> 
+                {% block app_content %}{% endblock %}
+            </div> 
+        </div>
+    {% endblock %}
+</div>
+
+{% block scripts %}
+    {{ super() }}
+    {{ moment.include_moment() }}
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.47/js/bootstrap-datetimepicker.min.js"></script>
+    <script type="text/javascript">
+      $(function () {
+        $('#sign_datepicker').datetimepicker({
+            format:'YYYY-MM-DD'
+        });
+        $('#start_datepicker').datetimepicker({
+            format:'YYYY-MM-DD'
+        });
+        $('#end_datepicker').datetimepicker({
+            format:'YYYY-MM-DD'
+            
+        });
+      });
+    </script>
+   
+    
+{% endblock %}

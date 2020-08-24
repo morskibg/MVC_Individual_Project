@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+
+{% block app_content %} 
+              
+    <div class='col-md-12'>                                       
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-info" role="alert">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}                           
+        <h1>Add ITN</h1> 
+        <div id="example"></div>
+    </div> 
+       
+{% endblock %}
+
+
+
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='node_modules/handsontable/dist/handsontable.full.min.js')}}"></script>
+    <link href="{{ url_for('static', filename='node_modules/handsontable/dist/handsontable.full.min.css')}}" rel="stylesheet" media="screen">
+    <script>
+        var data = [
+            ['', 'Ford', 'Tesla', 'Toyota', 'Honda','Ford', 'Tesla', 'Toyota', 'Honda'],
+            ['2017', 10, 11, 12, 13, 10, 11, 12, 13],
+            ['2018', 20, 11, 14, 13, 10, 11, 12, 13],
+            ['2019', 30, 15, 12, 13, 10, 11, 12, 13]
+            ];
+
+        var container = document.getElementById('example');
+        var hot = new Handsontable(container, {
+        data: data,
+        rowHeaders: true,
+        colHeaders: true,
+        filters: true,
+        dropdownMenu: true,
+        licenseKey: 'non-commercial-and-evaluation'
+        });
+        
+    </script>
+{% endblock %}

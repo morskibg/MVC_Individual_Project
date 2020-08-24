@@ -1,0 +1,28 @@
+.navbar-proba {
+    background-color: #f35a13;
+    /* border-color: #1d1c1c; */
+}
+
+/* .navbar-right a,.navbar-nav a,a.navbar-brand{
+    color:whitesmoke;
+}  */
+
+.nav-link, a.navbar-brand {
+    color:whitesmoke;
+}
+.nav-link:hover,
+.nav-link:hover {
+    color: #000000 ;
+    background-color: #ffb833 !important;
+
+}
+.navbar-toggle{
+    background-color: #ecf011fc;
+}
+
+/* .alert {
+    padding-right: 15px;
+    padding-left: 15px;
+    margin-right: auto;
+    margin-left: auto;
+} */
