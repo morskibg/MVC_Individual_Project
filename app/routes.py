@@ -239,6 +239,7 @@ def upload_itns():
        
 
             flash('matched','info')
+            flash('github_proba','info')
         else:
             flash('Upload failed','danger') 
 
