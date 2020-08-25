@@ -4,6 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.sql import label
 
 
+
 @app.shell_context_processor
 def make_shell_context():
     return {'db': db, 'Contractor': Contractor, 'Contract': Contract, 'ContractType': ContractType,'AddressMurs':AddressMurs,

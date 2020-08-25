@@ -1,3 +1,8 @@
+import os
+import xlrd
+import time,re
+import sys, pytz, datetime as dt
+import pandas as pd
 from flask import render_template, flash, redirect, url_for, request
 from app import app
 from app.forms import (
@@ -5,14 +10,20 @@ from app.forms import (
     UploadInvGroupsForm, UploadContractsForm, UploadItnsForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
-import sys, pytz, datetime as dt
+ 
 from werkzeug.urls import url_parse
 from app import db
-import pandas as pd
+
 from werkzeug.utils import secure_filename
-import os
-import xlrd
-import time,re
+from app.helper_functions import (get_contract_by_internal_id,
+                                 convert_date_to_utc,
+                                 validate_ciryllic,
+                                 set_contarct_dates,
+
+)
+
+
+
 
 MONEY_ROUND = 2
 
@@ -78,11 +89,11 @@ def add_contract():
     form.contract_type_id.choices = [(c.id, c.name) for c in ContractType.query.order_by(ContractType.id)]
     if form.validate_on_submit():
 
-        signing_date_utc =  __convert_date_to_utc__("Europe/Sofia",form.signing_date.data)
-        start_date_utc =  __convert_date_to_utc__("Europe/Sofia",form.start_date.data)
-        end_date_utc =  __convert_date_to_utc__("Europe/Sofia",form.end_date.data) + dt.timedelta(hours = 23)
+        signing_date_utc =  convert_date_to_utc("Europe/Sofia",form.signing_date.data)
+        start_date_utc =  convert_date_to_utc("Europe/Sofia",form.start_date.data)
+        end_date_utc =  convert_date_to_utc("Europe/Sofia",form.end_date.data) + dt.timedelta(hours = 23)
 
-        print(__convert_date_to_utc__("Europe/Sofia",form.signing_date.data),file=sys.stdout)    
+        print(convert_date_to_utc("Europe/Sofia",form.signing_date.data),file=sys.stdout)    
         current_conract = Contract(internal_id = form.internal_id.data, contractor_id = form.contractor_id.data, subject = form.subject.data, \
                         parent_id = form.parent_contract_internal_id.data, \
                         signing_date = signing_date_utc, \
@@ -124,7 +135,7 @@ def add_itn():
     
     if form.validate_on_submit():
         
-        activation_date_utc =  __convert_date_to_utc__("Europe/Sofia",form.activation_date.data)
+        activation_date_utc =  convert_date_to_utc("Europe/Sofia",form.activation_date.data)
         
         #1. ADDRESS
         form_addr = form.address.data.lower() if form.address.data.lower() != '' else 'none'
@@ -237,32 +248,26 @@ def upload_itns():
                                                       'akciz', 'has_grid_services', 'has_spot_price', 'erp', 'address', 'description', 'is_virtual', 'virtual_parent_itn', 'forecast_montly_consumption']):
             arr = []
             for index,row in df.iterrows():
-                contract = Contract.query.filter(Contract.internal_id == row['internal_id']).first()
-                if contract is None :
-                    flash(f'Itn: {row.itn} has not got a contract !')
-                else:                    
-                    if contract.start_date is None:
-                        new_start_date =  __convert_date_to_utc__("Europe/Sofia",row.activation_date) 
-                        new_end_date = new_start_date + dt.timedelta(hours =contract.duration_in_days * 24 + 23)
-                        contract.update({'start_date':new_start_date, 'end_date':new_end_date})
-                        # flash(f'start_date : {contract.start_date}')
-                        # flash(f'end_date : {contract.end_date}')
+                
+                curr_contract = get_contract_by_internal_id(row['internal_id'])
+                if curr_contract is None :
+                    flash(f'Itn: {row.itn} has not got an contract !')
+                elif curr_contract.start_date is None:
+                    set_contarct_dates(curr_contract, row['activation_date'])
+                else:
+                    
+                    flash('OK','success')
 
+
+                   
                         
-                # arr.append(contract.start_date)
-       
-
-            # flash(arr,'info')
+      
             
         else:
             flash('Upload failed','danger') 
 
 
     return render_template('upload_itns.html', title='Upload ITNs', form=form)
-
-
-
-
 
 
 @app.route('/upload_contracts/<start>/<end>/', methods=['GET', 'POST'])
@@ -282,8 +287,8 @@ def upload_contracts(start,end):
                                                     'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
                                                     'notes']):
 
-            tks = df['internal_id'].apply(lambda x: __validate_ciryllic__(x))            
-            parent_tks = df['parent_id'].apply(lambda x: __validate_ciryllic__(x) if x != 0 else True)
+            tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
+            parent_tks = df['parent_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
             all_cyr = tks.all()
             all_cyr_parent = parent_tks.all()
             if not (all_cyr & all_cyr_parent):
@@ -311,8 +316,8 @@ def upload_contracts(start,end):
             df['is_work_day'] = df['is_work_day'].apply(lambda x: work_day_dict[x.strip()] if(work_day_dict.get(str(x).strip())) else 0 )
             t_format = '%Y-%m-%dT%H:%M'
             contracts = [Contract(internal_id = x[1]['internal_id'], contractor_id = Contractor.query.filter(Contractor.name == x[1]['contractor']).first().id, subject = 'None', parent_id =  x[1]['parent_id_initial_zero'], \
-                        signing_date =  __convert_date_to_utc__("Europe/Sofia",x[1]['sign_date'].strftime(t_format),t_format)  , \
-                        start_date = __convert_date_to_utc__("Europe/Sofia", x[1]['start_date'].strftime(t_format),t_format), end_date = __convert_date_to_utc__("Europe/Sofia", x[1]['end_date'].strftime(t_format),t_format) , duration_in_days = x[1]['duration_in_days'], invoicing_interval = x[1]['invoicing_interval'], maturity_interval = x[1]['maturity_interval'], \
+                        signing_date =  convert_date_to_utc("Europe/Sofia",x[1]['sign_date'].strftime(t_format),t_format)  , \
+                        start_date = convert_date_to_utc("Europe/Sofia", x[1]['start_date'].strftime(t_format),t_format), end_date = convert_date_to_utc("Europe/Sofia", x[1]['end_date'].strftime(t_format),t_format) , duration_in_days = x[1]['duration_in_days'], invoicing_interval = x[1]['invoicing_interval'], maturity_interval = x[1]['maturity_interval'], \
                         contract_type_id = x[1]['contract_type'], is_work_days = x[1]['is_work_day'], automatic_renewal_interval = x[1]['automatic_renewal_interval'], collateral_warranty = x[1]['collateral_warranty'], \
                         notes =  x[1]['notes']) for x in df.iterrows()]
             # start = time.time() 
@@ -347,25 +352,14 @@ def table():
 
 
 
-def __convert_date_to_utc__(time_zone, dt_str, t_format = "%Y-%m-%d"):
-    if(dt_str == ''):
-        return None
-    if  isinstance(dt_str, dt.date):
-        dt_str = dt_str.strftime(t_format)
-    naive = dt.datetime.strptime (dt_str, t_format)
-    local = pytz.timezone (time_zone)
-    local_date = local.localize(naive, is_dst=True)
-    return local_date.astimezone(pytz.utc)
 
-def __validate_ciryllic__(data):
-    
-    no_digit_internal_id = re.sub(r'[\d]', '', str(data))
-    for c in no_digit_internal_id:
-        asci = ord(c)
-        if( (asci >= 65)&(asci <= 90)|(asci >= 97)&(asci <= 122)) :
-            return False
-    else:
-        return True 
+
+
+
+# def __get_contract_by_nternal_id__(internal_id):
+#     return Contract.query.filter(Contract.internal_id == internal_id).first()
+
+
 
 
     
