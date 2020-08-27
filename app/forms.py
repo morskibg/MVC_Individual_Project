@@ -52,10 +52,13 @@ class AddItnForm(FlaskForm):
     address = StringField('Address', validators=[DataRequired()], default = 'None')
     description = StringField('Description', validators=[DataRequired()], default = 'None')    
     virtual_parent_id = SelectField('Virtual Parent ITN', validators=[Optional()])
+    forecast_vol = DecimalField('Forecasted Monthly Consumption [MWh]',validators=[Optional()])
+    file_ = FileField('Browse for hourly forcast schedule',validators=[Optional()])
     is_virtual = BooleanField('Is Virtual', default = False)
     has_grid_services = BooleanField('Include Grid Services', default = True)
     has_spot_price = BooleanField('Has Spot Price', default = False)
     has_balancing = BooleanField('Include Balancing Services', default = True)
+
 
     submit = SubmitField('Add ITN')
 
@@ -157,6 +160,15 @@ class NewContractForm(FlaskForm):
     def validate_notes(self, notes):        
         if len(notes.data) > 512:
             raise ValidationError('Notes must be less than 512 characters')
+
+class StpCoeffsForm(FlaskForm):
+
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    file_ = FileField('Browse for stp coefficients file')
+
+    submit = SubmitField('Add Stp Coeffs')
+
     
 
 

@@ -1,13 +1,16 @@
+import sys
 import datetime as dt
-# from datetime import datetime
 import pandas as pd
 import numpy as np
-import decimal 
+from decimal import Decimal 
+from flask import g
 from app import db
 from sqlalchemy.sql import func
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import login
+
+
 
 class BaseModel(db.Model):
     __abstract__ = True
@@ -56,7 +59,7 @@ class Contractor(BaseModel):
     vat_number = db.Column(db.String(32), nullable=True)
     email = db.Column(db.String(128), nullable=True)
     acc_411 = db.Column(db.String(16), unique=True, nullable = False)
-    last_updated = db.Column(db.DateTime, onupdate=dt.datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
 
     contracts = db.relationship("Contract", back_populates="contractor", lazy="dynamic")
     invoice_groups = db.relationship("InvoiceGroup", back_populates="contractor", lazy="dynamic")
@@ -84,7 +87,7 @@ class Contract(BaseModel):
     automatic_renewal_interval = db.Column(db.SmallInteger, nullable=True)
     collateral_warranty = db.Column(db.String(256), nullable=True)
     notes = db.Column(db.String(512), nullable=True)
-    last_updated = db.Column(db.DateTime, onupdate=dt.datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
 
     contractor = db.relationship('Contractor', back_populates = 'contracts')
     contract_type = db.relationship('ContractType', back_populates = 'contracts')
@@ -114,15 +117,16 @@ class ItnMeta(BaseModel):
     erp_id = db.Column(db.SmallInteger, db.ForeignKey('erp.id', ondelete='CASCADE'), nullable=False)
     is_virtual = db.Column(db.Boolean, nullable = False, default = 0)
     virtual_parent_itn = db.Column(db.String(33),nullable = True)
-    last_updated = db.Column(db.DateTime, onupdate=dt.datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
 
     address = db.relationship('AddressMurs', back_populates = 'itns')
     erp = db.relationship('Erp', back_populates = 'itns')
     sub_contracts = db.relationship("SubContract", back_populates="meta", lazy="dynamic")
     leaving_itns = db.relationship('LeavingItn', back_populates = 'meta', lazy="dynamic")
+    itn_schedules = db.relationship('ItnSchedule', back_populates = 'meta', lazy="dynamic")
 
     def __repr__(self):
-        return '<ItnMeta : {}, {}, {}>'.format(self.itn, self.address, self.grid_voltage)
+        return '<ItnMeta : {}, {}, {}, {}, {}, {}, {}>'.format(self.itn,self.description,  self.grid_voltage,self.address_id,self.erp_id,self.is_virtual,self.virtual_parent_itn)
 
 
 class AddressMurs(BaseModel):
@@ -220,7 +224,7 @@ class InvoiceGroup(BaseModel):
     sub_contracts = db.relationship("SubContract", back_populates="invoice_group", lazy="dynamic")
 
     def __repr__(self):
-        return '<InvoiceGroup: {}, Contractor_id {}>'.format(self.name, self.contractor_id)
+        return '<InvoiceGroup:{}, {}, Contractor_id {}>'.format(self.id, self.name, self.contractor_id)
 
 
 class SubContract(BaseModel):
@@ -237,6 +241,8 @@ class SubContract(BaseModel):
     has_grid_services = db.Column(db.Boolean, nullable = False, default = 0)
     has_spot_price = db.Column(db.Boolean, nullable = False, default = 0)
     has_balancing = db.Column(db.Boolean, nullable=False)
+    forecast_vol = db.Column(db.Numeric(12,6), nullable=False)
+    last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate = dt.datetime.utcnow)
 
 
     contract = db.relationship('Contract', back_populates = 'sub_contracts')   
@@ -246,7 +252,9 @@ class SubContract(BaseModel):
     
 
     def __repr__(self):
-        return (f'<{self.itn}, {self.contract_id}, {self.object_name}, {self.price}, {self.invoice_group_id}, {self.measuring_type_id}, {self.start_date}, {self.end_date}, {self.zko}, {self.akciz}, {self.has_grid_services}, {self.has_spot_price}, {self.has_balancing}>')
+        return (f'<{self.itn}, {self.contract_id}, {self.object_name}, {self.price}, \
+        {self.invoice_group_id}, {self.measuring_type_id}, {self.start_date}, {self.end_date},  \
+        {self.zko}, {self.akciz}, {self.has_grid_services}, {self.has_spot_price}, {self.has_balancing}, {self.forecast_vol}>')
 
 class StpCoeffs(BaseModel):
     utc = db.Column(db.DateTime, primary_key = True)
@@ -256,7 +264,7 @@ class StpCoeffs(BaseModel):
     measuring_type = db.relationship('MeasuringType', back_populates = 'stp_coeffs')
 
     def __repr__(self):
-        return '<Utc: {}, StpCoeffs {}>'.format(self.utc, self.contractor.name)
+        return '<Utc: {}, StpCoeffs {}>'.format(self.utc, self.value)
 
 class ItnSchedule(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
@@ -265,15 +273,67 @@ class ItnSchedule(BaseModel):
     reported_vol = db.Column(db.Numeric(12,6), nullable=False)
     price = db.Column(db.Numeric(8,4), nullable=False)
 
+    meta = db.relationship('ItnMeta', back_populates = 'itn_schedules')
     #sub_contracts = db.relationship("SubContract", back_populates="measuring_type", lazy="dynamic")
 
     def __repr__(self):
         return '<itn: {}, utc: {}, forecast_vol: {}, reported_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.reported_vol, self.price)
 
+    @staticmethod
+    def generate_bulk_list(itn, start_date, end_date, forecast_vol, price, measuring_type_id):
+        time_series = pd.date_range(start=start_date, end=end_date, freq='H')
+        
+        df = pd.DataFrame(time_series, columns = ['utc'])
+        df['itn'] = itn  
+        df['price'] = price
+        # print(measuring_type_id,file=sys.stdout)
+        stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == measuring_type_id).statement, db.session.bind)
+        
+        if not stp_df.empty:
+            df = df.merge(stp_df, on = 'utc', how = 'left')
+            df = df.fillna(0)
+            df['forecast_vol'] = df['value'].apply(lambda x: Decimal(str(x)) * Decimal(str(forecast_vol)))
+            
+        else:            
+            forcasted_schedule = g.pop('forcasted_schedule', None)
+            forcasted_schedule.set_index('date', inplace = True)
+            forcasted_schedule.index = forcasted_schedule.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_localize(None)
+            forcasted_schedule.reset_index(inplace = True)
+            forcasted_schedule.rename(columns = {forcasted_schedule.columns[0]:'utc'}, inplace = True)
+            df = df.merge(forcasted_schedule, on = 'utc', how = 'left')
+            df = df.fillna(0)
+            df['forecast_vol'] = df[forcasted_schedule.columns[1]].apply(lambda x: Decimal(str(x)))
+            
+        df['reported_vol'] = -1        
+        list_of_dict = []
+        for row in list(df.to_records()): 
+                     
+            list_of_dict.append(dict(itn = row['itn'], 
+                            utc = dt.datetime.strptime(np.datetime_as_string(row['utc'], unit='s'), '%Y-%m-%dT%H:%M:%S'),                                                      
+                            forecast_vol = row['forecast_vol'],
+                            reported_vol = Decimal(str(row['reported_vol'])),
+                            price = Decimal(str(row['price']))))
+                          
+        return list_of_dict
+
+    @classmethod
+    def autoinsert_new(cls, mapper, connection, target):
+        
+        sub_contract = target  
+        print(target, file = sys.stdout)      
+        bulk_list = cls.generate_bulk_list(itn = sub_contract.itn, start_date = sub_contract.start_date,
+                 end_date = sub_contract.end_date, forecast_vol=sub_contract.forecast_vol, price=sub_contract.price, 
+                 measuring_type_id = sub_contract.measuring_type_id )
+                 
+        db.session.bulk_insert_mappings(ItnSchedule, bulk_list)
+
+
+
+
 class LeavingItn(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     date = db.Column(db.DateTime, primary_key = True)
-
+# 
     meta = db.relationship("ItnMeta", back_populates="leaving_itns")
 
 
@@ -290,7 +350,7 @@ class IncomingItn(BaseModel):
         return '<itn: {}, check-in date: {}>'.format(self.itn, self.date)
 
 
-
-
+db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
+# db.event.listen(ItnSchedule, 'after_insert', ItnSchedule.autoinsert_new)
 
 

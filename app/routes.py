@@ -3,14 +3,14 @@ import xlrd
 import time,re
 import sys, pytz, datetime as dt
 import pandas as pd
-from flask import render_template, flash, redirect, url_for, request
+from flask import render_template, flash, redirect, url_for, request, g
 from app import app
 from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm)
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
- 
+
 from werkzeug.urls import url_parse
 from app import db
 
@@ -19,6 +19,12 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  convert_date_to_utc,
                                  validate_ciryllic,
                                  set_contarct_dates,
+                                 get_address,
+                                 get_invoicing_group,
+                                 get_itn_meta,
+                                 generate_utc_time_series,
+                                 get_subcontract,
+                                 get_erp_id_by_name,
 
 )
 
@@ -41,7 +47,7 @@ def index():
 def login():
 	
     if current_user.is_authenticated:	   
-        print('is_authenticated', file=sys.stdout)
+        # print('is_authenticated', file=sys.stdout)
         return redirect(url_for('index'))
 
     form = LoginForm()  
@@ -93,7 +99,7 @@ def add_contract():
         start_date_utc =  convert_date_to_utc("Europe/Sofia",form.start_date.data)
         end_date_utc =  convert_date_to_utc("Europe/Sofia",form.end_date.data) + dt.timedelta(hours = 23)
 
-        print(convert_date_to_utc("Europe/Sofia",form.signing_date.data),file=sys.stdout)    
+        # print(convert_date_to_utc("Europe/Sofia",form.signing_date.data),file=sys.stdout)    
         current_conract = Contract(internal_id = form.internal_id.data, contractor_id = form.contractor_id.data, subject = form.subject.data, \
                         parent_id = form.parent_contract_internal_id.data, \
                         signing_date = signing_date_utc, \
@@ -104,7 +110,7 @@ def add_contract():
                         contract_type_id = form.contract_type_id.data, is_work_days = form.is_work_days.data, \
                         automatic_renewal_interval = form.automatic_renewal_interval.data, collateral_warranty = form.collateral_warranty.data, \
                         notes = form.notes.data)
-        print(current_conract,file=sys.stdout)
+        # print(current_conract,file=sys.stdout)
         current_conract.save()  
         # , price = round(form.price.data, MONEY_ROUND)   has_balancing = form.has_balancing.data           
         # db.session.add(current_conract)    
@@ -135,7 +141,7 @@ def add_itn():
     
     if form.validate_on_submit():
         
-        activation_date_utc =  convert_date_to_utc("Europe/Sofia",form.activation_date.data)
+        # activation_date_utc =  convert_date_to_utc("Europe/Sofia",form.activation_date.data)
         
         #1. ADDRESS
         form_addr = form.address.data.lower() if form.address.data.lower() != '' else 'none'
@@ -156,38 +162,57 @@ def add_itn():
             virtual_parent_itn = form.virtual_parent_id.data)
         
         else:
-            curr_itn_meta.update({'description': request.form['description'],'grid_voltage': request.form['grid_voltage'],
-                                  'address': curr_address,'erp_id': request.form['erp_id'],'virtual_parent_itn': request.form['virtual_parent_id']})
-            flash(f'ITN <{form.itn.data}> was successifuly updated !','success')
+            flash('Such an ITN already exist !','info')
+            return redirect(url_for('add_itn'))
+            # curr_itn_meta.update({'description': request.form['description'],'grid_voltage': request.form['grid_voltage'],
+            #                       'address': curr_address,'erp_id': request.form['erp_id'],'is_virtual':request.form['is_virtual'],
+            #                       'virtual_parent_itn': request.form['virtual_parent_id']})
+            # flash(f'ITN <{form.itn.data}> was successifuly updated !','success')
         
         #3. INVOICING GROUP
         curr_inv_group = InvoiceGroup.query.filter(InvoiceGroup.id == form.invoice_group_name.data).first()       
         
         #4 SUB CONTRACT
         curr_contract = Contract.query.filter(Contract.id == form.internal_id.data).first()
-        curr_measuring_type = MeasuringType.query.filter(MeasuringType.id == form.measuring_type_id.data).first()
-        
-        curr_sub_contract = SubContract(itn = form.itn.data, \
-                                contract_id = curr_contract.id, \
-                                object_name = '',\
-                                price = round(form.price.data, MONEY_ROUND), \
-                                invoice_group_id = curr_inv_group.id, \
-                                measuring_type_id = curr_measuring_type.id, \
-                                start_date = curr_contract.start_date,\
-                                end_date = curr_contract.end_date, \
-                                zko = form.zko.data, \
-                                akciz = form.akciz.data,
-                                has_grid_services = form.has_grid_services.data, \
-                                has_spot_price = form.has_spot_price.data, \
-                                has_balancing = form.has_balancing.data)
-        db_sub_contract = SubContract.query.filter((SubContract.itn == curr_sub_contract.itn) 
-                                                    & (SubContract.start_date == curr_sub_contract.start_date) 
-                                                    & (SubContract.end_date == curr_sub_contract.end_date)).first()
-        if db_sub_contract is not None:
-            flash('Duplicate sub contract','error')
+        if curr_contract is None:
+            flash(f'Strange - no such an contract with id :{form.internal_id.data}!','danger')
         else:
-            curr_sub_contract.save()  
-            flash(f'ITN <{form.itn.data}> was successifuly created !','success')
+            if curr_contract.start_date is None:
+                set_contarct_dates(curr_contract, form.activation_date.data)
+
+            curr_measuring_type = MeasuringType.query.filter(MeasuringType.id == form.measuring_type_id.data).first()
+            # flash(request.files.get('file_').filename)
+            forcasted_vol = None
+            if request.files.get('file_').filename == '':
+                df = pd.read_excel(request.files.get('file_'), sheet_name=None)
+                if set(df[form.itn.data].columns).issubset(['date', 'forcasted_volume']):
+                    forcasted_vol = Decimal(str(df[form.itn.data]['forcasted_volume'].sum()))
+                    g.forcasted_schedule = df[form.itn.data]
+            else:
+                forcasted_vol = Decimal(str(form.forecast_vol.data))
+            
+            curr_sub_contract = SubContract(itn = form.itn.data, \
+                                    contract_id = curr_contract.id, \
+                                    object_name = '',\
+                                    price = round(form.price.data, MONEY_ROUND), \
+                                    invoice_group_id = curr_inv_group.id, \
+                                    measuring_type_id = curr_measuring_type.id, \
+                                    start_date = convert_date_to_utc("Europe/Sofia", form.activation_date.data).replace(tzinfo=None),\
+                                    end_date = curr_contract.end_date.replace(tzinfo=None), \
+                                    zko = form.zko.data, \
+                                    akciz = form.akciz.data,
+                                    has_grid_services = form.has_grid_services.data, \
+                                    has_spot_price = form.has_spot_price.data, \
+                                    has_balancing = form.has_balancing.data, \
+                                    forecast_vol = forcasted_vol)
+            db_sub_contract = SubContract.query.filter((SubContract.itn == curr_sub_contract.itn) 
+                                                        & (SubContract.start_date == curr_sub_contract.start_date) 
+                                                        & (SubContract.end_date == curr_sub_contract.end_date)).first()
+            if db_sub_contract is not None:
+                flash('Duplicate sub contract','error')
+            else:
+                curr_sub_contract.save()  
+                flash(f'Subcontract <{form.itn.data}> was successifuly created !','success')
 
     return render_template('add_itn.html', title='Add ITN', form=form)
 
@@ -239,34 +264,42 @@ def upload_invoicing_group():
 @app.route('/upload_itns', methods=['GET', 'POST'])
 @login_required
 def upload_itns():
-
     
     form = UploadItnsForm()
     if form.validate_on_submit():
-        df = pd.read_excel(request.files.get('file_'))
-        if all(elem in list(df.columns)  for elem in ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group', 'price', 'zko', 
-                                                      'akciz', 'has_grid_services', 'has_spot_price', 'erp', 'address', 'description', 'is_virtual', 'virtual_parent_itn', 'forecast_montly_consumption']):
+        df = pd.read_excel(request.files.get('file_'), sheet_name=None)
+        if set(df['data'].columns).issubset(['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group', 'price', 'zko', 
+                                                      'akciz', 'has_grid_services', 'has_spot_price', 'erp','grid_voltage', 'address', 'description', 'is_virtual',
+                                                      'virtual_parent_itn', 'forecast_montly_consumption','has_balancing']):
             arr = []
-            for index,row in df.iterrows():
+            for index,row in df['data'].iterrows():
                 
                 curr_contract = get_contract_by_internal_id(row['internal_id'])
+                flash(curr_contract.end_date, 'info')  
                 if curr_contract is None :
                     flash(f'Itn: {row.itn} has not got an contract !')
                 elif curr_contract.start_date is None:
                     set_contarct_dates(curr_contract, row['activation_date'])
                 else:
-                    
-                    flash('OK','success')
-
-
-                   
+                    curr_itn_meta = get_itn_meta(row)                    
+                    if curr_itn_meta is None:
+                        flash('Upload failed from curr_itn_meta','danger')
+                    else:
+                        flash(curr_itn_meta, 'info')                       
+                        # curr_itn_meta.save()
+                    curr_sub_contr = get_subcontract(row, curr_contract, df)
+                    if curr_sub_contr is not None:
+                        curr_sub_contr.save()
                         
+                        flash(f'upload successiful {curr_sub_contr}!','success')
+                    else:
+                        flash(f'Upload failed from sub creation {curr_sub_contr}','danger')                       
       
             
         else:
-            flash('Upload failed','danger') 
+            flash('Upload failed from mismatched columns','danger') 
 
-
+    # curr_itn_meta.save()
     return render_template('upload_itns.html', title='Upload ITNs', form=form)
 
 
@@ -282,10 +315,10 @@ def upload_contracts(start,end):
         
         df = df.fillna(0)
         df = df[int(start):int(end)]
-        if all(elem in list(df.columns)  for elem in ['parent_id', 'internal_id', 'contractor', 'sign_date', 'start_date',
-                                                    'end_date', 'invoicing_interval', 'maturity_interval', 'contract_type',
-                                                    'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
-                                                    'notes']):
+        if set(df.columns).issubset(['parent_id', 'internal_id', 'contractor', 'sign_date', 'start_date',
+                                    'end_date', 'invoicing_interval', 'maturity_interval', 'contract_type',
+                                    'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
+                                    'notes']):
 
             tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
             parent_tks = df['parent_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
@@ -344,6 +377,30 @@ def upload_contracts(start,end):
 
     return render_template('upload_contracts.html', title='Upload Invoicing Group', form=form)
 
+
+@app.route('/upload_stp', methods=['GET', 'POST'])
+@login_required
+def stp():
+    form = StpCoeffsForm()
+    if form.validate_on_submit():
+        df = pd.read_excel(request.files.get('file_'),sheet_name='full')
+        time_series = generate_utc_time_series(form.start_date.data, form.end_date.data)
+        if len(time_series) != df.shape[0]:
+            flash('Wrong time interval','danger')
+            return redirect(url_for('upload_stp'))
+
+        df['Utc'] = time_series
+        df_m = pd.melt(df, id_vars =['Utc'], value_vars =['CEZ_B1', 'CEZ_B2', 'CEZ_B3', 'CEZ_B4', 'CEZ_B5', 'CEZ_H1', 'CEZ_H2',
+           'CEZ_S1', 'EPRO_B01', 'EPRO_B02', 'EPRO_B03', 'EPRO_B04', 'EPRO_H0',
+           'EPRO_H1', 'EPRO_S0', 'EVN_G0', 'EVN_G1', 'EVN_G2', 'EVN_G3', 'EVN_G4',
+           'EVN_H0', 'EVN_H1', 'EVN_H2', 'EVN_BD000'],var_name='code') 
+        # df.set_index(time_series, inplace = True)
+
+
+        # flash(time_series,'info')
+        # flash(end_date_utc,'info')
+
+    return render_template('stp.html', title='Upload STP Coeffs', form = form)
 
 @app.route('/table', methods=['GET', 'POST'])
 @login_required
