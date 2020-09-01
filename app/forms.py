@@ -6,7 +6,7 @@ from wtforms import (
 # from wtforms.fields import DateField
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional,NumberRange
-from app.models import User, Contract, Contractor, MeasuringType
+from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType
 import re
 import sys
 import datetime as dt
@@ -100,8 +100,8 @@ class NewContractForm(FlaskForm):
     subject = TextField('Subject')
     parent_contract_internal_id = SelectField('Parent Contract Number')
     signing_date = StringField(id='sign_datepicker', validators = [DataRequired()])
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    start_date = StringField(id='start_datepicker', validators = [Optional()])
+    end_date = StringField(id='end_datepicker', validators = [Optional()])
     duration_in_days = IntegerField('Duration of The Contract (in days)', validators=[NumberRange(min = 1, max = 3652)], default=365)
     # price = DecimalField('Price',validators=[NumberRange(min = 0.01, max = 300)])
     invoicing_interval = IntegerField('Invoicing Interval (in days)', validators=[NumberRange(min = 1, max = 90)], default=31)
@@ -169,8 +169,38 @@ class StpCoeffsForm(FlaskForm):
 
     submit = SubmitField('Add Stp Coeffs')
 
-    
+class CreateSubForm(FlaskForm):
 
+    itn = QuerySelectField(query_factory = lambda: ItnMeta.query, allow_blank = False,get_label='itn', validators=[DataRequired()])
+    contract_data = QuerySelectField(query_factory = lambda: Contract.query, allow_blank = False,get_label=Contract.__str__  , validators=[DataRequired()])
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    invoice_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label='name', validators=[DataRequired()])
+    price = DecimalField('Price',validators=[NumberRange(min = 0.01, max = 300),DataRequired()], default = 100)
+    object_name = StringField('Object Name', validators=[Optional()])
+    measuring_type = QuerySelectField(query_factory = lambda: MeasuringType.query, allow_blank = False,get_label='code', validators=[DataRequired()])
+    zko = DecimalField('Zko',validators=[NumberRange(min = 0.01, max = 100),DataRequired()], default = 21.47)
+    akciz = DecimalField('Akciz',validators=[NumberRange(min = 0.01, max = 100),DataRequired()],default = 2.00)
+    forecast_vol = DecimalField('Forecasted Monthly Consumption [MWh]',validators=[Optional()])
+    file_ = FileField('Browse for hourly forcast schedule',validators=[Optional()])
+    
+    has_grid_services = BooleanField('Include Grid Services', default = True)
+    has_spot_price = BooleanField('Has Spot Price', default = False)
+    has_balancing = BooleanField('Include Balancing Services', default = True)
+
+    submit = SubmitField('Create SubContract')
+
+
+
+class UploadExcelForm(FlaskForm):
+
+    
+    file_1 = FileField('Browse for Upload Contracts File')
+    file_2 = FileField('Browse for Add Invoicing Group File')
+    file_3 = FileField('Browse for Add ITN File')
+
+
+    submit = SubmitField('Upload')
 
 
        
@@ -178,28 +208,3 @@ class StpCoeffsForm(FlaskForm):
     
 
     
-
-
-
-
-
-
-
-
-
-# class NewContractForm(FlaskForm):
-    
-#     internal_number = StringField('InternalNumber', validators=[DataRequired()])
-#     contractor_name = SelectField('ContractorName', validators=[DataRequired()])
-
-#     def __init__(self, *args, **kwargs):
-#         super(NewContractForm, self).__init__(*args, **kwargs)
-#         self.contractor_name.choices = [(c.id, c.name) for c in Contractor.query.order_by(Contractor.name)]
-
-#     submit = SubmitField('AddContract')
-
-#     def validate_contractor(self, name):
-#         contractor = Contractor.query.filter_by(name=name.data).first()
-#         if contractor is None:
-#             raise ValidationError('There is not such a contractor in database !')
-

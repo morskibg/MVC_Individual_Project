@@ -3,12 +3,13 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 from decimal import Decimal 
-from flask import g
+from flask import g, flash
 from app import db
 from sqlalchemy.sql import func
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import login
+
 
 
 
@@ -92,7 +93,13 @@ class Contract(BaseModel):
     contractor = db.relationship('Contractor', back_populates = 'contracts')
     contract_type = db.relationship('ContractType', back_populates = 'contracts')
     sub_contracts = db.relationship("SubContract", back_populates="contract", lazy="dynamic")
+
+
     
+    def __str__(self):
+        from app.helper_functions import convert_date_from_utc
+        date_eet = convert_date_from_utc('EET',self.signing_date)
+        return f'{self.internal_id} - {self.contractor.name} - {date_eet}'
 
     def __repr__(self):
         return '<Contract :internal_id - {},  contractor_id - {}, {}, {}, {}, {}, {}, {}, {}, {}, {}>'\
@@ -213,7 +220,7 @@ class MeasuringType(BaseModel):
     stp_coeffs = db.relationship("StpCoeffs", back_populates="measuring_type", lazy="dynamic")
 
     def __repr__(self):
-        return '<MeasuringType: {}>'.format(self.code)
+        return f'<MeasuringType: id={self.id}_code={self.code}>'
 
 class InvoiceGroup(BaseModel):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -279,54 +286,104 @@ class ItnSchedule(BaseModel):
     def __repr__(self):
         return '<itn: {}, utc: {}, forecast_vol: {}, reported_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.reported_vol, self.price)
 
+    @classmethod
+    def test(cls, mapper, connection, target):
+        state = db.inspect(target)
+        changes = {}
+
+        for attr in state.attrs:
+            hist = attr.load_history()
+
+            if not hist.has_changes():
+                continue
+
+            # hist.deleted holds old value
+            # hist.added holds new value
+            changes[attr.key] = hist.added
+        print(changes, file = sys.stdout)
+
+
+
     @staticmethod
     def generate_bulk_list(itn, start_date, end_date, forecast_vol, price, measuring_type_id):
+       
         time_series = pd.date_range(start=start_date, end=end_date, freq='H')
         
         df = pd.DataFrame(time_series, columns = ['utc'])
         df['itn'] = itn  
         df['price'] = price
-        # print(measuring_type_id,file=sys.stdout)
+        
         stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == measuring_type_id).statement, db.session.bind)
         
         if not stp_df.empty:
+            # generated or updated subcontract is STP, merge with stp table and goes to list of dict creation for bulk insert
             df = df.merge(stp_df, on = 'utc', how = 'left')
             df = df.fillna(0)
             df['forecast_vol'] = df['value'].apply(lambda x: Decimal(str(x)) * Decimal(str(forecast_vol)))
-            
-        else:            
+            # print(df.head, file = sys.stdout)
+        else:                     
             forcasted_schedule = g.pop('forcasted_schedule', None)
-            forcasted_schedule.set_index('date', inplace = True)
-            forcasted_schedule.index = forcasted_schedule.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_localize(None)
-            forcasted_schedule.reset_index(inplace = True)
-            forcasted_schedule.rename(columns = {forcasted_schedule.columns[0]:'utc'}, inplace = True)
-            df = df.merge(forcasted_schedule, on = 'utc', how = 'left')
-            df = df.fillna(0)
-            df['forecast_vol'] = df[forcasted_schedule.columns[1]].apply(lambda x: Decimal(str(x)))
+            if forcasted_schedule is not None:
+                # generated or updated subcontract is NOT STP, check for hourly forecast schedule from excel file and goes to list of dict creation for bulk insert 
+                forcasted_schedule.set_index('date', inplace = True)
+                forcasted_schedule.index = forcasted_schedule.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_localize(None)
+                forcasted_schedule.reset_index(inplace = True)
+                forcasted_schedule.rename(columns = {forcasted_schedule.columns[0]:'utc'}, inplace = True)
+                df = df.merge(forcasted_schedule, on = 'utc', how = 'left')
+                df = df.fillna(0)
+                df['forecast_vol'] = df[forcasted_schedule.columns[1]].apply(lambda x: Decimal(str(x)))
+            else:
+                remaining_schedule_list_of_dict = g.pop('remaining_schedule_list_of_dict', None)
+                if remaining_schedule_list_of_dict is not None:
+                    # generated or updated subcontract is remaning additional and goes to list of dict creation for bulk insert                                                   
+                    return remaining_schedule_list_of_dict
+                else:   
+                    df['forecast_vol'] = Decimal(str('0'))
             
         df['reported_vol'] = -1        
         list_of_dict = []
         for row in list(df.to_records()): 
-                     
+                        
             list_of_dict.append(dict(itn = row['itn'], 
                             utc = dt.datetime.strptime(np.datetime_as_string(row['utc'], unit='s'), '%Y-%m-%dT%H:%M:%S'),                                                      
                             forecast_vol = row['forecast_vol'],
                             reported_vol = Decimal(str(row['reported_vol'])),
                             price = Decimal(str(row['price']))))
-                          
+                            
         return list_of_dict
 
     @classmethod
     def autoinsert_new(cls, mapper, connection, target):
         
         sub_contract = target  
-        print(target, file = sys.stdout)      
+          
         bulk_list = cls.generate_bulk_list(itn = sub_contract.itn, start_date = sub_contract.start_date,
                  end_date = sub_contract.end_date, forecast_vol=sub_contract.forecast_vol, price=sub_contract.price, 
                  measuring_type_id = sub_contract.measuring_type_id )
                  
         db.session.bulk_insert_mappings(ItnSchedule, bulk_list)
 
+    @classmethod
+    def autoupdate_existing(cls, mapper, connection, target):
+
+        state = db.inspect(target)
+        changes = {}
+
+        for attr in state.attrs:
+            hist = attr.load_history()
+
+            if not hist.has_changes():
+                continue
+
+            # hist.deleted holds old value
+            # hist.added holds new value
+            changes[attr.key] = hist.added
+        print('from update callback', file = sys.stdout)
+        print(changes, file = sys.stdout)
+        
+        # delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc > target.end_date) & (ItnSchedule.itn == target.itn))
+        # connection.execute(delete_sch)
+        # ItnSchedule.autoinsert_new(mapper=mapper, connection=connection, target=target)
 
 
 
@@ -351,6 +408,6 @@ class IncomingItn(BaseModel):
 
 
 db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
-# db.event.listen(ItnSchedule, 'after_insert', ItnSchedule.autoinsert_new)
-
+db.event.listen(SubContract, 'after_update', ItnSchedule.autoupdate_existing)
+# db.event.listen(SubContract, 'before_update', ItnSchedule.test)
 

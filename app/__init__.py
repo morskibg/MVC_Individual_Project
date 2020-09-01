@@ -20,4 +20,4 @@ app.static_folder = 'static'
 
 
 from app import routes, models
-# from .helper_functions import *
+

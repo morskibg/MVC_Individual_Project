@@ -6,8 +6,8 @@ import pandas as pd
 from flask import render_template, flash, redirect, url_for, request, g
 from app import app
 from app.forms import (
-    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm)
+    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, UploadExcelForm,
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm, CreateSubForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
@@ -17,14 +17,20 @@ from app import db
 from werkzeug.utils import secure_filename
 from app.helper_functions import (get_contract_by_internal_id,
                                  convert_date_to_utc,
+                                 convert_date_from_utc,
                                  validate_ciryllic,
                                  set_contarct_dates,
                                  get_address,
                                  get_invoicing_group,
                                  get_itn_meta,
                                  generate_utc_time_series,
-                                 get_subcontract,
+                                 generate_subcontract,
                                  get_erp_id_by_name,
+                                 get_subcontracts_by_itn_and_utc_dates,
+                                 check_and_load_hourly_schedule,
+                                 get_remaining_forecat_schedule,
+                                 has_overlaping_subcontracts,
+                                 apply_collision_function,
 
 )
 
@@ -96,8 +102,8 @@ def add_contract():
     if form.validate_on_submit():
 
         signing_date_utc =  convert_date_to_utc("Europe/Sofia",form.signing_date.data)
-        start_date_utc =  convert_date_to_utc("Europe/Sofia",form.start_date.data)
-        end_date_utc =  convert_date_to_utc("Europe/Sofia",form.end_date.data) + dt.timedelta(hours = 23)
+        start_date_utc =  convert_date_to_utc("Europe/Sofia",form.start_date.data) if form.start_date.data != '' else None
+        end_date_utc =  convert_date_to_utc("Europe/Sofia",form.end_date.data) + dt.timedelta(hours = 23) if form.end_date.data != '' else None
 
         # print(convert_date_to_utc("Europe/Sofia",form.signing_date.data),file=sys.stdout)    
         current_conract = Contract(internal_id = form.internal_id.data, contractor_id = form.contractor_id.data, subject = form.subject.data, \
@@ -130,9 +136,9 @@ def add_contract():
 def add_itn():
 
     form = AddItnForm()
-
+    tz = "Europe/Sofia"
     form.measuring_type_id.choices = [(c.id, c.code) for c in MeasuringType.query.order_by(MeasuringType.id)]
-    form.internal_id.choices = [(c.id, (f'{c.internal_id}, {c.contractor.name}, {c.signing_date.date()}')) for c in Contract.query.order_by(Contract.internal_id)]                              
+    form.internal_id.choices = [(c.id, (f'{c.internal_id}, {c.contractor.name}, {convert_date_from_utc(tz,c.signing_date,False).date()}')) for c in Contract.query.order_by(Contract.internal_id)]                              
     form.erp_id.choices = [(c.id, c.name) for c in Erp.query.order_by(Erp.id)]
     form.grid_voltage.choices = [(x, x) for x in ['HV', 'MV', 'LV']]
     form.virtual_parent_id.choices = [(c.itn, c.itn) for c in ItnMeta.query.filter(ItnMeta.is_virtual == True).order_by(ItnMeta.itn)]
@@ -174,6 +180,7 @@ def add_itn():
         
         #4 SUB CONTRACT
         curr_contract = Contract.query.filter(Contract.id == form.internal_id.data).first()
+        
         if curr_contract is None:
             flash(f'Strange - no such an contract with id :{form.internal_id.data}!','danger')
         else:
@@ -181,15 +188,19 @@ def add_itn():
                 set_contarct_dates(curr_contract, form.activation_date.data)
 
             curr_measuring_type = MeasuringType.query.filter(MeasuringType.id == form.measuring_type_id.data).first()
-            # flash(request.files.get('file_').filename)
+           
             forcasted_vol = None
-            if request.files.get('file_').filename == '':
+            if request.files.get('file_').filename != '' and curr_measuring_type.code in ['DIRECT','UNDIRECT']:
                 df = pd.read_excel(request.files.get('file_'), sheet_name=None)
                 if set(df[form.itn.data].columns).issubset(['date', 'forcasted_volume']):
                     forcasted_vol = Decimal(str(df[form.itn.data]['forcasted_volume'].sum()))
                     g.forcasted_schedule = df[form.itn.data]
             else:
-                forcasted_vol = Decimal(str(form.forecast_vol.data))
+                if form.forecast_vol.data is None:
+                    flash('No forcasted volume provided or measuring type mismatch.','danger')
+                    return redirect(url_for('add_itn'))
+                else:
+                    forcasted_vol = Decimal(str(form.forecast_vol.data))
             
             curr_sub_contract = SubContract(itn = form.itn.data, \
                                     contract_id = curr_contract.id, \
@@ -197,7 +208,7 @@ def add_itn():
                                     price = round(form.price.data, MONEY_ROUND), \
                                     invoice_group_id = curr_inv_group.id, \
                                     measuring_type_id = curr_measuring_type.id, \
-                                    start_date = convert_date_to_utc("Europe/Sofia", form.activation_date.data).replace(tzinfo=None),\
+                                    start_date = convert_date_to_utc("Europe/Sofia", form.activation_date.data),\
                                     end_date = curr_contract.end_date.replace(tzinfo=None), \
                                     zko = form.zko.data, \
                                     akciz = form.akciz.data,
@@ -221,7 +232,8 @@ def add_itn():
 def add_invoicing_group():
 
     form = AddInvGroupForm()
-    form.internal_id.choices = [(c.id, (f'{c.internal_id}, {c.contractor.name}, {c.signing_date.date()}')) for c in Contract.query.order_by(Contract.internal_id)]    
+    tz = "Europe/Sofia"
+    form.internal_id.choices = [(c.id, (f'{c.internal_id}, {c.contractor.name}, {convert_date_from_utc(tz,c.signing_date,False).date()}')) for c in Contract.query.order_by(Contract.internal_id)]    
 
     if form.validate_on_submit():
         curr_contract = Contract.query.filter(Contract.id == form.internal_id.data).first()
@@ -287,7 +299,7 @@ def upload_itns():
                     else:
                         flash(curr_itn_meta, 'info')                       
                         # curr_itn_meta.save()
-                    curr_sub_contr = get_subcontract(row, curr_contract, df)
+                    curr_sub_contr = generate_subcontract(row, curr_contract, df)
                     if curr_sub_contr is not None:
                         curr_sub_contr.save()
                         
@@ -401,6 +413,138 @@ def stp():
         # flash(end_date_utc,'info')
 
     return render_template('stp.html', title='Upload STP Coeffs', form = form)
+
+@app.route('/create_subcontract', methods=['GET', 'POST'])
+@login_required
+def create_subcontract():
+    
+    form = CreateSubForm()
+    if form.validate_on_submit():
+        
+        form_start_date_utc = convert_date_to_utc("Europe/Sofia", form.start_date.data)
+        form_end_date_utc = convert_date_to_utc("Europe/Sofia", form.end_date.data) + dt.timedelta(hours = 23)
+        form_price = round(Decimal(str(form.price.data)), MONEY_ROUND)
+        form_zko = round(Decimal(str(form.zko.data)), MONEY_ROUND)
+        form_akciz = round(Decimal(str(form.akciz.data)), MONEY_ROUND)
+        form_forecasted_vol  = check_and_load_hourly_schedule(form)
+
+        curr_contract = get_contract_by_internal_id(form.contract_data.data.internal_id)
+        applicable_sub_contracts = get_subcontracts_by_itn_and_utc_dates(form.itn.data.itn, form_start_date_utc, form_end_date_utc)
+        # print(applicable_sub_contracts, file = sys.stdout)
+        if has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc) and has_overlaping_subcontracts(form.itn.data.itn, form_end_date_utc):
+            flash('overlaping', 'danger')
+        else:
+            forecasted_vol = check_and_load_hourly_schedule(form)    
+            new_sub_contract = SubContract(itn = form.itn.data.itn,
+                                    contract_id = form.contract_data.data.id, \
+                                    object_name = form.object_name.data,\
+                                    price = form_price, \
+                                    invoice_group_id = form.invoice_group.data.id, \
+                                    measuring_type_id = form.measuring_type.data.id, \
+                                    start_date = form_start_date_utc,\
+                                    end_date =  form_end_date_utc, \
+                                    zko = form_zko, \
+                                    akciz = form_akciz, \
+                                    has_grid_services = form.has_grid_services.data, \
+                                    has_spot_price = form.has_spot_price.data, \
+                                    has_balancing = form.has_balancing.data, \
+                                    forecast_vol = forecasted_vol)
+            for curr_subcontract in applicable_sub_contracts:
+                print(curr_subcontract, file = sys.stdout) 
+                print(f'new_start_date = {form_start_date_utc} ----- new_end_date = {form_end_date_utc}', file = sys.stdout)  
+                print(f'old_start_date = {curr_subcontract.start_date} ----- old_end_date = {curr_subcontract.end_date}', file = sys.stdout)                     
+                apply_collision_function(new_sub_contract, curr_subcontract)
+            
+
+        # print(applicable_sub_contracts, file = sys.stdout)
+        # print(has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc))
+
+        
+        # if len(sub_contracts) > 1:
+        #     flash(f'Error ! Overlaping subcontracts with itn {form.itn.data.itn} and local start date {form.start_date.data}','error')
+
+        # elif len(sub_contracts) == 1:
+        #     old_sub_calculated_end_date = form_start_date_utc - dt.timedelta(hours = 1)
+        #     new_sub_calculated_end_date = form_end_date_utc + dt.timedelta(hours = 23)        
+        #     old_sub_end_date = sub_contracts[0].end_date
+
+        #     if form_start_date_utc == curr_contract.start_date:
+        #         print('in strat date == conract start date', file = sys.stdout)
+        #         if form_end_date_utc == curr_contract.end_date:
+        #             print('reset subcontract', file = sys.stdout)
+        #             ItnSchedule.query.filter((ItnSchedule.utc >= form_start_date_utc) & (ItnSchedule.utc <= form_end_date_utc) & (ItnSchedule.itn == form.itn.data.itn)).delete()
+        #             SubContract.query.filter((SubContract.itn == form.itn.data.itn) & (SubContract.start_date >= form_start_date_utc) & (SubContract.end_date <= form_end_date_utc)).delete()
+        #             db.session.commit()
+        #         else:
+        #             sub_contracts[0].update({'start_date':form_end_date_utc})
+        #             flash('old_subcontract start date updated','info')
+
+        #     else:
+        #         if form_end_date_utc != old_sub_end_date:
+        #             remaining_schedule = get_remaining_forecat_schedule(form.itn.data.itn, form_end_date_utc)
+        #             old_schedule = ItnSchedule.query.filter(ItnSchedule.itn == form.itn.data.itn, ItnSchedule.utc <= old_sub_end_date).all()
+        #         # calculated_old_forecasted_vol = 
+        #         sub_contracts[0].update({'end_date':old_sub_calculated_end_date})
+        #         flash('old_subcontract updated','info')
+
+            # forecasted_vol = check_and_load_hourly_schedule(form)    
+            # new_sub_contract = SubContract(itn = form.itn.data.itn,
+            #                         contract_id = form.contract_data.data.id, \
+            #                         object_name = form.object_name.data,\
+            #                         price = form_price, \
+            #                         invoice_group_id = form.invoice_group.data.id, \
+            #                         measuring_type_id = form.measuring_type.data.id, \
+            #                         start_date = form_start_date_utc,\
+            #                         end_date =  form_end_date_utc, \
+            #                         zko = form_zko, \
+            #                         akciz = form_akciz, \
+            #                         has_grid_services = form.has_grid_services.data, \
+            #                         has_spot_price = form.has_spot_price.data, \
+            #                         has_balancing = form.has_balancing.data, \
+            #                         forecast_vol = forecasted_vol)
+
+            # new_sub_contract.save()
+            # if (form_end_date_utc != old_sub_end_date) & (form_start_date_utc != curr_contract.start_date) & (form_end_date_utc != curr_contract.end_date):
+            #     flash(f'ended before old sub contract end date - create one more additional sub','info')
+            #     # forecasted_vol = Decimal(str('999'))  
+            #     forecasted_vol = check_and_load_hourly_schedule(form)              
+            #     additional_sub_contract = SubContract(itn = sub_contracts[0].itn,
+            #                         contract_id = sub_contracts[0].contract_id, \
+            #                         object_name = sub_contracts[0].object_name,\
+            #                         price = sub_contracts[0].price, \
+            #                         invoice_group_id = sub_contracts[0].invoice_group_id, \
+            #                         measuring_type_id = sub_contracts[0].measuring_type_id, \
+            #                         start_date = form_end_date_utc + dt.timedelta(hours = 1) ,\
+            #                         end_date =  old_sub_end_date, \
+            #                         zko = sub_contracts[0].zko, \
+            #                         akciz = sub_contracts[0].akciz, \
+            #                         has_grid_services = sub_contracts[0].has_grid_services, \
+            #                         has_spot_price = sub_contracts[0].has_spot_price, \
+            #                         has_balancing = sub_contracts[0].has_balancing, \
+            #                         forecast_vol = forecasted_vol)
+
+            #     additional_sub_contract.save()               
+       
+            
+            
+            # sub_contracts[0].end_date = old_sub_calculated_end_date
+                
+
+                
+
+            # flash(f'old_sub_calculated_end_date :{old_sub_calculated_end_date}', 'info')
+            # flash(f'form.start_date: {convert_date_to_utc("Europe/Sofia",form.start_date.data)}', 'info')
+            # flash(f'form_sub_end_date: {form_sub_end_date}', 'info')
+            # flash(f'old_sub_end_date: {old_sub_end_date}', 'info')
+
+        
+        
+
+
+
+    return render_template('create_subcontract.html', title='Create SubContract', form = form)
+
+
 
 @app.route('/table', methods=['GET', 'POST'])
 @login_required
