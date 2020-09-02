@@ -6,6 +6,7 @@ from decimal import Decimal
 from flask import g, flash
 from app import db
 from sqlalchemy.sql import func
+import sqlalchemy as sa
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import login
@@ -273,6 +274,16 @@ class StpCoeffs(BaseModel):
     def __repr__(self):
         return '<Utc: {}, StpCoeffs {}>'.format(self.utc, self.value)
 
+class ItnScheduleTemp(BaseModel):
+    itn = db.Column(db.String(33), primary_key = True)
+    utc = db.Column(db.DateTime, primary_key = True)
+    forecast_vol = db.Column(db.Numeric(12,6), nullable=False)
+    reported_vol = db.Column(db.Numeric(12,6), nullable=False)
+    price = db.Column(db.Numeric(8,4), nullable=False)
+    def __repr__(self):
+        return '<itn: {}, utc: {}, forecast_vol: {}, reported_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.reported_vol, self.price)
+   
+
 class ItnSchedule(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     utc = db.Column(db.DateTime, primary_key = True)
@@ -283,29 +294,13 @@ class ItnSchedule(BaseModel):
     meta = db.relationship('ItnMeta', back_populates = 'itn_schedules')
     #sub_contracts = db.relationship("SubContract", back_populates="measuring_type", lazy="dynamic")
 
+    
+    
     def __repr__(self):
         return '<itn: {}, utc: {}, forecast_vol: {}, reported_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.reported_vol, self.price)
 
-    @classmethod
-    def test(cls, mapper, connection, target):
-        state = db.inspect(target)
-        changes = {}
-
-        for attr in state.attrs:
-            hist = attr.load_history()
-
-            if not hist.has_changes():
-                continue
-
-            # hist.deleted holds old value
-            # hist.added holds new value
-            changes[attr.key] = hist.added
-        print(changes, file = sys.stdout)
-
-
-
     @staticmethod
-    def generate_bulk_list(itn, start_date, end_date, forecast_vol, price, measuring_type_id):
+    def generate_bulk_list(itn, start_date, end_date, forecast_vol, price, measuring_type_id, is_remaining_schedule = True):
        
         time_series = pd.date_range(start=start_date, end=end_date, freq='H')
         
@@ -333,10 +328,25 @@ class ItnSchedule(BaseModel):
                 df = df.fillna(0)
                 df['forecast_vol'] = df[forcasted_schedule.columns[1]].apply(lambda x: Decimal(str(x)))
             else:
-                remaining_schedule_list_of_dict = g.pop('remaining_schedule_list_of_dict', None)
-                if remaining_schedule_list_of_dict is not None:
-                    # generated or updated subcontract is remaning additional and goes to list of dict creation for bulk insert                                                   
-                    return remaining_schedule_list_of_dict
+                # remaining_schedule_list_of_dict = g.pop('remaining_schedule_list_of_dict', None)
+                # if remaining_schedule_list_of_dict is not None:
+                if is_remaining_schedule:
+                    # generated or updated subcontract is remaning additional and goes to list of dict creation for bulk insert  
+                   
+                    print('in generate add sub', file = sys.stdout)  
+                    remaining_schedule = ItnScheduleTemp.query.all()
+                    # delete_sch = ItnScheduleTemp.__table__.delete()
+                    # db.session.execute(delete_sch)
+
+                    list_of_dict = []
+                    for schedule in remaining_schedule: 
+                                            
+                                list_of_dict.append(dict(itn = schedule.itn, 
+                                                utc = schedule.utc,                                                      
+                                                forecast_vol = schedule.forecast_vol,
+                                                reported_vol = schedule.reported_vol,
+                                                price = schedule.price))                                               
+                    return list_of_dict
                 else:   
                     df['forecast_vol'] = Decimal(str('0'))
             
@@ -380,11 +390,22 @@ class ItnSchedule(BaseModel):
             changes[attr.key] = hist.added
         print('from update callback', file = sys.stdout)
         print(changes, file = sys.stdout)
-        
-        # delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc > target.end_date) & (ItnSchedule.itn == target.itn))
-        # connection.execute(delete_sch)
+        if changes.get('start_date') is not None:
+            hist = sa.inspect(target).attrs.start_date.history
+            
+            print(f'from update start_date {target.start_date} <----> {target.end_date}', file = sys.stdout)
+            print(f'hist_deleted ---> {hist.deleted}')
+            delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc >= hist.deleted) & (ItnSchedule.utc < target.start_date) & (ItnSchedule.itn == target.itn))
+            connection.execute(delete_sch)
+        elif changes.get('end_date') is not None:
+            hist = sa.inspect(target).attrs.end_date.history
+            print('from update end_date', file = sys.stdout)
+            print(f'hist_deleted ---> {hist.deleted}')
+            print(f'from update end_date {target.start_date} <----> {target.end_date}', file = sys.stdout)
+            delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc <= hist.deleted) & (ItnSchedule.utc > target.end_date) & (ItnSchedule.itn == target.itn))
+            connection.execute(delete_sch)
         # ItnSchedule.autoinsert_new(mapper=mapper, connection=connection, target=target)
-
+        print('deleted in shedule successiful', file = sys.stdout)
 
 
 class LeavingItn(BaseModel):
@@ -409,5 +430,6 @@ class IncomingItn(BaseModel):
 
 db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
 db.event.listen(SubContract, 'after_update', ItnSchedule.autoupdate_existing)
+# db.event.listen(SubContract, 'before_update', ItnSchedule.autoupdate_existing)
 # db.event.listen(SubContract, 'before_update', ItnSchedule.test)
 

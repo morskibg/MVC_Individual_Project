@@ -31,6 +31,7 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  get_remaining_forecat_schedule,
                                  has_overlaping_subcontracts,
                                  apply_collision_function,
+                                 upload_forecasted_schedule_to_temp_db,
 
 )
 
@@ -189,18 +190,19 @@ def add_itn():
 
             curr_measuring_type = MeasuringType.query.filter(MeasuringType.id == form.measuring_type_id.data).first()
            
-            forcasted_vol = None
+            forecasted_vol = None
             if request.files.get('file_').filename != '' and curr_measuring_type.code in ['DIRECT','UNDIRECT']:
                 df = pd.read_excel(request.files.get('file_'), sheet_name=None)
-                if set(df[form.itn.data].columns).issubset(['date', 'forcasted_volume']):
-                    forcasted_vol = Decimal(str(df[form.itn.data]['forcasted_volume'].sum()))
-                    g.forcasted_schedule = df[form.itn.data]
+                if set(df[form.itn.data].columns).issubset(['date', 'forecasted_volume']):
+                    # forecasted_vol = Decimal(str(df[form.itn.data]['forecasted_volume'].sum()))
+                    forecasted_vol = upload_forecasted_schedule_to_temp_db(df[form.itn.data], form.itn.data, round(form.price.data, MONEY_ROUND))
+                    # g.forcasted_schedule = df[form.itn.data]
             else:
                 if form.forecast_vol.data is None:
                     flash('No forcasted volume provided or measuring type mismatch.','danger')
                     return redirect(url_for('add_itn'))
                 else:
-                    forcasted_vol = Decimal(str(form.forecast_vol.data))
+                    forecasted_vol = Decimal(str(form.forecast_vol.data))
             
             curr_sub_contract = SubContract(itn = form.itn.data, \
                                     contract_id = curr_contract.id, \
@@ -215,7 +217,7 @@ def add_itn():
                                     has_grid_services = form.has_grid_services.data, \
                                     has_spot_price = form.has_spot_price.data, \
                                     has_balancing = form.has_balancing.data, \
-                                    forecast_vol = forcasted_vol)
+                                    forecast_vol = forecasted_vol)
             db_sub_contract = SubContract.query.filter((SubContract.itn == curr_sub_contract.itn) 
                                                         & (SubContract.start_date == curr_sub_contract.start_date) 
                                                         & (SubContract.end_date == curr_sub_contract.end_date)).first()
@@ -287,7 +289,7 @@ def upload_itns():
             for index,row in df['data'].iterrows():
                 
                 curr_contract = get_contract_by_internal_id(row['internal_id'])
-                flash(curr_contract.end_date, 'info')  
+                
                 if curr_contract is None :
                     flash(f'Itn: {row.itn} has not got an contract !')
                 elif curr_contract.start_date is None:
@@ -297,13 +299,13 @@ def upload_itns():
                     if curr_itn_meta is None:
                         flash('Upload failed from curr_itn_meta','danger')
                     else:
-                        flash(curr_itn_meta, 'info')                       
+                        # flash(curr_itn_meta, 'info')                       
                         # curr_itn_meta.save()
                     curr_sub_contr = generate_subcontract(row, curr_contract, df)
                     if curr_sub_contr is not None:
                         curr_sub_contr.save()
                         
-                        flash(f'upload successiful {curr_sub_contr}!','success')
+                        flash(f'Upload successiful {curr_sub_contr}!','success')
                     else:
                         flash(f'Upload failed from sub creation {curr_sub_contr}','danger')                       
       
@@ -430,7 +432,7 @@ def create_subcontract():
 
         curr_contract = get_contract_by_internal_id(form.contract_data.data.internal_id)
         applicable_sub_contracts = get_subcontracts_by_itn_and_utc_dates(form.itn.data.itn, form_start_date_utc, form_end_date_utc)
-        # print(applicable_sub_contracts, file = sys.stdout)
+        print(applicable_sub_contracts, file = sys.stdout)
         if has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc) and has_overlaping_subcontracts(form.itn.data.itn, form_end_date_utc):
             flash('overlaping', 'danger')
         else:
@@ -449,12 +451,14 @@ def create_subcontract():
                                     has_spot_price = form.has_spot_price.data, \
                                     has_balancing = form.has_balancing.data, \
                                     forecast_vol = forecasted_vol)
+            
             for curr_subcontract in applicable_sub_contracts:
                 print(curr_subcontract, file = sys.stdout) 
                 print(f'new_start_date = {form_start_date_utc} ----- new_end_date = {form_end_date_utc}', file = sys.stdout)  
                 print(f'old_start_date = {curr_subcontract.start_date} ----- old_end_date = {curr_subcontract.end_date}', file = sys.stdout)                     
-                apply_collision_function(new_sub_contract, curr_subcontract)
-            
+                apply_collision_function(new_sub_contract, curr_subcontract, form)
+            new_sub_contract.save() 
+            # db.session.commit()
 
         # print(applicable_sub_contracts, file = sys.stdout)
         # print(has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc))
