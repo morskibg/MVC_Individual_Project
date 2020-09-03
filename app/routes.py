@@ -6,8 +6,8 @@ import pandas as pd
 from flask import render_template, flash, redirect, url_for, request, g
 from app import app
 from app.forms import (
-    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, UploadExcelForm,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm, CreateSubForm)
+    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, UploadExcelForm, ErpForm,
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm, CreateSubForm, TestForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
@@ -32,15 +32,43 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  has_overlaping_subcontracts,
                                  apply_collision_function,
                                  upload_forecasted_schedule_to_temp_db,
+                                 convert_weekly_schedule,
+                                 update_or_insert,
 
 )
 
 
+from zipfile import ZipFile
+from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_to_df
 
+)
 
 MONEY_ROUND = 2
 
-
+@app.route('/test', methods=['GET', 'POST'])
+@login_required
+def test():
+    form = TestForm()
+    if form.validate_on_submit():
+        # print(request.files.get('file_1'), file = sys.stdout)
+        # file_names = []
+        separator = '";"'
+        erp_zip = ZipFile(request.files.get('file_1'))
+        df_d, df_t = insert_to_df(erp_zip, separator)
+        # df = insert_to_df(erp_zip, separator)
+        # df = insert_erp_invoice(erp_zip, separator)
+        # for zf in erp_zip.namelist() :
+        #     if zf.endswith('.csv'):
+        #         file_names.append(zf)
+        # df1 = pd.read_csv(erp_zip.open(file_names[0]),sep=separator,  encoding="cp1251", engine='python',skiprows = 1)        
+        # flash(f'file is  ---->{df_d.isnull().sum()}','info')
+        # flash(f'file is  ---->{df_d.isnull().values.any()}','info')
+        # flash(f'file is  ---->{df_d.columns}','info')
+        # flash(f'file is  ---->{df_d.shape}','info')
+        # print(df_d[pd.isnull(df_d['erp_invoice_id'])], file = sys.stdout)
+      
+        
+    return render_template('test.html', title='Test', form=form)
 
 
 @app.route('/')
@@ -299,6 +327,7 @@ def upload_itns():
                     if curr_itn_meta is None:
                         flash('Upload failed from curr_itn_meta','danger')
                     else:
+                        pass
                         # flash(curr_itn_meta, 'info')                       
                         # curr_itn_meta.save()
                     curr_sub_contr = generate_subcontract(row, curr_contract, df)
@@ -547,6 +576,16 @@ def create_subcontract():
 
 
     return render_template('create_subcontract.html', title='Create SubContract', form = form)
+
+@app.route('/upload_erp', methods=['GET', 'POST'])
+@login_required
+def upload_erp():
+    form = ErpForm()
+    if form.validate_on_submit():
+        pass
+
+
+    return render_template('upload_erp.html', title='ERP Upload', form = form)
 
 
 

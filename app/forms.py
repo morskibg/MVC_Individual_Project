@@ -191,6 +191,17 @@ class CreateSubForm(FlaskForm):
     submit = SubmitField('Create SubContract')
 
 
+class TestForm(FlaskForm):
+    file_1 = FileField('Browse for Test File')
+
+    submit = SubmitField('Test')
+
+class ErpForm(FlaskForm):
+    file_1 = FileField('Browse for ERP Zip File')
+
+    submit = SubmitField('Upload')
+
+
 
 class UploadExcelForm(FlaskForm):
 

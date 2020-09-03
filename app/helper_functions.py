@@ -10,6 +10,56 @@ from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringT
 MONEY_ROUND = 2
 
 
+def stringifyer(df):
+    """check first row value of each colum if is datetime or decimal and convert them to string if yes"""
+    for col in df.columns:
+        if isinstance(df[col].iloc[0], dt.date): 
+            
+            df[col] = df.apply(lambda x: x[col].strftime('%Y-%m-%d %H:%M:%S'), axis=1)
+        elif isinstance(df[col].iloc[0], Decimal):            
+            
+            df[col] = df.apply(lambda x: str(x[col]), axis=1)
+        
+        
+def update_or_insert(df, table_name):
+    """Perform bulk insert on duplicate update of pandas df to mysql table. Support native for MySql NULL insertion.
+        Requirements: 1.Dataframe columns MUST be exactly the same and in the same order as SQL table.
+                      2.The NULL values in datafreme MUST be respresentet by np.nan or string 'NULL' 
+                      
+        Input:engine, dataframe, sql table name
+        Output: none"""
+    
+#     BAD_CHAR_DICT = {'#':' ','%':'%%','(':'\(',')':'\)',"'":"\'",'"':'\"',',':'\,'}
+    
+#     for i in BAD_CHAR_DICT.items():
+#         df = replace_char_in_df(df , i[0], i[1])
+#     date_time_stringifyer(df)
+
+#     for col in df.columns:
+#         if isinstance(df[col].iloc[0], pd.datetime):               
+#             df[col] = df.apply(lambda x: x[col].strftime('%Y-%m-%d %H:%M:%S'), axis=1)
+
+    stringifyer(df)        
+    SPLIT_SIZE = 40000
+    df.fillna(value='NULL', inplace = True)
+    fields = str(tuple(df.columns.values))
+    fields = re.sub('[\']',"",fields)
+    fields = re.sub('(,\))',")",fields)
+    tuples_ = [tuple(r) for r in df.to_numpy()]
+
+    tuple_tokens =[tuples_[i : i + SPLIT_SIZE] for i in range(0, len(tuples_), SPLIT_SIZE)]
+    for t in tuple_tokens:
+        tuples_to_insert = str(t)    
+        tuples_to_insert = re.sub('(NULL)',"#NULL#",tuples_to_insert)
+        tuples_to_insert = re.sub('[\[\]]|(\'#)|(#\')',"", tuples_to_insert)
+        tuples_to_insert = re.sub('(,\))',")", tuples_to_insert)
+        tuples_to_insert = re.sub('%',"%%", tuples_to_insert)  
+        sql_str = f"INSERT INTO {table_name} {fields} VALUES {tuples_to_insert} ON DUPLICATE KEY UPDATE {','.join([x + ' = VALUES(' + x + ')' for x in df.columns.values])} "
+        
+        db.session.execute(sql_str)
+        db.session.commit()
+       
+
 
 def convert_date_from_utc(time_zone, dt_obj, is_string = True, t_format = "%Y-%m-%d %H:%M:%S"):
     if(dt_obj is None):
@@ -121,41 +171,100 @@ def has_overlaping_subcontracts(itn, date):
                     .all()
     return True if len(sub_contract) > 1 else False
 
-def upload_forecasted_schedule_to_temp_db(forecasted_schedule_df, itn, price):
-   
-    
-    forecasted_vol = Decimal(str(forecasted_schedule_df['forecasted_volume'].sum()))
-    
-    time_series = pd.date_range(start = forecasted_schedule_df.iloc[0]['date'].to_pydatetime(), \
-                                end = forecasted_schedule_df.iloc[-1]['date'].to_pydatetime(), \
-                                freq='H', tz = 'EET').tz_convert('UTC').tz_localize(None)        
-    schedule_df = pd.DataFrame(time_series, columns = ['utc'])
-    schedule_df['itn'] = itn 
-    schedule_df['price'] = price
-    schedule_df['reported_vol'] = -1
+def upload_forecasted_schedule_to_temp_db(forecasted_schedule_df, itn, price, activation_date, curr_contract):
 
-    forecasted_schedule_df.set_index('date', inplace = True)
-    forecasted_schedule_df.index = forecasted_schedule_df.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_localize(None)
-    forecasted_schedule_df.reset_index(inplace = True)
-    forecasted_schedule_df.rename(columns = {forecasted_schedule_df.columns[0]:'utc'}, inplace = True)
-    schedule_df = schedule_df.merge(forecasted_schedule_df, on = 'utc', how = 'left')
+
+    local_start_date = activation_date.to_pydatetime()
+    local_end_date = curr_contract.end_date
     
-    schedule_df = schedule_df.fillna(0)
-    schedule_df['forecast_vol'] = schedule_df['forecasted_volume'].apply(lambda x: Decimal(str(x)))
-    schedule_df.drop(columns = 'forecasted_volume', inplace = True)
-    schedule_df['utc'] = schedule_df['utc'].astype(str)
+    time_series = pd.date_range(start = local_start_date, end = local_end_date + dt.timedelta(hours = 23) , freq='H', tz = 'EET')
+    
+    df = pd.DataFrame(time_series, columns = ['utc'])
+    df['weekday'] = df['utc'].apply(lambda x: x.strftime('%A'))
+    df['hour'] = df['utc'].apply(lambda x: x.hour)
+    df.set_index('utc', inplace = True)
+    df.index = df.index.tz_convert('UTC').tz_localize(None)
+    df.reset_index(inplace = True) 
+    
+    if forecasted_schedule_df is not None:   
+        df = pd.merge(df, forecasted_schedule_df, on = ['weekday','hour'], how = 'right' )
+        # df.drop_duplicates(subset = 'utc', keep = 'first', inplace = True)         
+        df['forecast_vol'] = df['forecasted_vol'].apply(lambda x: Decimal(str(x)))
+        forecasted_vol = Decimal(str(forecasted_schedule_df['forecasted_vol'].sum()))
+    else:
+        flash(f'No forcasted volume provided for ITN {itn}. Zerro will be inserted !','danger')
+        df['forecast_vol'] = Decimal(str('0'))
+        forecasted_vol = Decimal(str('0'))
+    
+    df['itn'] =itn
+    df['price'] = price
+    df['reported_vol'] = -1
+    df = df[['itn','utc','forecast_vol','reported_vol','price']]
+    
+    df['utc'] = df['utc'].astype(str)
     ItnScheduleTemp.query.delete()
     db.session.commit()
-    
-    bulk_list = schedule_df.to_dict(orient='records')    
+    print(df, file = sys.stdout)
+    bulk_list = df.to_dict(orient='records')    
     db.session.bulk_insert_mappings(ItnScheduleTemp, bulk_list)
     return forecasted_vol
 
 
 
+   
+    
+    # forecasted_vol = Decimal(str(forecasted_schedule_df['forecasted_volume'].sum()))
+    
+    # time_series = pd.date_range(start = forecasted_schedule_df.iloc[0]['date'].to_pydatetime(), \
+    #                             end = forecasted_schedule_df.iloc[-1]['date'].to_pydatetime(), \
+    #                             freq='H', tz = 'EET').tz_convert('UTC').tz_localize(None)        
+    # schedule_df = pd.DataFrame(time_series, columns = ['utc'])
+    # schedule_df['itn'] = itn 
+    # schedule_df['price'] = price
+    # schedule_df['reported_vol'] = -1
+
+    # forecasted_schedule_df.set_index('date', inplace = True)
+    # forecasted_schedule_df.index = forecasted_schedule_df.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_localize(None)
+    # forecasted_schedule_df.reset_index(inplace = True)
+    # forecasted_schedule_df.rename(columns = {forecasted_schedule_df.columns[0]:'utc'}, inplace = True)
+    # schedule_df = schedule_df.merge(forecasted_schedule_df, on = 'utc', how = 'left')
+    
+    # schedule_df = schedule_df.fillna(0)
+    # schedule_df['forecast_vol'] = schedule_df['forecasted_volume'].apply(lambda x: Decimal(str(x)))
+    # schedule_df.drop(columns = 'forecasted_volume', inplace = True)
+    # schedule_df['utc'] = schedule_df['utc'].astype(str)
+    # ItnScheduleTemp.query.delete()
+    # db.session.commit()
+    
+    # bulk_list = schedule_df.to_dict(orient='records')    
+    # db.session.bulk_insert_mappings(ItnScheduleTemp, bulk_list)
+    # return forecasted_vol
+
+
+def convert_weekly_schedule(schedule_df, itn ):
+
+    
+    local_start_date = schedule_df.iloc[0]['start_date']
+    local_end_date = schedule_df.iloc[0]['end_date']
+    time_series = pd.date_range(start = local_start_date, end = local_end_date + dt.timedelta(hours = 23) , freq='H', tz = 'EET')
+    
+    df = pd.DataFrame(time_series, columns = ['utc'])
+    df['weekday'] = df['utc'].apply(lambda x: x.strftime('%A'))
+    df.set_index('utc', inplace = True)
+    df.index = df.index.tz_convert('UTC').tz_localize(None)
+    df.reset_index(inplace = True)    
+    df = df.merge(schedule_df, on = 'weekday', how = 'left' )
+    df.drop(columns = ['start_date','end_date','weekday','hour'], inplace = True)
+    df['itn'] =itn
+    
+    df['reported_vol'] = -1
+    df = df[['itn','utc','forecasted_vol','reported_vol']]
+    return df
+
 
 def generate_subcontract(row, curr_contract, df):
 
+    
     activation_date = convert_date_to_utc("Europe/Sofia",row['activation_date']).replace(tzinfo=None)
     curr_sub_contract =  SubContract.query.filter(SubContract.itn == row['itn'], \
                                                         SubContract.start_date <= activation_date, \
@@ -164,12 +273,14 @@ def generate_subcontract(row, curr_contract, df):
         
         forecasted_vol = None
 
-        if df.get(row['itn']) is not None and get_measuring_type(row['measuring_type']).code in ['DIRECT','UNDIRECT']:
-            forecasted_vol = upload_forecasted_schedule_to_temp_db(df[row['itn']], row['itn'], row['price'])
+        if get_measuring_type(row['measuring_type']).code in ['DIRECT','UNDIRECT']:
+            forcasted_df = df.get(row['itn']) if df.get(row['itn']) is not None else df.get('all')
+            forecasted_vol = upload_forecasted_schedule_to_temp_db(forcasted_df, row['itn'], row['price'], row['activation_date'], curr_contract)
             ##g.forcasted_schedule = df[row['itn']]
         else:
             if row['forecast_montly_consumption'] is None:
-                flash('No forcasted volume provided or measuring type mismatch.','danger')
+                flash(f'No forcasted volume provided or measuring type mismatch for ITN {row.itn}. Zerro will be inserted !','danger')
+                forecasted_vol = Decimal(str('0'))
             else:
                 forecasted_vol = Decimal(str(row['forecast_montly_consumption']))
 
@@ -205,7 +316,8 @@ def generate_utc_time_series(start_date, end_date, tz = "Europe/Sofia"):
 
     start_date_utc = convert_date_to_utc(tz, start_date)
     end_date_utc = convert_date_to_utc(tz, end_date) + dt.timedelta(hours = 23)
-    time_series = pd.date_range(start = start_date_utc, end = end_date_utc, freq='H', tz='UTC')
+    time_series = pd.date_range(start = start_date_utc, end = end_date_utc, freq='H', \
+                                    tz = tz).tz_convert('UTC').tz_localize(None)
 
     return time_series
 
@@ -220,6 +332,7 @@ def generate_utc_time_series(start_date, end_date, tz = "Europe/Sofia"):
 #     return df
     
 def check_and_load_hourly_schedule(form):
+
 
     # print(f'in check_and_load_hourly_schedule:  {form.measuring_type.data.code}', file=sys.stdout)
     if form.measuring_type.data.code in ['DIRECT','UNDIRECT']:

@@ -159,7 +159,7 @@ class Erp(BaseModel):
 
 class ErpInvoice(BaseModel):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    number = db.Column(db.String(64), nullable=False, unique = True)  
+    number = db.Column(db.String(64), nullable=False, unique = False)  
     date = db.Column(db.DateTime, nullable=False)
     event = db.Column(db.String(128), nullable = True)
     correction_note = db.Column(db.String(64), nullable = True)
