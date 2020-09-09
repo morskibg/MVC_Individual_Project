@@ -31,8 +31,6 @@ class BaseModel(db.Model):
         db.session.commit()
 
 
-
-
 class User(UserMixin,BaseModel):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), index=True, unique=True)
@@ -65,10 +63,19 @@ class Contractor(BaseModel):
 
     contracts = db.relationship("Contract", back_populates="contractor", lazy="dynamic")
     invoice_groups = db.relationship("InvoiceGroup", back_populates="contractor", lazy="dynamic")
-    # sub_contracts = db.relationship("SubContract", back_populates="contractor", lazy="dynamic")
+    
 
     def __repr__(self):
-        return '<Contractor {} - {}>'.format(self.name, self.acc_411)    
+        return '<Contractor {} - {}>'.format(self.name, self.acc_411)  
+
+class TimeZone(BaseModel):
+    id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
+    code = db.Column(db.String(32), unique=True, nullable = False)
+
+    contracts = db.relationship("Contract", back_populates="time_zone", lazy="dynamic")
+
+    def __repr__(self):
+        return f'<Time Zone: {self.code}'
 
 class Contract(BaseModel):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -76,16 +83,15 @@ class Contract(BaseModel):
     contractor_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     subject = db.Column(db.String(128), nullable=True)
     parent_id = db.Column(db.Integer, nullable=True)
+    time_zone_id = db.Column(db.SmallInteger, db.ForeignKey('time_zone.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     signing_date = db.Column(db.DateTime, nullable=False)
     start_date = db.Column(db.DateTime, index=True, nullable=True)
     end_date = db.Column(db.DateTime, index=True, nullable=True)
-    duration_in_days = db.Column(db.SmallInteger, nullable=False)
-    # price = db.Column(db.Numeric(6,2), nullable=False)
+    duration_in_days = db.Column(db.SmallInteger, nullable=False)    
     invoicing_interval = db.Column(db.SmallInteger,nullable=False)
     maturity_interval = db.Column(db.SmallInteger,nullable=False)
     contract_type_id = db.Column(db.SmallInteger, db.ForeignKey('contract_type.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
-    is_work_days = db.Column(db.Boolean, nullable=False)
-    # has_balancing = db.Column(db.Boolean, nullable=False)
+    is_work_days = db.Column(db.Boolean, nullable=False)    
     automatic_renewal_interval = db.Column(db.SmallInteger, nullable=True)
     collateral_warranty = db.Column(db.String(256), nullable=True)
     notes = db.Column(db.String(512), nullable=True)
@@ -94,6 +100,7 @@ class Contract(BaseModel):
     contractor = db.relationship('Contractor', back_populates = 'contracts')
     contract_type = db.relationship('ContractType', back_populates = 'contracts')
     sub_contracts = db.relationship("SubContract", back_populates="contract", lazy="dynamic")
+    time_zone = db.relationship("TimeZone", back_populates="contracts")
 
 
     
@@ -225,8 +232,9 @@ class MeasuringType(BaseModel):
 
 class InvoiceGroup(BaseModel):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(128), nullable=False, unique = True)
+    name = db.Column(db.String(32), nullable=False, unique = True)
     contractor_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
+    description = db.Column(db.String(128), nullable=True, unique = False)
 
     contractor = db.relationship('Contractor', back_populates = 'invoice_groups')
     sub_contracts = db.relationship("SubContract", back_populates="invoice_group", lazy="dynamic")
@@ -239,17 +247,17 @@ class SubContract(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     contract_id = db.Column(db.Integer, db.ForeignKey('contract.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     object_name = db.Column(db.String(64), nullable = True)
-    price = db.Column(db.Numeric(6,2), nullable=False)
+    price = db.Column(db.Numeric(8,7), nullable=False)
     invoice_group_id = db.Column(db.Integer, db.ForeignKey('invoice_group.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     measuring_type_id = db.Column(db.SmallInteger, db.ForeignKey('measuring_type.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     start_date = db.Column(db.DateTime, primary_key = True)
     end_date = db.Column(db.DateTime, primary_key = True)    
-    zko = db.Column(db.Numeric(6,2), nullable=False)
-    akciz = db.Column(db.Numeric(6,2), nullable=False)
+    zko = db.Column(db.Numeric(8,7), nullable=False)
+    akciz = db.Column(db.Numeric(8,7), nullable=False)
     has_grid_services = db.Column(db.Boolean, nullable = False, default = 0)
     has_spot_price = db.Column(db.Boolean, nullable = False, default = 0)
     has_balancing = db.Column(db.Boolean, nullable=False)
-    forecast_vol = db.Column(db.Numeric(12,6), nullable=False)
+    forecast_vol = db.Column(db.Numeric(15,3), nullable=False)
     last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate = dt.datetime.utcnow)
 
 
@@ -279,7 +287,7 @@ class ItnScheduleTemp(BaseModel):
     utc = db.Column(db.DateTime, primary_key = True)
     forecast_vol = db.Column(db.Numeric(12,6), nullable=False)
     reported_vol = db.Column(db.Numeric(12,6), nullable=False)
-    price = db.Column(db.Numeric(8,4), nullable=False)
+    price = db.Column(db.Numeric(8,7), nullable=False)
     def __repr__(self):
         return '<itn: {}, utc: {}, forecast_vol: {}, reported_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.reported_vol, self.price)
    
@@ -289,7 +297,7 @@ class ItnSchedule(BaseModel):
     utc = db.Column(db.DateTime, primary_key = True)
     forecast_vol = db.Column(db.Numeric(12,6), nullable=False)
     reported_vol = db.Column(db.Numeric(12,6), nullable=False)
-    price = db.Column(db.Numeric(8,4), nullable=False)
+    price = db.Column(db.Numeric(8,7), nullable=False)
 
     meta = db.relationship('ItnMeta', back_populates = 'itn_schedules')
     #sub_contracts = db.relationship("SubContract", back_populates="measuring_type", lazy="dynamic")

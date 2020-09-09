@@ -6,8 +6,9 @@ import pandas as pd
 from flask import render_template, flash, redirect, url_for, request, g
 from app import app
 from app.forms import (
-    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, UploadExcelForm, ErpForm,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm, CreateSubForm, TestForm)
+    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm, CreateSubForm, TestForm,
+    UploadInitialForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
@@ -22,7 +23,7 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  set_contarct_dates,
                                  get_address,
                                  get_invoicing_group,
-                                 get_itn_meta,
+                                 get_or_create_itn_meta,
                                  generate_utc_time_series,
                                  generate_subcontract,
                                  get_erp_id_by_name,
@@ -34,13 +35,16 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  upload_forecasted_schedule_to_temp_db,
                                  convert_weekly_schedule,
                                  update_or_insert,
+                                 
 
 )
 
 
 from zipfile import ZipFile
-from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_to_df
-
+from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_to_df,
+                                      fill_db_from_excel_cez, fill_db_from_excel_e_pro,
+                                      fill_db_from_excel_evn,
+                                      
 )
 
 MONEY_ROUND = 2
@@ -49,18 +53,25 @@ MONEY_ROUND = 2
 @login_required
 def test():
     form = TestForm()
+    
     if form.validate_on_submit():
+        
         # print(request.files.get('file_1'), file = sys.stdout)
         # file_names = []
         separator = '";"'
         erp_zip = ZipFile(request.files.get('file_1'))
-        df_d, df_t = insert_to_df(erp_zip, separator)
+        # fill_db_from_excel_evn(erp_zip)
+        fill_db_from_excel_cez(erp_zip)
+        # fill_db_from_excel_e_pro(erp_zip)
+        
+        # df_d, df_t = insert_to_df(erp_zip, separator)
         # df = insert_to_df(erp_zip, separator)
         # df = insert_erp_invoice(erp_zip, separator)
         # for zf in erp_zip.namelist() :
         #     if zf.endswith('.csv'):
         #         file_names.append(zf)
-        # df1 = pd.read_csv(erp_zip.open(file_names[0]),sep=separator,  encoding="cp1251", engine='python',skiprows = 1)        
+        # df1 = pd.read_csv(erp_zip.open(file_names[0]),sep=separator,  encoding="cp1251", engine='python',skiprows = 1)      
+        #   
         # flash(f'file is  ---->{df_d.isnull().sum()}','info')
         # flash(f'file is  ---->{df_d.isnull().values.any()}','info')
         # flash(f'file is  ---->{df_d.columns}','info')
@@ -69,6 +80,85 @@ def test():
       
         
     return render_template('test.html', title='Test', form=form)
+    
+
+@app.route('/upload_initial_data', methods=['GET', 'POST'])
+@login_required
+def upload_initial_data():
+    
+    form = UploadInitialForm()
+    if form.validate_on_submit():
+        if request.files.get('file_contractors').filename != '':
+            
+            raw_contractor_df =  pd.read_csv(request.files.get('file_contractors'), encoding = "windows-1251",header=None)
+            raw_contractor_df.drop(columns = [0,1,2,3,4,5,6,7,8,9,10], inplace = True)
+            
+            start_idx = raw_contractor_df[raw_contractor_df[11] == '411'].index[0] 
+            end_idx = raw_contractor_df[raw_contractor_df[11] == '421'].index[0] 
+            raw_contractor_df = raw_contractor_df[start_idx:end_idx]
+            raw_contractor_df.iloc[0] = raw_contractor_df.iloc[0].shift(-1)
+            raw_contractor_df.drop(columns = [20,21], inplace = True)
+            raw_contractor_df.columns = ['Name','EIC','Vat_Number','Phone','E_Mail','City','Comptroller','Address','Acc_411']
+            raw_contractor_df['Address'] = raw_contractor_df['City'] + ',' + raw_contractor_df['Address']
+            raw_contractor_df.drop(columns = ['City'], inplace = True)
+            raw_contractor_df['Head_Address'] = np.nan
+            raw_contractor_df = raw_contractor_df[['Name', 'EIC','Address','Vat_Number','E_Mail','Acc_411']]
+            raw_contractor_df.rename(columns = {'Name':'name', 'EIC':'eic','Address':'address','Vat_Number':'vat_number','E_Mail':'email','Acc_411':'acc_411'}, inplace = True)
+   
+            update_or_insert(raw_contractor_df, Contractor.__table__.name)
+
+        if request.files.get('file_measuring').filename != '':
+            measuring_df = pd.read_excel(request.files.get('file_measuring'))
+            update_or_insert(measuring_df, MeasuringType.__table__.name)
+
+        if request.files.get('file_erp').filename != '':
+            erp_df =  pd.read_excel(request.files.get('file_erp'))
+            update_or_insert(erp_df, Erp.__table__.name)
+
+        if request.files.get('file_stp').filename != '':
+
+            START_DATE = '01/01/2020 00:00:00'
+            END_DATE = '31/12/2020 23:00:00'
+            FORMAT = '%d/%m/%Y %H:%M:%S'
+
+            df = pd.read_excel(request.files.get('file_stp'),sheet_name='full')
+            sDate = pd.to_datetime(START_DATE,format = FORMAT)
+            eDate = pd.to_datetime(END_DATE,format = FORMAT)
+            timeseries = pd.date_range(start=sDate, end=eDate, tz='EET', freq='h')
+            Utc = timeseries.tz_convert('UTC').tz_localize(None) 
+            df['utc'] = Utc
+            df_m = pd.melt(df, id_vars =['utc'], value_vars =['CEZ_B1', 'CEZ_B2', 'CEZ_B3', 'CEZ_B4', 'CEZ_B5', 'CEZ_H1', 'CEZ_H2',
+                'CEZ_S1', 'EPRO_B01', 'EPRO_B02', 'EPRO_B03', 'EPRO_B04', 'EPRO_H0',
+                'EPRO_H1', 'EPRO_S0', 'EVN_G0', 'EVN_G1', 'EVN_G2', 'EVN_G3', 'EVN_G4',
+                'EVN_H0', 'EVN_H1', 'EVN_H2', 'EVN_BD000'],var_name='code') 
+            
+            df_measure_code = pd.read_sql(MeasuringType.query.statement, db.session.bind)
+            df_l = df_m.merge(df_measure_code, on=['code'])
+            df_l.rename(columns = {'id':'measuring_type_id','Utc':'utc'}, inplace = True)
+            df_l.drop(columns = ['code'], inplace = True)
+            df_l = df_l[['utc','measuring_type_id','value']]
+            
+            update_or_insert(df_l, StpCoeffs.__table__.name)
+
+        if request.files.get('file_inv_group').filename != '':
+            if request.files.get('file_inv_group').filename == 'contractors_inv_groups_itn_old.xlsx':
+                df = pd.read_excel(request.files.get('file_inv_group'))
+                df.drop_duplicates(subset = 'Invoice_Group_Name', keep = 'first', inplace = True)
+                df['contractor_id'] = df['Contractor_Name'].apply(lambda x: Contractor.query.filter(Contractor.name == x).first().id if Contractor.query.filter(Contractor.name == x).first() is not None else -1)
+                df['name'] = df['Invoice_Group_Name'].apply(lambda x: x[:29])
+                df['description'] = df['Invoice_Group_Name']
+                # df.rename(columns = {'Invoice_Group_Name':'name'}, inplace = True)
+                df = df[['name', 'contractor_id', 'description']]
+                update_or_insert(df, InvoiceGroup.__table__.name)
+            else:
+                flash('Empty','danger')
+
+
+
+        
+    return render_template('upload_initial_data.html', title='Test', form=form)
+
+
 
 
 @app.route('/')
@@ -306,43 +396,44 @@ def upload_invoicing_group():
 @app.route('/upload_itns', methods=['GET', 'POST'])
 @login_required
 def upload_itns():
-    
+    template_cols = ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group', 'price', 'zko', 
+                    'akciz', 'has_grid_services', 'has_spot_price', 'erp','grid_voltage', 'address', 'description', 'is_virtual',
+                    'virtual_parent_itn', 'forecast_montly_consumption','has_balancing', 'acc_411']
     form = UploadItnsForm()
     if form.validate_on_submit():
         df = pd.read_excel(request.files.get('file_'), sheet_name=None)
-        if set(df['data'].columns).issubset(['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group', 'price', 'zko', 
-                                                      'akciz', 'has_grid_services', 'has_spot_price', 'erp','grid_voltage', 'address', 'description', 'is_virtual',
-                                                      'virtual_parent_itn', 'forecast_montly_consumption','has_balancing']):
+        if set(df['data'].columns).issubset(template_cols):
             arr = []
             for index,row in df['data'].iterrows():
                 
                 curr_contract = get_contract_by_internal_id(row['internal_id'])
+                print(f'From upload itns: current contract ----> {curr_contract}', file = sys.stdout)
                 
                 if curr_contract is None :
-                    flash(f'Itn: {row.itn} has not got an contract !')
-                elif curr_contract.start_date is None:
+                    flash(f'Itn: {row.itn} does\'t have an contract ! Skipping !')
+                    continue
+                if curr_contract.start_date is None:
                     set_contarct_dates(curr_contract, row['activation_date'])
+                
+                curr_itn_meta = get_or_create_itn_meta(row)                    
+                if curr_itn_meta is None:
+
+                    flash(f'Itn: {row.itn} does\'t have meta data ! Skipping !')
+                    continue
                 else:
-                    curr_itn_meta = get_itn_meta(row)                    
-                    if curr_itn_meta is None:
-                        flash('Upload failed from curr_itn_meta','danger')
-                    else:
-                        pass
-                        # flash(curr_itn_meta, 'info')                       
-                        # curr_itn_meta.save()
-                    curr_sub_contr = generate_subcontract(row, curr_contract, df)
+                    curr_sub_contr = generate_subcontract(row, curr_contract, df, curr_itn_meta)
                     if curr_sub_contr is not None:
                         curr_sub_contr.save()
                         
-                        flash(f'Upload successiful {curr_sub_contr}!','success')
+                        flash(f'Sucontract {curr_sub_contr} was created !','info')
                     else:
-                        flash(f'Upload failed from sub creation {curr_sub_contr}','danger')                       
-      
-            
-        else:
-            flash('Upload failed from mismatched columns','danger') 
+                        flash(f'Itn: {row.itn} faled to create subcontract ! Skipping !')
+                        continue   
 
-    # curr_itn_meta.save()
+                    flash(f'Itn: {row.itn} was uploaded successifuly !','success')        
+        else:
+            flash(f'Upload failed from mismatched columns: {set(df.get("data").columns).difference(set(template_cols))}','danger') 
+
     return render_template('upload_itns.html', title='Upload ITNs', form=form)
 
 
@@ -354,19 +445,21 @@ def upload_contracts(start,end):
     form = UploadContractsForm()
     if form.validate_on_submit():
         
-        df = pd.read_excel(request.files.get('file_'),usecols = 'D:M,O:Q')
+        df = pd.read_excel(request.files.get('file_'),usecols = 'D:M,O:R')
         
         df = df.fillna(0)
         df = df[int(start):int(end)]
+        flash(df.columns)
         if set(df.columns).issubset(['parent_id', 'internal_id', 'contractor', 'sign_date', 'start_date',
                                     'end_date', 'invoicing_interval', 'maturity_interval', 'contract_type',
                                     'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
-                                    'notes']):
+                                    'notes','time_zone']):
 
             tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
             parent_tks = df['parent_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
             all_cyr = tks.all()
             all_cyr_parent = parent_tks.all()
+            
             if not (all_cyr & all_cyr_parent):
                 flash('There is tk in latin, aborting', 'danger')
                 return redirect(url_for('upload_contracts'))
@@ -375,7 +468,8 @@ def upload_contracts(start,end):
             df['parent_id_initial_zero'] = 0
             df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
             df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days, axis = 1)
-
+            df['time_zone'] = df['time_zone'].apply(lambda x: TimeZone.query.filter(TimeZone.code == x).first() if TimeZone.query.filter(TimeZone.code == x).first() is not None else x)
+            
             renewal_dict = {'удължава се автоматично с още 12 м. ако никоя от страните не заяви писмено неговото прекратяване':12,'Подновява се автоматично за 1 година , ако никоя от страните не възрази писмено за прекратяването му поне 15 дни преди изтичането му':12,
                         'удължава се автоматично с още 6 м. ако никоя от страните не заяви писмено неговото прекратяване':6,'удължава се автоматично за 3 м. ако никоя от страните не заяви писмено неговото прекратяване с допълнително споразумение.':3,'За срок от една година. Подновява се с ДС / не се изготвя справка към ф-ра':12,
                         'За срок от една година. Подновява се с ДС / не се изготвя справка към ф-ра':12}
@@ -392,13 +486,17 @@ def upload_contracts(start,end):
             df['is_work_day'] = df['is_work_day'].apply(lambda x: work_day_dict[x.strip()] if(work_day_dict.get(str(x).strip())) else 0 )
             t_format = '%Y-%m-%dT%H:%M'
             contracts = [Contract(internal_id = x[1]['internal_id'], contractor_id = Contractor.query.filter(Contractor.name == x[1]['contractor']).first().id, subject = 'None', parent_id =  x[1]['parent_id_initial_zero'], \
-                        signing_date =  convert_date_to_utc("Europe/Sofia",x[1]['sign_date'].strftime(t_format),t_format)  , \
-                        start_date = convert_date_to_utc("Europe/Sofia", x[1]['start_date'].strftime(t_format),t_format), end_date = convert_date_to_utc("Europe/Sofia", x[1]['end_date'].strftime(t_format),t_format) , duration_in_days = x[1]['duration_in_days'], invoicing_interval = x[1]['invoicing_interval'], maturity_interval = x[1]['maturity_interval'], \
-                        contract_type_id = x[1]['contract_type'], is_work_days = x[1]['is_work_day'], automatic_renewal_interval = x[1]['automatic_renewal_interval'], collateral_warranty = x[1]['collateral_warranty'], \
-                        notes =  x[1]['notes']) for x in df.iterrows()]
+                        signing_date =  convert_date_to_utc(x[1]['time_zone'].code,x[1]['sign_date'].strftime(t_format),t_format)  , \
+                        start_date = convert_date_to_utc(x[1]['time_zone'].code, x[1]['start_date'].strftime(t_format),t_format), \
+                        end_date = convert_date_to_utc(x[1]['time_zone'].code, x[1]['end_date'].strftime(t_format),t_format) , \
+                        duration_in_days = x[1]['duration_in_days'], invoicing_interval = x[1]['invoicing_interval'], maturity_interval = x[1]['maturity_interval'], \
+                        contract_type_id = x[1]['contract_type'], is_work_days = x[1]['is_work_day'], automatic_renewal_interval = x[1]['automatic_renewal_interval'], \
+                        collateral_warranty = x[1]['collateral_warranty'], notes =  x[1]['notes'],time_zone_id = x[1]['time_zone'].id) \
+                        for x in df.iterrows()]
             # start = time.time() 
-            db.session.add_all(contracts)
-            # db.session.bulk_save_objects(contracts)
+            # flash(contracts)
+            # db.session.add_all(contracts)
+            db.session.bulk_save_objects(contracts)
             db.session.commit()
             flash(f'Contracts from {start} to {end} successifully uploaded','success')
             
@@ -576,6 +674,8 @@ def create_subcontract():
 
 
     return render_template('create_subcontract.html', title='Create SubContract', form = form)
+
+
 
 @app.route('/upload_erp', methods=['GET', 'POST'])
 @login_required

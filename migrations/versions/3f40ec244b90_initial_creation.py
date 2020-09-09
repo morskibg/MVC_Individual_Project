@@ -1,8 +1,8 @@
-"""initial
+"""initial creation
 
-Revision ID: 941adab262c7
+Revision ID: 3f40ec244b90
 Revises: 
-Create Date: 2020-08-11 19:46:15.128374
+Create Date: 2020-09-08 08:42:59.610637
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '941adab262c7'
+revision = '3f40ec244b90'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -54,18 +54,31 @@ def upgrade():
     sa.Column('date', sa.DateTime(), nullable=False),
     sa.Column('event', sa.String(length=128), nullable=True),
     sa.Column('correction_note', sa.String(length=64), nullable=True),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('number')
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('incoming_itn',
     sa.Column('itn', sa.String(length=33), nullable=False),
     sa.Column('date', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('itn', 'date')
     )
+    op.create_table('itn_schedule_temp',
+    sa.Column('itn', sa.String(length=33), nullable=False),
+    sa.Column('utc', sa.DateTime(), nullable=False),
+    sa.Column('forecast_vol', sa.Numeric(precision=12, scale=6), nullable=False),
+    sa.Column('reported_vol', sa.Numeric(precision=12, scale=6), nullable=False),
+    sa.Column('price', sa.Numeric(precision=8, scale=7), nullable=False),
+    sa.PrimaryKeyConstraint('itn', 'utc')
+    )
     op.create_table('measuring_type',
     sa.Column('id', sa.SmallInteger(), autoincrement=True, nullable=False),
     sa.Column('code', sa.String(length=16), nullable=False),
     sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('time_zone',
+    sa.Column('id', sa.SmallInteger(), autoincrement=True, nullable=False),
+    sa.Column('code', sa.String(length=32), nullable=False),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('code')
     )
     op.create_table('user',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -82,6 +95,7 @@ def upgrade():
     sa.Column('contractor_id', sa.Integer(), nullable=False),
     sa.Column('subject', sa.String(length=128), nullable=True),
     sa.Column('parent_id', sa.Integer(), nullable=True),
+    sa.Column('time_zone_id', sa.SmallInteger(), nullable=False),
     sa.Column('signing_date', sa.DateTime(), nullable=False),
     sa.Column('start_date', sa.DateTime(), nullable=True),
     sa.Column('end_date', sa.DateTime(), nullable=True),
@@ -96,6 +110,7 @@ def upgrade():
     sa.Column('last_updated', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['contract_type_id'], ['contract_type.id'], onupdate='CASCADE', ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['contractor_id'], ['contractor.id'], onupdate='CASCADE', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['time_zone_id'], ['time_zone.id'], onupdate='CASCADE', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('internal_id')
     )
@@ -147,7 +162,7 @@ def upgrade():
     sa.Column('utc', sa.DateTime(), nullable=False),
     sa.Column('forecast_vol', sa.Numeric(precision=12, scale=6), nullable=False),
     sa.Column('reported_vol', sa.Numeric(precision=12, scale=6), nullable=False),
-    sa.Column('price', sa.Numeric(precision=8, scale=4), nullable=False),
+    sa.Column('price', sa.Numeric(precision=8, scale=7), nullable=False),
     sa.ForeignKeyConstraint(['itn'], ['itn_meta.itn'], onupdate='CASCADE', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('itn', 'utc')
     )
@@ -161,16 +176,18 @@ def upgrade():
     sa.Column('itn', sa.String(length=33), nullable=False),
     sa.Column('contract_id', sa.Integer(), nullable=False),
     sa.Column('object_name', sa.String(length=64), nullable=True),
-    sa.Column('price', sa.Numeric(precision=6, scale=2), nullable=False),
+    sa.Column('price', sa.Numeric(precision=8, scale=7), nullable=False),
     sa.Column('invoice_group_id', sa.Integer(), nullable=False),
     sa.Column('measuring_type_id', sa.SmallInteger(), nullable=False),
     sa.Column('start_date', sa.DateTime(), nullable=False),
     sa.Column('end_date', sa.DateTime(), nullable=False),
-    sa.Column('zko', sa.Numeric(precision=6, scale=2), nullable=False),
-    sa.Column('akciz', sa.Numeric(precision=6, scale=2), nullable=False),
+    sa.Column('zko', sa.Numeric(precision=8, scale=7), nullable=False),
+    sa.Column('akciz', sa.Numeric(precision=8, scale=7), nullable=False),
     sa.Column('has_grid_services', sa.Boolean(), nullable=False),
     sa.Column('has_spot_price', sa.Boolean(), nullable=False),
     sa.Column('has_balancing', sa.Boolean(), nullable=False),
+    sa.Column('forecast_vol', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('last_updated', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['contract_id'], ['contract.id'], onupdate='CASCADE', ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['invoice_group_id'], ['invoice_group.id'], onupdate='CASCADE', ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['itn'], ['itn_meta.itn'], onupdate='CASCADE', ondelete='CASCADE'),
@@ -220,7 +237,9 @@ def downgrade():
     op.drop_index(op.f('ix_user_username'), table_name='user')
     op.drop_index(op.f('ix_user_email'), table_name='user')
     op.drop_table('user')
+    op.drop_table('time_zone')
     op.drop_table('measuring_type')
+    op.drop_table('itn_schedule_temp')
     op.drop_table('incoming_itn')
     op.drop_table('erp_invoice')
     op.drop_table('erp')

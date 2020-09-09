@@ -203,12 +203,16 @@ class ErpForm(FlaskForm):
 
 
 
-class UploadExcelForm(FlaskForm):
+class UploadInitialForm(FlaskForm):
 
     
-    file_1 = FileField('Browse for Upload Contracts File')
-    file_2 = FileField('Browse for Add Invoicing Group File')
-    file_3 = FileField('Browse for Add ITN File')
+    file_erp = FileField('Browse for ERP File')
+    file_measuring = FileField('Browse for Measuring Type File')
+    file_contractors = FileField('Browse for Contracors CSV File')
+    file_stp = FileField('Browse for Stp File')
+    file_inv_group = FileField('Browse for Invoice Group File')
+
+
 
 
     submit = SubmitField('Upload')

@@ -7,6 +7,7 @@ from decimal import Decimal
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
 
+
 MONEY_ROUND = 2
 
 
@@ -28,16 +29,6 @@ def update_or_insert(df, table_name):
                       
         Input:engine, dataframe, sql table name
         Output: none"""
-    
-#     BAD_CHAR_DICT = {'#':' ','%':'%%','(':'\(',')':'\)',"'":"\'",'"':'\"',',':'\,'}
-    
-#     for i in BAD_CHAR_DICT.items():
-#         df = replace_char_in_df(df , i[0], i[1])
-#     date_time_stringifyer(df)
-
-#     for col in df.columns:
-#         if isinstance(df[col].iloc[0], pd.datetime):               
-#             df[col] = df.apply(lambda x: x[col].strftime('%Y-%m-%d %H:%M:%S'), axis=1)
 
     stringifyer(df)        
     SPLIT_SIZE = 40000
@@ -53,7 +44,8 @@ def update_or_insert(df, table_name):
         tuples_to_insert = re.sub('(NULL)',"#NULL#",tuples_to_insert)
         tuples_to_insert = re.sub('[\[\]]|(\'#)|(#\')',"", tuples_to_insert)
         tuples_to_insert = re.sub('(,\))',")", tuples_to_insert)
-        tuples_to_insert = re.sub('%',"%%", tuples_to_insert)  
+        tuples_to_insert = re.sub('%',"%%", tuples_to_insert)
+        tuples_to_insert = re.sub(':',"::", tuples_to_insert)  
         sql_str = f"INSERT INTO {table_name} {fields} VALUES {tuples_to_insert} ON DUPLICATE KEY UPDATE {','.join([x + ' = VALUES(' + x + ')' for x in df.columns.values])} "
         
         db.session.execute(sql_str)
@@ -69,7 +61,7 @@ def convert_date_from_utc(time_zone, dt_obj, is_string = True, t_format = "%Y-%m
     utc = pytz.timezone('UTC')
     new_zone = pytz.timezone(time_zone)
     dt_obj = utc.localize(dt_obj)
-    dt_obj = dt_obj.astimezone(new_zone)  
+    dt_obj = dt_obj.astimezone(new_zone).replace(tzinfo=None)  
     if is_string:
         dt_obj = dt_obj.strftime("%Y-%m-%d")
     return dt_obj
@@ -102,7 +94,7 @@ def get_erp_id_by_name(name):
 
 def set_contarct_dates(contract, activation_date):
 
-    new_start_date =  convert_date_to_utc("Europe/Sofia",activation_date) 
+    new_start_date =  convert_date_to_utc(TimeZone.query.filter(TimeZone.id == contract.time_zone_id).first().code, activation_date) 
     new_end_date = new_start_date + dt.timedelta(hours =contract.duration_in_days * 24 + 23)
     contract.update({'start_date':new_start_date, 'end_date':new_end_date})
 
@@ -131,7 +123,7 @@ def get_measuring_type(measuring_type):
     return curr_measuring_type
 
 
-def get_itn_meta(row):
+def get_or_create_itn_meta(row):
 
     curr_itn_meta = ItnMeta.query.filter(ItnMeta.itn == row['itn']).first()
     
@@ -144,15 +136,9 @@ def get_itn_meta(row):
             erp_id = get_erp_id_by_name(row['erp']), 
             is_virtual = row['is_virtual'], 
             virtual_parent_itn = row['virtual_parent_itn'] if not pd.isnull(row['virtual_parent_itn']) else None)
-    # curr_itn_meta.save()
+        # curr_itn_meta.save()
+    # print(curr_itn_meta, file = sys.stdout)
     return curr_itn_meta  
-
-# def get_subcontracts_by_itn_and_utc_date(itn, date):
-
-#     curr_sub_contract =  SubContract.query.filter(SubContract.itn == itn, \
-#                                                 SubContract.start_date <= date, \
-#                                                 SubContract.end_date >= date).all()
-#     return curr_sub_contract
 
 def get_subcontracts_by_itn_and_utc_dates(itn, start_date, end_date):
 
@@ -175,9 +161,11 @@ def upload_forecasted_schedule_to_temp_db(forecasted_schedule_df, itn, price, ac
 
 
     local_start_date = activation_date.to_pydatetime()
-    local_end_date = curr_contract.end_date
-    
-    time_series = pd.date_range(start = local_start_date, end = local_end_date + dt.timedelta(hours = 23) , freq='H', tz = 'EET')
+    # convert_date_from_utc(time_zone, dt_obj, is_string = True, t_format = "%Y-%m-%d %H:%M:%S")
+    local_end_date = convert_date_from_utc(TimeZone.query.filter(TimeZone.id == curr_contract.time_zone_id).first().code,curr_contract.end_date, False)   
+    # print(f'From upload_forecasted_schedule_to_temp_db - local_end_date : {local_end_date} ', file = sys.stdout)
+    time_series = pd.date_range(start = local_start_date, end = local_end_date , freq='H', tz = 'EET')
+    # print(f'From upload_forecasted_schedule_to_temp_db - time_series : {time_series} ', file = sys.stdout)
     
     df = pd.DataFrame(time_series, columns = ['utc'])
     df['weekday'] = df['utc'].apply(lambda x: x.strftime('%A'))
@@ -197,7 +185,7 @@ def upload_forecasted_schedule_to_temp_db(forecasted_schedule_df, itn, price, ac
         forecasted_vol = Decimal(str('0'))
     
     df['itn'] =itn
-    df['price'] = price
+    df['price'] = price / Decimal('1000')
     df['reported_vol'] = -1
     df = df[['itn','utc','forecast_vol','reported_vol','price']]
     
@@ -261,11 +249,20 @@ def convert_weekly_schedule(schedule_df, itn ):
     df = df[['itn','utc','forecasted_vol','reported_vol']]
     return df
 
+def validate_forecasting_df(df, itn):
+    
+    if df.get(itn) is None:
+        schedule_df = df.get('all') if set(df.get('all')).issubset(['weekday', 'hour','forecasted_vol']) else None             
+    else:
+        schedule_df = df.get(itn) if set(df.get(itn)).issubset(['weekday','hour','forecasted_vol']) else None     
+    return schedule_df
 
-def generate_subcontract(row, curr_contract, df):
+
+
+def generate_subcontract(row, curr_contract, df, curr_itn_meta):
 
     
-    activation_date = convert_date_to_utc("Europe/Sofia",row['activation_date']).replace(tzinfo=None)
+    activation_date = convert_date_to_utc(TimeZone.query.filter(TimeZone.id == curr_contract.time_zone_id).first().code,row['activation_date'])
     curr_sub_contract =  SubContract.query.filter(SubContract.itn == row['itn'], \
                                                         SubContract.start_date <= activation_date, \
                                                         SubContract.end_date >= activation_date).all()
@@ -274,7 +271,8 @@ def generate_subcontract(row, curr_contract, df):
         forecasted_vol = None
 
         if get_measuring_type(row['measuring_type']).code in ['DIRECT','UNDIRECT']:
-            forcasted_df = df.get(row['itn']) if df.get(row['itn']) is not None else df.get('all')
+            forcasted_df = validate_forecasting_df(df, row['itn'])
+            
             forecasted_vol = upload_forecasted_schedule_to_temp_db(forcasted_df, row['itn'], row['price'], row['activation_date'], curr_contract)
             ##g.forcasted_schedule = df[row['itn']]
         else:
@@ -284,16 +282,16 @@ def generate_subcontract(row, curr_contract, df):
             else:
                 forecasted_vol = Decimal(str(row['forecast_montly_consumption']))
 
-        curr_sub_contract = SubContract(itn = row['itn'],
+        curr_sub_contract = SubContract(itn =curr_itn_meta.itn,
                                     contract_id = curr_contract.id, \
                                     object_name = '',\
-                                    price = round(Decimal(str(row['price'])), MONEY_ROUND), \
+                                    price = round(Decimal(str(row['price'])) / Decimal('1000'), MONEY_ROUND), \
                                     invoice_group_id = get_invoicing_group(row['invoice_group']).id, \
                                     measuring_type_id = get_measuring_type(row['measuring_type']).id, \
-                                    start_date = convert_date_to_utc("Europe/Sofia",row['activation_date']),\
+                                    start_date = activation_date,\
                                     end_date =  curr_contract.end_date, \
-                                    zko = round(Decimal(str(row['zko'])), MONEY_ROUND), \
-                                    akciz = round(Decimal(str(row['akciz'])), MONEY_ROUND), \
+                                    zko = round(Decimal(str(row['zko'])) / Decimal('1000'), MONEY_ROUND), \
+                                    akciz = round(Decimal(str(row['akciz'])) / Decimal('1000'), MONEY_ROUND), \
                                     has_grid_services = row['has_grid_services'], \
                                     has_spot_price = row['has_spot_price'], \
                                     has_balancing = row['has_balancing'], \
@@ -312,7 +310,7 @@ def convert_datetime64_to_datetime(dt_obj):
         return None
     return dt.datetime.strptime(np.datetime_as_string(dt_obj,unit='s'), '%Y-%m-%dT%H:%M:%S')
 
-def generate_utc_time_series(start_date, end_date, tz = "Europe/Sofia"):
+def generate_utc_time_series(start_date, end_date, tz ="Europe/Sofia"):
 
     start_date_utc = convert_date_to_utc(tz, start_date)
     end_date_utc = convert_date_to_utc(tz, end_date) + dt.timedelta(hours = 23)
@@ -320,39 +318,35 @@ def generate_utc_time_series(start_date, end_date, tz = "Europe/Sofia"):
                                     tz = tz).tz_convert('UTC').tz_localize(None)
 
     return time_series
-
-# def create_subcontract_df(itn,activation_date, internal_id, measuring_type, invoice_group, price, zko, 
-#                                 akciz, has_grid_services, has_spot_price,  
-#                                 object_name, is_virtual,virtual_parent_itn, forecast_montly_consumption,has_balancing):
-    
-#     df = pd.DataFrame([{'itn':itn,'activation_date':activation_date, 'internal_id':internal_id, 'measuring_type':measuring_type, 
-#                         'invoice_group':invoice_group, 'price':price, 'zko':zko,'akciz':akciz, 'has_grid_services':has_grid_services,
-#                         'has_spot_price':has_spot_price, 'object_name':object_name, 
-#                         'forecast_montly_consumption':forecast_montly_consumption,'has_balancing':has_balancing}])
-#     return df
     
 def check_and_load_hourly_schedule(form):
 
-
     # print(f'in check_and_load_hourly_schedule:  {form.measuring_type.data.code}', file=sys.stdout)
     if form.measuring_type.data.code in ['DIRECT','UNDIRECT']:
+
         df = pd.read_excel(request.files.get('file_'), sheet_name=None)
 
-        if df.get(form.itn.data.itn) is not None and set(df.get(form.itn.data.itn)).issubset(['date','forecasted_volume']):
+        forcasted_df = validate_forecasting_df(df, form.itn.data.itn)
+        forecasted_vol = upload_forecasted_schedule_to_temp_db(schedule_df, form.itn.data.itn, form.price.data)
 
-        # if set(df.get(row['itn'])).issubset(['date','forecasted_volume']):
-            # forecasted_vol = Decimal(str(df['forecasted_volume'].sum()))
-            # g.forcasted_schedule = df
-            forecasted_vol = upload_forecasted_schedule_to_temp_db(df[form.itn.data.itn], form.itn.data.itn, form.price.data)
-        else:
-            flash('Wrong file format for forcasted volume upload','danger') 
-            return redirect(url_for('create_subcontract'))      
+        # if df.get(form.itn.data.itn) is None:
+        #     schedule_df = df.get('all') if set(df.get('all')).issubset(['date','forecasted_volume']) else None           
+        #     forecasted_vol = upload_forecasted_schedule_to_temp_db(schedule_df, form.itn.data.itn, form.price.data) 
+
+        # elif set(df.get(form.itn.data.itn)).issubset(['date','forecasted_volume']):
+        #     forecasted_vol = upload_forecasted_schedule_to_temp_db(df[form.itn.data.itn], form.itn.data.itn, form.price.data)
+            
+        # else:
+        #     flash('Wrong file format for forcasted volume upload','danger') 
+        #     return redirect(url_for('create_subcontract'))    
+             
     elif form.forecast_vol.data == '':
+
         flash('No forcasted volume provided or measuring type mismatch.','danger')
         return redirect(url_for('create_subcontract')) 
     else:
-        forecasted_vol = Decimal(str(form.forecast_vol.data))
-        flash(f'forcasted volume = {forecasted_vol}','info')
+        forecasted_vol = Decimal(str(form.forecast_vol.data)) 
+        flash(f'forcasted volume in kWh= {forecasted_vol}','info')
     return forecasted_vol
 
 def get_remaining_forecat_schedule(itn, new_subcontract_end_date, old_subcontract_end_date):
@@ -398,13 +392,13 @@ def apply_collision_function(new_subcontract, old_subcontract, form):
         additional_sub_contract = SubContract(itn = old_subcontract.itn,
                             contract_id = old_subcontract.contract_id, \
                             object_name = old_subcontract.object_name,\
-                            price = old_subcontract.price, \
+                            price = old_subcontract.price / Decimal('1000'), \
                             invoice_group_id = old_subcontract.invoice_group_id, \
                             measuring_type_id = old_subcontract.measuring_type_id, \
                             start_date = new_subcontract.end_date + dt.timedelta(hours = 1) ,\
                             end_date =  old_subcontract.end_date, \
-                            zko = old_subcontract.zko, \
-                            akciz = old_subcontract.akciz, \
+                            zko = old_subcontract.zko / Decimal('1000'), \
+                            akciz = old_subcontract.akciz / Decimal('1000'), \
                             has_grid_services = old_subcontract.has_grid_services, \
                             has_spot_price = old_subcontract.has_spot_price, \
                             has_balancing = old_subcontract.has_balancing, \
