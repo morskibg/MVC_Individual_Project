@@ -7,7 +7,7 @@ from flask import render_template, flash, redirect, url_for, request, g
 from app import app
 from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, StpCoeffsForm, CreateSubForm, TestForm,
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm,
     UploadInitialForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
@@ -23,60 +23,412 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  set_contarct_dates,
                                  get_address,
                                  get_invoicing_group,
-                                 get_or_create_itn_meta,
+                                 create_itn_meta,
                                  generate_utc_time_series,
-                                 generate_subcontract,
+                                 generate_subcontract_from_file,
                                  get_erp_id_by_name,
                                  get_subcontracts_by_itn_and_utc_dates,
                                  check_and_load_hourly_schedule,
-                                 get_remaining_forecat_schedule,
+                                 upload_remaining_forecat_schedule,
                                  has_overlaping_subcontracts,
                                  apply_collision_function,
-                                 upload_forecasted_schedule_to_temp_db,
-                                 convert_weekly_schedule,
+                                 upload_forecasted_schedule_to_temp_db,                                 
                                  update_or_insert,
-                                 
+                                 validate_forecasting_df,
+                                 generate_forecast_schedule,
+                                 validate_subcontracts_dates,
+                                 validate_input_df ,
+                                 ROUND_HALF_UP,                                
+                                 stringifyer
 
 )
 
 
 from zipfile import ZipFile
-from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_to_df,
-                                      fill_db_from_excel_cez, fill_db_from_excel_e_pro,
-                                      fill_db_from_excel_evn,
+from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
+                                      insert_settlment_cez, insert_settlment_e_pro,
+                                      insert_settlment_evn,
                                       
 )
 
-MONEY_ROUND = 2
+MONEY_ROUND = 9
+
+
+@app.route('/erp', methods=['GET', 'POST'])
+@login_required
+def erp():
+    
+    form = ErpForm()
+    if form.validate_on_submit():
+        separator = '";"'
+        metas = db.session.query(ItnMeta.itn,MeasuringType.code).join(SubContract,SubContract.itn == ItnMeta.itn).join(MeasuringType).all()
+        itn_meta_df = pd.DataFrame.from_records(metas, columns = metas[0].keys()) 
+        
+        if request.files.get('file_cez').filename != '':
+            
+            erp_zip = ZipFile(request.files.get('file_cez'))    
+            insert_erp_invoice(erp_zip, separator)                   
+            insert_settlment_cez(erp_zip, itn_meta_df)
+            insert_mrus(erp_zip,separator)           
+            flash('Data from CEZ uploaded successfully','success')
+
+        if request.files.get('file_epro').filename != '':
+
+            erp_zip = ZipFile(request.files.get('file_epro'))
+            insert_erp_invoice(erp_zip, separator)           
+            insert_settlment_e_pro(erp_zip, itn_meta_df)
+            insert_mrus(erp_zip,separator)           
+            flash('Data from E PRO uploaded successfully','success')
+
+        if request.files.get('file_evn').filename != '':
+
+            erp_zip = ZipFile(request.files.get('file_evn'))
+            # insert_erp_invoice(erp_zip, separator)           
+            insert_settlment_evn(erp_zip)
+            # insert_mrus(erp_zip,separator)           
+            flash('Data from EVN uploaded successfully','success')
+            
+
+
+    return render_template('erp.html', title='ERP Upload', form=form)
 
 @app.route('/test', methods=['GET', 'POST'])
 @login_required
 def test():
+    MONEY_ROUND = 2
+    ENERGY_ROUND = 3
     form = TestForm()
+    # form = CreateSubForm()
+    if form.validate_on_submit(): 
+
+        # ################################# Initial Ibex  ###################################### 
+        
+        # s_date = pd.to_datetime('01/07/2020', format = '%d/%m/%Y')
+        # e_date = pd.to_datetime('31/12/2021', format = '%d/%m/%Y')
+        # time_series = pd.date_range(start = s_date, end = e_date , freq='h', tz = 'EET')
+        # forecast_df = pd.DataFrame(time_series, columns = ['utc'])
+        # forecast_df['forecast_price'] = 0
+        # forecast_df['volume'] = 0
+        # forecast_df['price'] = 0
+        # forecast_df.set_index('utc', inplace = True)
+        
+        # forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
+        # forecast_df.reset_index(inplace = True)
+        # forecast_df = forecast_df[['utc','price', 'forecast_price', 'volume']]
+        # stringifyer(forecast_df)
+        # bulk_update_list = forecast_df.to_dict(orient='records')
     
-    if form.validate_on_submit():
+        # db.session.bulk_insert_mappings(IbexData, bulk_update_list)
+        # db.session.commit()
+        # #######################################################################
+
+        # ################################# Upload to Ibex  ###################################### 
+        # print(f' IN IBEX')
+        # s_date = pd.to_datetime('01/07/2020', format = '%d/%m/%Y')
+        # e_date = pd.to_datetime('28/09/2021', format = '%d/%m/%Y')
+        s_date = form.start_date.data
+        e_date = form.end_date.data
+        ibex_df = IbexData.download_from_ibex_web_page(s_date, e_date)
+        stringifyer(ibex_df)
+        bulk_update_list = ibex_df.to_dict(orient='records')
+        print(f' IN IBEX {bulk_update_list}')
+        db.session.bulk_update_mappings(IbexData, bulk_update_list)
+        # db.session.commit()
         
-        # print(request.files.get('file_1'), file = sys.stdout)
-        # file_names = []
-        separator = '";"'
-        erp_zip = ZipFile(request.files.get('file_1'))
-        # fill_db_from_excel_evn(erp_zip)
-        fill_db_from_excel_cez(erp_zip)
-        # fill_db_from_excel_e_pro(erp_zip)
+        # ########################### v1 ############################################
+        # start = time.time()
+        # erp_itn_sub = ItnMeta.query.join(Erp).filter(Erp.name == form.erp.data.name).subquery()
+        # e_date = convert_date_to_utc('EET', form.end_date.data) + dt.timedelta(hours = 23)
+
+        # reported_vol_sum = (ItnSchedule.query.with_entities(func.sum(ItnSchedule.reported_vol))             
+        #     .filter( ItnSchedule.utc >= convert_date_to_utc('EET',form.start_date.data), ItnSchedule.utc <= e_date) 
+        #     .join(erp_itn_sub, erp_itn_sub.c.itn == ItnSchedule.itn)             
+        #     .all())
+        # end = time.time()
+
+        # flash(f'From join with subquery, elapsed time:{end - start}. Calculated sum for erp:{form.erp.data.name} is :{reported_vol_sum}. Period is from: {form.start_date.data} to:{e_date}', 'success')
+        # ##########################################################################
+
+        # ########################### v2 ############################################
+        # start = time.time()
+        # e_date = convert_date_to_utc('EET', form.end_date.data) + dt.timedelta(hours = 23)
+
+        # reported_vol_by_erp_all = ItnSchedule.query.with_entities(func.sum(ItnSchedule.reported_vol)) \
+        #     .join(ItnMeta) \
+        #     .join(SubContract) \
+        #     .join(Erp) \
+        #     .join(InvoiceGroup) \
+        #     .filter( ItnSchedule.utc >= convert_date_to_utc('EET',form.start_date.data), ItnSchedule.utc <= e_date, Erp.name == form.erp.data.name) \
+        #     .all()
+        # end = time.time()
+        # flash(f'From multiple joins, elapsed time:{end - start}. Calculated sum for erp:{form.erp.data.name} is :{reported_vol_by_erp_all}. Period is from: {form.start_date.data} to:{e_date}', 'info')
+
+        # ########################### by invoicing groups ############################################
+        # start = time.time()
+        # inv_group_itn_sub = ItnMeta.query.join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name).subquery()
         
-        # df_d, df_t = insert_to_df(erp_zip, separator)
-        # df = insert_to_df(erp_zip, separator)
-        # df = insert_erp_invoice(erp_zip, separator)
-        # for zf in erp_zip.namelist() :
-        #     if zf.endswith('.csv'):
-        #         file_names.append(zf)
-        # df1 = pd.read_csv(erp_zip.open(file_names[0]),sep=separator,  encoding="cp1251", engine='python',skiprows = 1)      
-        #   
-        # flash(f'file is  ---->{df_d.isnull().sum()}','info')
-        # flash(f'file is  ---->{df_d.isnull().values.any()}','info')
-        # flash(f'file is  ---->{df_d.columns}','info')
-        # flash(f'file is  ---->{df_d.shape}','info')
-        # print(df_d[pd.isnull(df_d['erp_invoice_id'])], file = sys.stdout)
+        # time_zone = TimeZone.query.join(Contract).join(SubContract).join(inv_group_itn_sub, inv_group_itn_sub.c.itn == SubContract.itn).first().code
+        # s_date = convert_date_to_utc(time_zone, form.start_date.data)
+        # e_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+
+        # reported_vol_sum = (ItnSchedule.query.with_entities(func.sum(ItnSchedule.reported_vol))             
+        #     .filter( ItnSchedule.utc >= s_date, ItnSchedule.utc <= e_date) 
+        #     .join(inv_group_itn_sub, inv_group_itn_sub.c.itn == ItnSchedule.itn)             
+        #     .all())[0][0].quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+        # end = time.time()
+
+        # flash(f'From by invoicing groups, elapsed time:{end - start}. Calculated sum for erp:{form.erp.data.name} is :{reported_vol_sum} kWh. Period is from: {s_date} to:{e_date} time zone {time_zone}', 'success')
+        # ##########################################################################  
+
+        # ########################### by invoicing groups and itn ############################################
+        # start = time.time()
+        # inv_group_itn_sub = ItnMeta.query.join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name).subquery()
+
+        # time_zone = TimeZone.query.join(Contract).join(SubContract).join(inv_group_itn_sub, inv_group_itn_sub.c.itn == SubContract.itn).first().code
+        # s_date = convert_date_to_utc(time_zone, form.start_date.data)
+        # e_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+
+        # reported_vol_sum = (ItnSchedule.query.with_entities(func.sum(ItnSchedule.reported_vol))             
+        #     .filter( ItnSchedule.utc >= s_date, ItnSchedule.utc <= e_date) 
+        #     .join(inv_group_itn_sub, inv_group_itn_sub.c.itn == ItnSchedule.itn)  
+        #     .group_by(ItnSchedule.itn)           
+        #     .all())
+        # end = time.time()
+
+        # flash(f'reported_vol_sum {reported_vol_sum} kWh')
+        # ####################### DELETE ALL ###################################################  
+        # metas = ItnMeta.query.all()
+        # for meta in metas:
+        #     print(f'itn {meta.itn}  deleted !')
+        #     meta.delete()
+        # db.session.commit()
+        # print(f'all itn deleted')
+        # ########################################################################## 
+
+        # ######################### DELETE BY INv GROUP ################################################ 
+
+        # metas = ItnMeta.query.join(SubContract,SubContract.itn == ItnMeta.itn).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name ).all()
+        # for meta in metas:
+        #     print(f'itn {meta.itn} from inv group : {form.invoicing_group.data.name}  deleted !')
+        #     meta.delete()
+        # db.session.commit()
+        # print(f'all itn from inv group {form.invoicing_group.data.name} deleted')
+        # ########################################################################## 
+
+        # ################################# DELETE CONTRACT  ###################################### 
+        # contract_to_del = Contract.query.filter(Contract.internal_id == 'ТК-36').first()
+        # # sub_to_del = SubContract.query.join(Contract).filter(Contract.internal_id == 'ТК-36').first()
+        # print(f'contract to delete {contract_to_del} \n subcontract_to_delete : ')
+        # contract_to_del.delete()
+
+        # contracts = Contract.query.all()
+        # for c in contracts:
+        #     c.delete()
+
+
+
+
+
+        # ########################################################################## 
+
+        ########################### mrus money sum by invoicing group ############################################
+        # start = time.time()
+
+        # inv_group_itn_sub_query = (
+        #     db.session.query(
+        #         ItnMeta.itn.label('sub_itn'),
+        #         SubContract.zko.label('zko'),
+        #         SubContract.akciz.label('akciz'),
+        #         SubContract.price.label('price'),
+        #         Contractor.name.label('Contractor'),
+        #     )
+        #     .join(SubContract)
+        #     .join(InvoiceGroup)
+        #     .join(Contractor)
+        #     .filter(InvoiceGroup.name == form.invoicing_group.data.name)
+        #     .subquery()
+        # )
+        
+        # time_zone = TimeZone.query.join(Contract).join(SubContract).join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == SubContract.itn).first().code
+        
+        # s_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
+        # s_date = s_date.replace(s_date.year, s_date.month, 11,0,0,0)
+        # s_date = convert_date_to_utc(time_zone, s_date)
+
+        # e_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
+        # e_date = e_date.replace(e_date.year, e_date.month + 1, 10,23,0,0)        
+        # e_date = convert_date_to_utc(time_zone, e_date) 
+
+        # power_s_date = convert_date_to_utc(time_zone, form.start_date.data)
+        # power_e_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)           
+
+        # grid_service_sub_query = (
+        #     db.session.query(
+        #         Distribution.itn.label('itn_id'),
+        #         func.round(func.sum(Distribution.value), MONEY_ROUND).label('grid_services')                
+        #     )
+        #     .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == Distribution.itn)
+        #     .join(ErpInvoice,ErpInvoice.id == Distribution.erp_invoice_id)
+        #     .filter(ErpInvoice.date >= s_date, ErpInvoice.date <= e_date)
+        #     .group_by(Distribution.itn)
+        #     .subquery()
+        # )   
+        
+        # records_with_grid_services = (
+        #     db.session.query(
+        #         ItnSchedule.itn.label('Обект (ИТН №)'),
+        #         grid_service_sub_query.c.grid_services.label('Мрежови услуги (лв.)'),
+        #         AddressMurs.name.label('Адрес'),
+        #         func.round(func.sum(ItnSchedule.reported_vol), ENERGY_ROUND).label('Потребление (kWh)'),
+        #         func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.zko, MONEY_ROUND).label('Задължение към обществото'),
+        #         func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.akciz, MONEY_ROUND).label('Акциз'),
+        #         func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.price, MONEY_ROUND).label('Сума за енергия'),
+        #         inv_group_itn_sub_query.c.Contractor
+        #         )
+        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn) 
+        #         .join(grid_service_sub_query, grid_service_sub_query.c.itn_id == ItnSchedule.itn)                        
+        #         .join(ItnMeta, ItnMeta.itn == ItnSchedule.itn)                        
+        #         .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id)                        
+        #         .filter(ItnSchedule.utc >= power_s_date, ItnSchedule.utc <= power_e_date)  
+        #         .group_by(ItnSchedule.itn, inv_group_itn_sub_query.c.zko, inv_group_itn_sub_query.c.akciz, inv_group_itn_sub_query.c.price)                        
+        #         .all()
+        # )
+        
+        # records_without_grid_services = (
+        #     db.session.query(
+        #         ItnSchedule.itn.label('Обект (ИТН №)'),                
+        #         AddressMurs.name.label('Адрес'),
+        #         func.round(func.sum(ItnSchedule.reported_vol), ENERGY_ROUND).label('Потребление (kWh)'),
+        #         func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.zko, MONEY_ROUND).label('Задължение към обществото'),
+        #         func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.akciz, MONEY_ROUND).label('Акциз'),
+        #         func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.price, MONEY_ROUND).label('Сума за енергия'),
+        #         inv_group_itn_sub_query.c.Contractor
+        #         )
+        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn)                                        
+        #         .join(ItnMeta, ItnMeta.itn == ItnSchedule.itn)                        
+        #         .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id)                        
+        #         .filter(ItnSchedule.utc >= power_s_date, ItnSchedule.utc <= power_e_date)  
+        #         .group_by(ItnSchedule.itn, inv_group_itn_sub_query.c.zko, inv_group_itn_sub_query.c.akciz, inv_group_itn_sub_query.c.price)                        
+        #         .all()
+        # )
+        # try:            
+        #     df = pd.DataFrame.from_records(records_without_grid_services, columns = records_without_grid_services[0].keys())
+        #     df.insert(loc=1, column = 'Мрежови услуги (лв.)', value = 0) 
+        #     print(f'from WITHOUT shape = {df.shape[0]}')  
+
+        # except Exception as e:
+        #     print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {power_s_date} - {power_e_date}. Message is: {e}')
+
+        # else:
+        #     if len(records_with_grid_services) != 0:
+        #         try:
+        #             temp_df = pd.DataFrame.from_records(records_with_grid_services, columns = records_with_grid_services[0].keys())
+        #             print(f'from with shape = {temp_df.shape[0]}')
+
+        #         except Exception as e:
+        #             print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {power_s_date} - {power_e_date}. Message is: {e}')
+
+        #         else:
+        #             df = df.append(temp_df, ignore_index=True)
+
+        #     df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'last')
+        #     df['Обща сума (без ДДС)'] = df['Сума за енергия'] + df['Акциз'] + df['Задължение към обществото'] + df['Мрежови услуги (лв.)']
+        #     df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])
+        #     df['Period'] = f"""{s_date.month}/{s_date.year}"""
+        #     df['Invoicing_group_name'] = form.invoicing_group.data.name
+        #     print(f'{df}')
+
+           
+
+        # try:
+        #     df = pd.DataFrame.from_records(records, columns = records[0].keys())
+        # except:
+        #     records = (
+        #         db.session.query(
+        #             ItnSchedule.itn.label('Обект (ИТН №)'),                
+        #             AddressMurs.name.label('Адрес'),
+        #             func.round(func.sum(ItnSchedule.reported_vol), ENERGY_ROUND).label('Потребление (kWh)'),
+        #             func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.zko, MONEY_ROUND).label('Задължение към обществото'),
+        #             func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.akciz, MONEY_ROUND).label('Акциз'),
+        #             func.round(func.sum(ItnSchedule.reported_vol) * inv_group_itn_sub_query.c.price, MONEY_ROUND).label('Сума за енергия'),
+        #             inv_group_itn_sub_query.c.Contractor
+        #             )
+        #             .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn)                                        
+        #             .join(ItnMeta, ItnMeta.itn == ItnSchedule.itn)                        
+        #             .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id)                        
+        #             .filter(ItnSchedule.utc >= power_s_date, ItnSchedule.utc <= power_e_date)  
+        #             .group_by(ItnSchedule.itn, inv_group_itn_sub_query.c.zko, inv_group_itn_sub_query.c.akciz, inv_group_itn_sub_query.c.price)                        
+        #             .all()
+        #     )
+        #     try:
+        #         df = pd.DataFrame.from_records(records, columns = records[0].keys())
+        #     except Exception as e:
+        #         print(f'Unable to join, {e}')
+        #     else:
+        #         df['Мрежови услуги (лв.)'] = 0
+
+        
+        #      dddd       
+        ##########################################################################  
+
+
+
+        # reported_vol_sum = (ItnSchedule.query.with_entities(func.sum(ItnSchedule.reported_vol))             
+        #     .filter( ItnSchedule.utc >= convert_date_to_utc('EET',form.start_date.data), ItnSchedule.utc <= convert_date_to_utc('EET', form.end_date.data) + dt.timedelta(hours = 23), ItnSchedule.itn == "32Z4700012120576") 
+        #     .all())
+        # s_date = convert_date_to_utc('EET',form.start_date.data)
+        # e_date = convert_date_to_utc('EET', form.end_date.data) + dt.timedelta(hours = 23)
+        # flash(f'start_date: {s_date} --- end_date{e_date}     reported vol sum:{reported_vol_sum}')
+
+
+        # flash(reported_vol_sub)
+
+
+        # itn_c = ItnSchedule.query.with_entities(ItnMeta.itn, ItnSchedule.utc) \
+        #     .join(ItnSchedule,ItnSchedule.itn == ItnMeta.itn) \
+        #     .join(SubContract) \
+        #     .join(InvoiceGroup) \
+        #     .filter( ItnSchedule.utc >= convert_date_to_utc('EET','2020-08-22'), ItnSchedule.utc < convert_date_to_utc('EET','2020-08-23'), InvoiceGroup.name == '911-9-10_9') \
+        #     .all()
+        
+        # inv_gr_itn = ItnMeta.query.join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == '911-9-10_9').first()
+       
+        # flash(f'Reported volume for erp: {form.erp.data.name} for interval {form.start_date.data} - {form.end_date.data} is : {res} kWh', 'info')
+
+        # mrus = Distribution.query.with_entities(func.sum(Distribution.calc_amount)) \
+        #     .join(ItnMeta) \
+        #     .join(SubContract) \
+        #     .join(InvoiceGroup) \
+        #     .join(ErpInvoice, ErpInvoice.id == Distribution.erp_invoice_id) \
+        #     .filter(InvoiceGroup.name == form.invoicing_group.data.name) \
+        #     .filter(Distribution.tariff.in_(['Достъп','Пренос през електропреносната мрежа', 'Разпределение'])) \
+        #     .filter(ErpInvoice.date >= convert_date_to_utc('EET',form.start_date.data), ErpInvoice.date <= convert_date_to_utc('EET', form.end_date.data)) \
+        #     .all()
+
+        # res_mrus = mrus[0][0].quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # flash(f'MRUS invoicing group name : {form.invoicing_group.data.name} - {form.invoicing_group.data.description} for interval {form.start_date.data} - {form.end_date.data} is : {res_mrus}', 'info')
+        # # flash(itn_c)
+        # # #print(request.files.get('file_1'), file = sys.stdout)
+        # # file_names = []
+        # separator = '";"'
+        # erp_zip = ZipFile(request.files.get('file_1'))
+        # # insert_settlment_evn(erp_zip)
+        # insert_settlment_cez(erp_zip)
+        # # insert_settlment_e_pro(erp_zip)
+        
+        # # df_d, df_t = insert_mrus(erp_zip, separator)
+        # # df = insert_mrus(erp_zip, separator)
+        # # df = insert_erp_invoice(erp_zip, separator)
+        # # for zf in erp_zip.namelist() :
+        # #     if zf.endswith('.csv'):
+        # #         file_names.append(zf)
+        # # df1 = pd.read_csv(erp_zip.open(file_names[0]),sep=separator,  encoding="cp1251", engine='python',skiprows = 1)      
+        # #   
+        # # flash(f'file is  ---->{df_d.isnull().sum()}','info')
+        # # flash(f'file is  ---->{df_d.isnull().values.any()}','info')
+        # # flash(f'file is  ---->{df_d.columns}','info')
+        # # flash(f'file is  ---->{df_d.shape}','info')
+        # # #print(df_d[pd.isnull(df_d['erp_invoice_id'])], file = sys.stdout)
       
         
     return render_template('test.html', title='Test', form=form)
@@ -153,6 +505,139 @@ def upload_initial_data():
             else:
                 flash('Empty','danger')
 
+        if request.files.get('file_hum_contractors').filename != '':
+            df = pd.read_excel(request.files.get('file_hum_contractors'),skiprows=1)
+            
+            flash(df.columns)
+            children_df = df[df['parent_name'] != 0]
+            df['parent_id'] = np.nan
+            df = df[['parent_id', 'name', 'eic', 'address','vat_number','email','acc_411']]
+            update_or_insert(df, Contractor.__table__.name)
+
+            
+            db_df = pd.read_sql(Contractor.query.statement, db.session.bind)
+            db_df = db_df[['id','name']]
+            db_df.rename(columns = {'id':'parent_id', 'name': 'parent_name'}, inplace = True)
+            children_df = children_df.merge(db_df, on = 'parent_name', how = 'left')
+            df = children_df[['parent_id', 'name', 'eic', 'address','vat_number','email','acc_411']]
+           
+            update_or_insert(df, Contractor.__table__.name)
+
+        if request.files.get('file_hum_contracts').filename != '':
+
+            df = pd.read_excel(request.files.get('file_hum_contracts'),skiprows=0)            
+
+            tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
+            
+            all_cyr = tks.all()
+            
+            
+            if not all_cyr:
+                flash('There is tk in latin, aborting', 'danger')
+                return redirect(url_for('upload_initial_data'))
+            
+            df = df.fillna(0)
+            df['time_zone_id'] = df['time_zone'].apply(lambda x: TimeZone.query.filter(TimeZone.code == x).first().id )            
+
+            
+            df['signing_date'] = df.apply(lambda x: convert_date_to_utc(TimeZone.query.filter(TimeZone.id == x['time_zone_id']).first().code, x['signing_date']), axis = 1)
+            df['start_date'] = df.apply(lambda x: convert_date_to_utc(TimeZone.query.filter(TimeZone.id == x['time_zone_id']).first().code, x['start_date']), axis = 1)
+            df['end_date'] = df.apply(lambda x: convert_date_to_utc(TimeZone.query.filter(TimeZone.id == x['time_zone_id']).first().code, x['end_date']) + dt.timedelta(hours = 23), axis = 1)
+            
+            # df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
+            df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days + 1, axis = 1)
+            
+            
+            
+            df['automatic_renewal_interval'] = 0
+            df['subject'] = ''
+            df['parent_id'] = 0
+            invoicing_dict = {'до 12-то число, следващ месеца на доставката':42,'на 10 дни':10,'на 15 дни':15,'последно число':31,'конкретна дата':-1}
+            df['invoicing_interval'] = df['invoicing_interval'].apply(lambda x: invoicing_dict[x.strip()] if(invoicing_dict.get(str(x).strip())) else 0 )
+            contract_type_dict = {'OTC':'End_User','ОП':'Procurement'}
+
+            df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
+            df['contract_type_id'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
+
+            work_day_dict = {'календарни дни':0, 'работни дни':1}
+            df['is_work_days'] = df['is_work_day'].apply(lambda x: work_day_dict[x.strip()] if(work_day_dict.get(str(x).strip())) else 0 )
+
+            df['contractor_id'] = df['contractor'].apply(lambda x: Contractor.query.filter(Contractor.name == x).first().id if Contractor.query.filter(Contractor.name == x).first() is not None else x)
+            df = df[['internal_id','contractor_id','subject','parent_id','time_zone_id','signing_date','start_date','end_date','duration_in_days', \
+                                                                    'invoicing_interval','maturity_interval','contract_type_id','is_work_days','automatic_renewal_interval','collateral_warranty','notes']]
+
+            update_or_insert(df, Contract.__table__.name)
+            flash('upload was successiful','info')
+            # t_format = '%Y-%m-%dT%H:%M'
+            
+        
+        if request.files.get('file_hum_itn').filename != '':
+
+            STP_MAP_DICT = {
+                'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
+                'G3':'EVN_G3','G4':'EVN_G4', 'H0':'EVN_H0','H1':'EVN_H1','H2':'EVN_H2','B1':'CEZ_B1','B2':'CEZ_B2','B3':'CEZ_B3','B4':'CEZ_B4','B5':'CEZ_B5','H1':'CEZ_H1','H2':'CEZ_H2','S1':'CEZ_S1'    
+            }
+
+            df = pd.read_excel(request.files.get('file_hum_itn'), sheet_name=None)  
+            df = validate_input_df(df['data'])
+            # df['price'] = df['price'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
+            df['zko'] = df['zko'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
+            df['akciz'] = df['akciz'].apply(lambda x: Decimal(str(x)) / Decimal('1000')) 
+            df['forecast_montly_consumption'] = df['forecast_montly_consumption'].apply(lambda x: Decimal(str(x)) * Decimal('1000'))
+            
+            df['measuring_type'] = df['measuring_type'].apply(lambda x: STP_MAP_DICT.get(x) if STP_MAP_DICT.get(x) is not None else x) 
+            df.rename(columns = {'invoice_group_name':'invoice_group'}, inplace = True)
+            arr = []
+            for index,row in df.iterrows():
+                #print(f'in rows --------------->>{row.internal_id}')
+                curr_contract = get_contract_by_internal_id(row['internal_id'])
+                #print(f'From upload itns: current contract ----> {curr_contract}', file = sys.stdout)
+                if curr_contract is None :
+                    flash(f'Itn: {row.itn} does\'t have an contract ! Skipping !','danger')
+                    print(f'Itn: {row.itn} does\'t have an contract ! Skipping !')
+                    continue
+                if curr_contract.start_date is None:
+                    set_contarct_dates(curr_contract, row['activation_date'])
+                curr_itn_meta = create_itn_meta(row)                    
+                if curr_itn_meta is None:
+
+                    flash(f'Itn: {row.itn} already exist ! Skipping !','info')
+                    print(f'Itn: {row.itn} already exist ! Skipping !')
+                    continue
+                else:
+                    
+                    curr_sub_contr = generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta)
+                    if curr_sub_contr is not None:
+                        #print(f'currrrr sub contr--->{curr_sub_contr} %%%%% curr_meta ----->{curr_itn_meta}')
+                        curr_itn_meta.save()
+                        curr_sub_contr.save()
+                       
+                        flash(f'Subcontract {curr_sub_contr} was created !','info')
+                        print(f'Subcontract {curr_sub_contr} was created !','info')
+
+                    else:
+                        flash(f'Itn: {row.itn} faled to create subcontract ! Skipping !')
+                        continue   
+
+                    flash(f'Itn: {row.itn} was uploaded successifuly !','success') 
+                    print(f'Itn: {row.itn} was uploaded successifuly !')        
+        
+
+        
+        if request.files.get('file_hum_inv_groups').filename != '':  
+            df = pd.read_excel(request.files.get('file_hum_inv_groups'), sheet_name=None, usecols='E,F,T')
+            df = validate_input_df(df['data'])
+            df.rename(columns = {'invoice_group_name':'name', 'invoice_group_description':'description'},inplace = True)
+            df['contractor_id'] = df['911-9-4'].apply(lambda x: Contractor.query.filter(Contractor.acc_411 == x).first().id \
+                                             if Contractor.query.filter(Contractor.acc_411 == x).first() is not None else 0)
+            df = df[['name','contractor_id','description']]
+            update_or_insert(df, InvoiceGroup.__table__.name)
+            flash('upload was successiful','info')
+
+
+            
+
+
 
 
         
@@ -172,7 +657,7 @@ def index():
 def login():
 	
     if current_user.is_authenticated:	   
-        # print('is_authenticated', file=sys.stdout)
+        # #print('is_authenticated', file=sys.stdout)
         return redirect(url_for('index'))
 
     form = LoginForm()  
@@ -223,10 +708,10 @@ def add_contract():
         signing_date_utc =  convert_date_to_utc("Europe/Sofia",form.signing_date.data)
         start_date_utc =  convert_date_to_utc("Europe/Sofia",form.start_date.data) if form.start_date.data != '' else None
         end_date_utc =  convert_date_to_utc("Europe/Sofia",form.end_date.data) + dt.timedelta(hours = 23) if form.end_date.data != '' else None
-
-        # print(convert_date_to_utc("Europe/Sofia",form.signing_date.data),file=sys.stdout)    
+  
         current_conract = Contract(internal_id = form.internal_id.data, contractor_id = form.contractor_id.data, subject = form.subject.data, \
                         parent_id = form.parent_contract_internal_id.data, \
+                        time_zone_id = form.time_zone.data.id, \
                         signing_date = signing_date_utc, \
                         start_date = start_date_utc , \
                         end_date = end_date_utc, \
@@ -235,13 +720,15 @@ def add_contract():
                         contract_type_id = form.contract_type_id.data, is_work_days = form.is_work_days.data, \
                         automatic_renewal_interval = form.automatic_renewal_interval.data, collateral_warranty = form.collateral_warranty.data, \
                         notes = form.notes.data)
-        # print(current_conract,file=sys.stdout)
+        # #print(f' %%%%%%%%%%%%%%%%%%%%    {form.time_zone.data.id}',file=sys.stdout)
+
         current_conract.save()  
+
         # , price = round(form.price.data, MONEY_ROUND)   has_balancing = form.has_balancing.data           
         # db.session.add(current_conract)    
         # db.session.commit()            
-        # print(current_conract,file=sys.stdout)
-        # print(f'{form.internal_id.data}, {form.contractor_id.data}, {round(form.price.data, MONEY_ROUND)},\
+        # #print(current_conract,file=sys.stdout)
+        # #print(f'{form.internal_id.data}, {form.contractor_id.data}, {round(form.price.data, MONEY_ROUND)},\
         # {form.subject.data},{form.parent_contract_internal_id.data},{form.signing_date.data},{form.start_date.data},{form.end_date.data},\
         # {form.duration_in_days.data},{form.invoicing_interval.data},{form.maturity_interval.data},{form.contract_type_id.data},\
         # {form.automatic_renewal_interval.data},{form.collateral_warranty.data},{form.notes.data},{form.is_work_days.data},{form.has_balancing.data}',file=sys.stdout)
@@ -325,7 +812,7 @@ def add_itn():
             curr_sub_contract = SubContract(itn = form.itn.data, \
                                     contract_id = curr_contract.id, \
                                     object_name = '',\
-                                    price = round(form.price.data, MONEY_ROUND), \
+                                    # price = round(form.price.data, MONEY_ROUND), \
                                     invoice_group_id = curr_inv_group.id, \
                                     measuring_type_id = curr_measuring_type.id, \
                                     start_date = convert_date_to_utc("Europe/Sofia", form.activation_date.data),\
@@ -396,18 +883,28 @@ def upload_invoicing_group():
 @app.route('/upload_itns', methods=['GET', 'POST'])
 @login_required
 def upload_itns():
-    template_cols = ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group', 'price', 'zko', 
+    # template_cols = ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group_name', 'invoice_group_description', 'price', 'zko', 
+    #                 'akciz', 'has_grid_services', 'has_spot_price', 'erp','grid_voltage', 'address', 'description', 'is_virtual',
+    #                 'virtual_parent_itn', 'forecast_montly_consumption','has_balancing', 'acc_411']
+    template_cols = ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group_name', 'invoice_group_description',  'zko', 
                     'akciz', 'has_grid_services', 'has_spot_price', 'erp','grid_voltage', 'address', 'description', 'is_virtual',
                     'virtual_parent_itn', 'forecast_montly_consumption','has_balancing', 'acc_411']
     form = UploadItnsForm()
     if form.validate_on_submit():
         df = pd.read_excel(request.files.get('file_'), sheet_name=None)
         if set(df['data'].columns).issubset(template_cols):
+            
+            # df['data']['price'] = df['data']['price'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
+            df['data']['zko'] = df['data']['zko'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
+            df['data']['akciz'] = df['data']['akciz'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
+
+            df['data']['forecast_montly_consumption'] = df['data']['forecast_montly_consumption'].apply(lambda x: Decimal(str(x)) * Decimal('1000'))
+            df['data'].rename(columns = {'invoice_group_name':'invoice_group'}, inplace = True)
             arr = []
             for index,row in df['data'].iterrows():
                 
                 curr_contract = get_contract_by_internal_id(row['internal_id'])
-                print(f'From upload itns: current contract ----> {curr_contract}', file = sys.stdout)
+                #print(f'From upload itns: current contract ----> {curr_contract}', file = sys.stdout)
                 
                 if curr_contract is None :
                     flash(f'Itn: {row.itn} does\'t have an contract ! Skipping !')
@@ -415,13 +912,13 @@ def upload_itns():
                 if curr_contract.start_date is None:
                     set_contarct_dates(curr_contract, row['activation_date'])
                 
-                curr_itn_meta = get_or_create_itn_meta(row)                    
+                curr_itn_meta = create_itn_meta(row)                    
                 if curr_itn_meta is None:
 
-                    flash(f'Itn: {row.itn} does\'t have meta data ! Skipping !')
+                    flash(f'Itn: {row.itn} already exist ! Skipping !','info')
                     continue
                 else:
-                    curr_sub_contr = generate_subcontract(row, curr_contract, df, curr_itn_meta)
+                    curr_sub_contr = generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta)
                     if curr_sub_contr is not None:
                         curr_sub_contr.save()
                         
@@ -467,7 +964,7 @@ def upload_contracts(start,end):
             df = df.fillna(0)
             df['parent_id_initial_zero'] = 0
             df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
-            df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days, axis = 1)
+            df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days + 1, axis = 1)
             df['time_zone'] = df['time_zone'].apply(lambda x: TimeZone.query.filter(TimeZone.code == x).first() if TimeZone.query.filter(TimeZone.code == x).first() is not None else x)
             
             renewal_dict = {'удължава се автоматично с още 12 м. ако никоя от страните не заяви писмено неговото прекратяване':12,'Подновява се автоматично за 1 година , ако никоя от страните не възрази писмено за прекратяването му поне 15 дни преди изтичането му':12,
@@ -519,29 +1016,7 @@ def upload_contracts(start,end):
     return render_template('upload_contracts.html', title='Upload Invoicing Group', form=form)
 
 
-@app.route('/upload_stp', methods=['GET', 'POST'])
-@login_required
-def stp():
-    form = StpCoeffsForm()
-    if form.validate_on_submit():
-        df = pd.read_excel(request.files.get('file_'),sheet_name='full')
-        time_series = generate_utc_time_series(form.start_date.data, form.end_date.data)
-        if len(time_series) != df.shape[0]:
-            flash('Wrong time interval','danger')
-            return redirect(url_for('upload_stp'))
 
-        df['Utc'] = time_series
-        df_m = pd.melt(df, id_vars =['Utc'], value_vars =['CEZ_B1', 'CEZ_B2', 'CEZ_B3', 'CEZ_B4', 'CEZ_B5', 'CEZ_H1', 'CEZ_H2',
-           'CEZ_S1', 'EPRO_B01', 'EPRO_B02', 'EPRO_B03', 'EPRO_B04', 'EPRO_H0',
-           'EPRO_H1', 'EPRO_S0', 'EVN_G0', 'EVN_G1', 'EVN_G2', 'EVN_G3', 'EVN_G4',
-           'EVN_H0', 'EVN_H1', 'EVN_H2', 'EVN_BD000'],var_name='code') 
-        # df.set_index(time_series, inplace = True)
-
-
-        # flash(time_series,'info')
-        # flash(end_date_utc,'info')
-
-    return render_template('stp.html', title='Upload STP Coeffs', form = form)
 
 @app.route('/create_subcontract', methods=['GET', 'POST'])
 @login_required
@@ -549,25 +1024,50 @@ def create_subcontract():
     
     form = CreateSubForm()
     if form.validate_on_submit():
-        
-        form_start_date_utc = convert_date_to_utc("Europe/Sofia", form.start_date.data)
-        form_end_date_utc = convert_date_to_utc("Europe/Sofia", form.end_date.data) + dt.timedelta(hours = 23)
-        form_price = round(Decimal(str(form.price.data)), MONEY_ROUND)
-        form_zko = round(Decimal(str(form.zko.data)), MONEY_ROUND)
-        form_akciz = round(Decimal(str(form.akciz.data)), MONEY_ROUND)
-        form_forecasted_vol  = check_and_load_hourly_schedule(form)
 
         curr_contract = get_contract_by_internal_id(form.contract_data.data.internal_id)
+
+        if curr_contract.start_date is None:
+            set_contarct_dates(curr_contract, form.start_date.data)
+
+        
+
+        form_start_date_utc = convert_date_to_utc(TimeZone.query.filter(TimeZone.id == curr_contract.time_zone_id).first().code, form.start_date.data)
+        form_end_date_utc = convert_date_to_utc(TimeZone.query.filter(TimeZone.id == curr_contract.time_zone_id).first().code, form.end_date.data) + dt.timedelta(hours = 23)
+
+        form_start_date_utc, form_end_date_utc = validate_subcontracts_dates(form_start_date_utc, form_end_date_utc, curr_contract)
+        if form_start_date_utc is None:
+            flash('Wrong dates according the contract !','danger')
+            return redirect(url_for('create_subcontract'))
+        #print(f'from create_subcontract ---- activation_date_utc = {form_start_date_utc}<---> sub_end_date_utc = {form_end_date_utc}')
+
+        form_price = round(Decimal(str(form.price.data)) / Decimal('1000'), MONEY_ROUND)
+        form_zko = round(Decimal(str(form.zko.data)) / Decimal('1000'), MONEY_ROUND)
+        form_akciz = round(Decimal(str(form.akciz.data)) / Decimal('1000'), MONEY_ROUND)
+        form_forecast_df = pd.read_excel(request.files.get('file_'), sheet_name=None) if request.files.get('file_').filename != '' else None
+        form_forecasted_vol = form.forecast_vol.data
+        df = pd.read_excel(request.files.get('file_'),sheet_name=None) if request.files.get('file_').filename != '' else None
+        
+        forecast_df = validate_forecasting_df(df, form.itn.data.itn) if df is not None else None 
+        #print(f'from create subcontract: end_date_utc from form is {form_end_date_utc}')
+        # generate_forecast_schedule(measuring_type, itn, price, forecast_vol, weekly_forecast_df, activation_date_utc, curr_contract): 
+        
+
+        # # form_forecasted_vol  = check_and_load_hourly_schedule(form.measuring_type.data.code, form.itn.data.itn, form_price, \
+        # #                                                       form.forecast_vol.data, form_forecast_df, form.start_date.data, curr_contract)
+        
+        
         applicable_sub_contracts = get_subcontracts_by_itn_and_utc_dates(form.itn.data.itn, form_start_date_utc, form_end_date_utc)
-        print(applicable_sub_contracts, file = sys.stdout)
+        #print(applicable_sub_contracts, file = sys.stdout)
         if has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc) and has_overlaping_subcontracts(form.itn.data.itn, form_end_date_utc):
             flash('overlaping', 'danger')
         else:
-            forecasted_vol = check_and_load_hourly_schedule(form)    
+            # forecasted_vol = check_and_load_hourly_schedule(form) 
+               
             new_sub_contract = SubContract(itn = form.itn.data.itn,
                                     contract_id = form.contract_data.data.id, \
                                     object_name = form.object_name.data,\
-                                    price = form_price, \
+                                    # price = form_price, \
                                     invoice_group_id = form.invoice_group.data.id, \
                                     measuring_type_id = form.measuring_type.data.id, \
                                     start_date = form_start_date_utc,\
@@ -576,19 +1076,25 @@ def create_subcontract():
                                     akciz = form_akciz, \
                                     has_grid_services = form.has_grid_services.data, \
                                     has_spot_price = form.has_spot_price.data, \
-                                    has_balancing = form.has_balancing.data, \
-                                    forecast_vol = forecasted_vol)
+                                    has_balancing = form.has_balancing.data)
+                                    # forecast_vol = form_forecasted_vol)
             
             for curr_subcontract in applicable_sub_contracts:
-                print(curr_subcontract, file = sys.stdout) 
-                print(f'new_start_date = {form_start_date_utc} ----- new_end_date = {form_end_date_utc}', file = sys.stdout)  
-                print(f'old_start_date = {curr_subcontract.start_date} ----- old_end_date = {curr_subcontract.end_date}', file = sys.stdout)                     
-                apply_collision_function(new_sub_contract, curr_subcontract, form)
+                #print(curr_subcontract, file = sys.stdout) 
+                #print(f'new_start_date = {form_start_date_utc} ----- new_end_date = {form_end_date_utc}', file = sys.stdout)  
+                #print(f'old_start_date = {curr_subcontract.start_date} ----- old_end_date = {curr_subcontract.end_date}', file = sys.stdout)                     
+                apply_collision_function(new_sub_contract, curr_subcontract, form.measuring_type.data.code, form.itn.data.itn, \
+                                         form_price, form.forecast_vol.data, form_forecast_df, form.start_date.data, curr_contract)
+            generate_forecast_schedule(form.measuring_type.data, form.itn.data.itn, form_price, form_forecasted_vol, forecast_df, form_start_date_utc, curr_contract, form_end_date_utc)
             new_sub_contract.save() 
             # db.session.commit()
 
-        # print(applicable_sub_contracts, file = sys.stdout)
-        # print(has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc))
+
+
+
+
+        # #print(applicable_sub_contracts, file = sys.stdout)
+        # #print(has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc))
 
         
         # if len(sub_contracts) > 1:
@@ -600,9 +1106,9 @@ def create_subcontract():
         #     old_sub_end_date = sub_contracts[0].end_date
 
         #     if form_start_date_utc == curr_contract.start_date:
-        #         print('in strat date == conract start date', file = sys.stdout)
+        #         #print('in strat date == conract start date', file = sys.stdout)
         #         if form_end_date_utc == curr_contract.end_date:
-        #             print('reset subcontract', file = sys.stdout)
+        #             #print('reset subcontract', file = sys.stdout)
         #             ItnSchedule.query.filter((ItnSchedule.utc >= form_start_date_utc) & (ItnSchedule.utc <= form_end_date_utc) & (ItnSchedule.itn == form.itn.data.itn)).delete()
         #             SubContract.query.filter((SubContract.itn == form.itn.data.itn) & (SubContract.start_date >= form_start_date_utc) & (SubContract.end_date <= form_end_date_utc)).delete()
         #             db.session.commit()
@@ -677,15 +1183,6 @@ def create_subcontract():
 
 
 
-@app.route('/upload_erp', methods=['GET', 'POST'])
-@login_required
-def upload_erp():
-    form = ErpForm()
-    if form.validate_on_submit():
-        pass
-
-
-    return render_template('upload_erp.html', title='ERP Upload', form = form)
 
 
 

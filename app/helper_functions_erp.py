@@ -6,7 +6,7 @@ import time,re
 from decimal import Decimal
 from flask import  flash
 from app.models import *    
-from app.helper_functions import update_or_insert
+from app.helper_functions import update_or_insert, stringifyer
 import collections
 from zipfile import ZipFile
 from io import BytesIO
@@ -84,6 +84,7 @@ def reader_csv(zip_obj, file_name, separator):
     except Exception as e: 
         print(e)
     else:
+        # df.to_excel(f'{file_name}.xlsx')
         return df
     
 
@@ -98,11 +99,13 @@ def get_tech_point(df, erp_invoice = None):
         if(erp_invoice is not None):
             erp_invoice = erp_invoice[erp_invoice['event'] == '']
             df = df.merge(erp_invoice, on = 'number', how = 'left')
-            df.drop(columns = ['date_x', 'date_y', 'event', 'correction_note', 'fk'], inplace = True)
+            df.drop(columns = ['date_x', 'date_y', 'event', 'correction_note','composite_key','number'], inplace = True)
             df.rename(columns = {'id':'erp_invoice_id'}, inplace = True)
     except Exception as e: 
         print(e)
     else:
+        # print(f'from tech ----> df: \n {df}')
+        # print(f'df tech has null ---- > {df.erp_invoice_id.isnull().values.any()}')
         return df
 
 
@@ -117,85 +120,87 @@ def get_distrib_point(df, erp_invoice_df = None):
         df = df.drop(cols_to_drop, axis = 1)
 
         df.drop_duplicates(subset=['itn', 'start_date','end_date','price','value'],keep='first',inplace = True)
+        # print(f'from get_distrib_point before if  ------> df : \n{df}')
         if(erp_invoice_df is not None):
         
-            df['fk'] = df['correction_note'].apply(str) + df['event'].apply(str) + df['number'].apply(str) + df['date'].apply(str)
+            df['composite_key'] = df['correction_note'].apply(str) + df['event'].apply(str) + df['number'].apply(str) + df['date'].apply(str)
             
-            df = df.merge(erp_invoice_df, on = 'fk', how = 'left')
+            df = df.merge(erp_invoice_df, on = 'composite_key', how = 'left')
             # print(df, file = sys.stdout)
-            df.drop(columns = ['correction_note_y','event_x', 'number_x', 'date_x', 'fk','number_y', 'date_y', 'event_y','correction_note_x'], inplace = True)
+            df.drop(columns = ['correction_note_y','event_x', 'number_x', 'date_x', 'number_y', 'date_y', 'event_y','correction_note_x','composite_key'], inplace = True)
             df.rename(columns = {'id':'erp_invoice_id'}, inplace = True)
+            # erp_invoice_df.to_excel('erp_invoice_df.xlsx')
             
 
     except Exception as e: 
         print(e)
     else:
+        # print(f'from distr ----> df: \n {df}')
         return df
 
 
-def insert_to_db(paths):
-    erp_invoice = get_all(session, erp_invoice)
+# def insert_to_db(paths):
+#     erp_invoice = get_all(session, erp_invoice)
     
-    for path in paths:        
-        print(path)
-        input_df = reader_csv(path,'";"')
-        tech_point = get_tech_point(input_df, erp_invoice)
-        distrib_point = get_distrib_point(input_df, erp_invoice)
-        try:
-            update_or_insert(engine, tech_point, 'tech')
-            update_or_insert(engine, distrib_point, 'distribution')
-        except Exception as e: 
-            print(e)
+#     for path in paths:        
+#         print(path)
+#         input_df = reader_csv(path,'";"')
+#         tech_point = get_tech_point(input_df, erp_invoice)
+#         distrib_point = get_distrib_point(input_df, erp_invoice)
+#         try:
+#             update_or_insert(engine, tech_point, 'tech')
+#             update_or_insert(engine, distrib_point, 'distribution')
+#         except Exception as e: 
+#             print(e)
 
             
 
-def insert_to_df(zip_obj, separator):
-    erp_invoice_df =  pd.read_sql(ErpInvoice.query.statement, db.session.bind)
-    
-    erp_invoice_df['fk'] = erp_invoice_df['correction_note'].apply(str) + erp_invoice_df['event'].apply(str) + erp_invoice_df['number'].apply(str) + erp_invoice_df['date'].apply(str)
+def insert_mrus(zip_obj, separator):
+
+    erp_invoice_df =  pd.read_sql(ErpInvoice.query.statement, db.session.bind)   
     tech_tbl = pd.DataFrame()
     distr_tbl = pd.DataFrame()
-    # print(erp_invoice_df['fk'], file = sys.stdout)
-    
+   
     for zf in zip_obj.namelist() :
         if zf.endswith('.csv'): 
-
+            print(f'file name:{zf}\n')
             input_df = reader_csv(zip_obj, zf, separator)
 
             tech_point = get_tech_point(input_df, erp_invoice_df)
             distrib_point = get_distrib_point(input_df, erp_invoice_df)
-            if(distr_tbl.empty):           
-                distr_tbl = distrib_point
-            else:           
-                distr_tbl = distr_tbl.append(distrib_point, ignore_index=True)
-            if(tech_tbl.empty):
-                tech_tbl = tech_point            
-            else:
-                tech_tbl = tech_tbl.append(tech_point, ignore_index=True) 
 
-    # update_or_insert(distr_tbl, Distribution.__table__.name)
+            try:
+                if(distr_tbl.empty):           
+                    distr_tbl = distrib_point
+                else:           
+                    distr_tbl = distr_tbl.append(distrib_point, ignore_index=True)
+            except Exception as e:
+                print(f'distribution is None {e}')
+            try:
+                if(tech_tbl.empty):
+                    tech_tbl = tech_point            
+                else:
+                    tech_tbl = tech_tbl.append(tech_point, ignore_index=True) 
+            except Exception as e:
+                print(f'tech is None {e}')
+         
+    try:
+        have_all_itns_meta(distr_tbl['itn'].values)
+        update_or_insert(distr_tbl, Distribution.__table__.name)
+    except Exception as e:
+        print(f'Exception from writing distribution to DB, with message: {e}')
 
-    # distr_tbl['start_date'] = distr_tbl['start_date'].astype(str)  
-    # distr_tbl['end_date'] = distr_tbl['end_date'].astype(str)    
-    # bulk_list = distr_tbl.to_dict(orient='records')  
-    # print(distr_tbl, file = sys.stdout) 
-    # db.session.bulk_insert_mappings(Distribution, bulk_list)
-
-
-    # update_or_insert(tech_tbl, Tech.__table__.name)
-
-    # tech_tbl['start_date'] = tech_tbl['start_date'].astype(str)  
-    # tech_tbl['end_date'] = tech_tbl['end_date'].astype(str)
-    # bulk_list = tech_tbl.to_dict(orient='records')   
-    # db.session.bulk_insert_mappings(Tech, bulk_list)
-
-    # db.session.commit()       
-    return distr_tbl, tech_tbl
-
+    try:       
+        have_all_itns_meta(tech_tbl['itn'].values)
+        update_or_insert(tech_tbl, Tech.__table__.name)
+    except Exception as e:
+        print(f'Exception from writing distribution to DB, with message: {e}')    
+  
+    
 def insert_erp_invoice(zip_obj, separator):
 
     full_df = pd.DataFrame()
-    # print(f' in insert {type(full_df)}', file = sys.stdout)
+
     for zf in zip_obj.namelist() :
         if zf.endswith('.csv'): 
 
@@ -209,53 +214,140 @@ def insert_erp_invoice(zip_obj, separator):
     erp_inv_df = full_df[['number','date','event','correction_note']].copy()
     erp_inv_df.drop_duplicates(subset = ['number','correction_note','event','date'], keep = 'first', inplace = True)
     erp_inv_df.reset_index(inplace = True, drop = True)
-    print(f'from insert table name : {ErpInvoice.__table__.name}', file = sys.stdout)
+    
+    erp_inv_df['date'] =erp_inv_df['date'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
+   
+    erp_inv_df['composite_key'] = erp_inv_df['correction_note'].apply(str) + erp_inv_df['event'].apply(str) + erp_inv_df['number'].apply(str) + erp_inv_df['date']
+    
     update_or_insert(erp_inv_df, ErpInvoice.__table__.name)
-    # erp_inv_df['date'] = erp_inv_df['date'].astype(str)
-    # bulk_list = erp_inv_df.to_dict(orient='records')   
-    
-    # db.session.bulk_insert_mappings(ErpInvoice, bulk_list)
-    # db.session.commit()
-    
+
     return erp_inv_df
 
-    #################### Hourly ###########################
+def have_all_itns_meta(series_itn):
+
+    all_metas = ItnMeta.query.with_entities(ItnMeta.itn).all()
+    all_metas = set([x[0] for x in all_metas])
+    # print(f'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ALL ITNS = {all_metas}')
+    print(f'All metas len = {len(all_metas)}')
+    print(f'All series itn len = {len(set(series_itn))}') 
+    
+    if set(series_itn).issubset(all_metas):
+        print(f'all have metas')
+        return True
+    else:
+        print(f'NOT all have metas')
+        print(f'ZOMBIE ITN \n{set(series_itn) - all_metas}')
+        
+        return False
+
 
 def update_reported_volume(df, table_name):
+    
+    print(f'########################## ENTERING UPDATE REPORTED VOLUME #############################')
+    # update_df = df[['itn','utc','reported_vol']]
 
-    all_data = pd.read_sql(ItnSchedule.query.filter(ItnSchedule.itn.in_(list(set(df['itn'])))).statement, db.session.bind)
-    # print(all_data.shape, file = sys.stdout)
-    all_data.drop(columns = 'reported_vol', inplace = True)
-    all_data.dropna(inplace = True)
-    updated_data = pd.merge(df, all_data, on = ['itn','utc'], how = 'inner')
-    # print(df.head,file = sys.stdout)    
-    update_or_insert(updated_data, table_name)
+    
+    
+    # have_all_itns_meta(df['itn'])
+    
+
+    stringifyer(df)
+    bulk_update_list = df.to_dict(orient='records')
+    
+    db.session.bulk_update_mappings(ItnSchedule, bulk_update_list)
+    db.session.commit()
+    # print(f'len of bulk list {len(bulk_update_list)}')
+    # print(f'len of df {df.shape[0]}')
+
+
+    # # print(f'from update_reported_volume ----> INPUT_DATA\n {df.head}')  
+    # print(f'shape of input df : {df.shape}')    
+    # s_date = str(min(df['utc']))
+    # e_date = str(max(df['utc']))
+    # records = (
+    #     db.session.query(ItnSchedule.itn, ItnSchedule.utc, ItnSchedule.reported_vol)
+    #     .filter(ItnSchedule.itn.in_(list(set(df['itn']))))
+    #     .filter(ItnSchedule.utc >= s_date, ItnSchedule.utc <= e_date)
+    #     .all())
+
+    # all_data = pd.DataFrame.from_records(records, columns = records[0].keys())
+    # all_data = all_data[['itn','utc','reported_vol']]
+    # m = df.merge(all_data, on=['itn','utc'], how='outer', suffixes=['', '_'], indicator=True)
+    # null_mask = m.isnull().any(axis=1)
+    # m = m[null_mask]
+    # print(f'from {s_date} ----- {e_date}')
+    # print(f' M is {m}')
+    # m.to_excel('m.xlsx')
+    # all_data.dropna(inplace = True)
+    # updated_data = pd.merge(df, all_data, on = ['itn','utc'], how = 'left')
+    # print(f'len of updated_data {updated_data.shape[0]}')
+    # print(f'min {min(all_data.utc)}')
+    # print(f'max {max(all_data.utc)}')
+    # print(f'min {min(df.utc)}')
+    # print(f'max {max(df.utc)}')
+    # print(f'min {min(all_data.utc)}')
+    # print(f'max {max(all_data.utc)}')
+    
+   
+    # print(f' M is {m}')
+    # updated_data = pd.merge(df, all_data, on = ['itn','utc'], how = 'inner')
+    # update_or_insert(updated_data, table_name)
+    
+    # # all_data = pd.read_sql(ItnSchedule.query.statement, db.session.bind) 
+    # # df_parts =[df[i : i + SPLIT_SIZE] for i in range(0, df.shape[0], SPLIT_SIZE)]
+    # # count = 1
+    # # for part_df in df_parts:
+
+    # #     print(f'from UPDARE VOLUME - READED DATA FROM DB ----> all_data from db\n {all_data}')
+    # #     # all_data.drop(columns = 'reported_vol', inplace = True)
+       
+    # #     updated_data = pd.merge(part_df, all_data, on = ['itn','utc'], how = 'inner')
+    # #     update_or_insert(updated_data, table_name)
+    # #     print(f'from update loop i = {count}') 
+    # #     count += 1   
+    print(f'########################## Finiiiiiiish UPDATE REPORTED VOLUME #############################')
+    
 
 def create_db_df_eepro_evn(df, ITN):      
+    try:
+        df = df.fillna(0)
+        df = df.iloc[3:]
+        # print(f'entering create_db_df_eepro_evn df :\n -------> {df}')
+        df['1'] = df['1'].apply(lambda x: x.replace('.','/'))
+        
+        is_manufacturer = True if df['3'].mean() != 0 else False
+        df_for_db= pd.DataFrame(columns=['itn','utc','reported_vol']) 
+        
+        df_for_db['utc'] = pd.to_datetime(df['1'], format = '%d/%m/%Y %H:%M')
+        df_for_db['itn'] = ITN
+        
+        df_for_db['reported_vol'] = df['3'].astype(float) if is_manufacturer else df['2'].astype(float)  
+        df_for_db.set_index('utc', inplace = True)
+        df_for_db.index = df_for_db.index.shift(periods=-1, freq='h').tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_convert(None)  
 
-    df = df.fillna(0)
-    df = df.iloc[3:]
-    df['1'] = df['1'].apply(lambda x: x.replace('.','/'))
-    is_manufacturer = True if df['3'].mean() != 0 else False
-    df_for_db= pd.DataFrame(columns=['ITN_Id','Utc','Reported_Volume'])    
-    df_for_db['Utc'] = pd.to_datetime(df['1'], format = '%d/%m/%Y %H:%M')
-    df_for_db['ITN_Id'] = ITN
-    df_for_db['Reported_Volume'] = df['3'].astype(float) if is_manufacturer else df['2'].astype(float)  
-    df_for_db.set_index('Utc', inplace = True)
-    df_for_db.index = df_for_db.index.shift(periods=-1, freq='h').tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_convert(None)  
-    df_for_db.reset_index(inplace = True)
+        df_for_db.reset_index(inplace = True)
+    except Exception as e:
+        print(f'Exception from create_db_df_eepro_evn: {e}')
 
+    print(f'from create_db_df_eepro_evn df_for_db ITN======{ITN}\n ---->{df_for_db}')   
     return df_for_db
 
-def fill_db_from_excel_cez(zip_obj): 
+def insert_settlment_cez(zip_obj, itn_meta_df): 
 
     ordered_dict = order_files_by_date(zip_obj)
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.xlsx'):
-            print(file_name, file = sys.stdout) 
-            df = pd.read_excel(zip_obj.read(file_name))
-            # print(df, file = sys.stdout) 
+            print(f'From insert_settlment_cez: file name is:  {file_name}') 
+            df = pd.read_excel(zip_obj.read(file_name))  
+            merged_df = pd.merge(df, itn_meta_df, left_on = df.columns[1], right_on = 'itn', how = 'left')             
+            df = merged_df[(merged_df['code'] == 'DIRECT') | (merged_df['code'] == 'UNDIRECT')]
 
+            if df.empty:
+                print(f'thera are only stp itn - skipping!')
+                continue
+
+            df.drop(columns = ['code', 'itn'], inplace = True)
+            print(f'from insert_settlment_cez redacted DF: \n{df}')
             df = df.fillna(0)
             df.drop(['DD.MM.YYYY hh:mm','Име на Клиент, ЕСО:','Сетълмент период:'], axis=1, inplace = True)
             
@@ -271,6 +363,7 @@ def fill_db_from_excel_cez(zip_obj):
             df.rename(columns={'Уникален Идентификационен Номер:': 'itn'}, inplace = True)
             df.set_index(pd.DatetimeIndex(df['utc']), inplace = True)
             df.drop(columns= 'utc', inplace = True)
+
             
             try:
                 df.index = df.index.tz_convert('UTC').tz_convert(None)
@@ -280,22 +373,13 @@ def fill_db_from_excel_cez(zip_obj):
             else:
                 if(not df.empty):
                     df.reset_index(inplace = True)
+                    # print(f'From insert_settlment_cez ---> %%%%%%%%%%%%%%%%%%%df is:\n {df}') 
                     update_reported_volume(df, ItnSchedule.__table__.name)
-                    # all_data = pd.read_sql(ItnSchedule.query.filter(ItnSchedule.itn.in_(list(set(df['itn'])))).statement, db.session.bind)
-                    # # print(all_data.shape, file = sys.stdout)
-                    # all_data.drop(columns = 'reported_vol', inplace = True)
-                    # all_data.dropna(inplace = True)
-                    # updated_data = pd.merge(df, all_data, on = ['itn','utc'], how = 'inner')
-                    # # print(df.head,file = sys.stdout)
-                    
-                    # update_or_insert(updated_data, ItnSchedule.__table__.name)
-                    
-                
-    #  df = pd.read_excel(zip_obj.read(file_name))           
-def fill_db_from_excel_e_pro(zip_obj):
+            
+def insert_settlment_e_pro(zip_obj, itn_meta_df):
 
     ordered_dict = order_files_by_date(zip_obj)
-    # print(ordered_dict, file = sys.stdout)
+    
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.zip'):
             print(file_name, file = sys.stdout)
@@ -305,35 +389,37 @@ def fill_db_from_excel_e_pro(zip_obj):
          
             dfs = {text_file.filename: pd.read_excel(inner_zip.read(text_file.filename))
             for text_file in inner_zip.infolist() if text_file.filename.endswith('.xlsx')}
-            # print(dfs, file = sys.stdout)
-
+            
             for key in dfs.keys():
                 try:
                     df = dfs[key]
                     df.columns = df.columns.str.strip()
                     ClientName = [x for x in df.columns if(x.find('Unnamed:') == -1)][0]
-                    ITN = df.iloc[:1][ClientName].values[0].split(': ')[1]            
+                    ITN = df.iloc[:1][ClientName].values[0].split(': ')[1]   
+                    if itn_meta_df[itn_meta_df['itn'] == ITN]['code'].values[0] in ['DIRECT, UNDIRECT']:
+                        continue
+                    
                     df = df.rename(columns={ClientName:'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})          
-
+                   
                     df_for_db = create_db_df_eepro_evn(df, ITN)
+                    
                     if(not df_for_db.empty):
-                        # print('ITN is: ', ITN)
-                        print(df_for_db, file = sys.stdout)
-                        # update_or_insert(engine,df_for_db, SCHEDULE_TABLE)
+                        update_reported_volume(df_for_db, ItnSchedule.__table__.name)
                     else:
                         print('Values in file ', key, ' was only 0 !')
                 except Exception as e: 
-                    print('File ', key, ' was NOT proceeded !')
-                    print (str(e))
+                    print(f'File {key} was NOT proceeded .Exception message: {e}!')
+                    
                 
                 
-def fill_db_from_excel_evn(zip_obj):
+def insert_settlment_evn(zip_obj):
     
-    PASSWORD = '8yc#*3-Q5ADt'
+    # PASSWORD = '8yc#*3-Q5ADt'
+    PASSWORD = '79+Kg+*rLA7P'
     ENCODING = 'utf-8'
 
     ordered_dict = order_files_by_date(zip_obj)
-    # print(ordered_dict, file = sys.stdout)
+    print(ordered_dict, file = sys.stdout)
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.zip'):
             print(file_name, file = sys.stdout)
@@ -343,26 +429,33 @@ def fill_db_from_excel_evn(zip_obj):
          
             dfs_dict = {text_file.filename: pd.read_excel(inner_zip.read(text_file.filename,pwd=bytes(PASSWORD, ENCODING)))
             for text_file in inner_zip.infolist() if text_file.filename.endswith('.xlsx')}
-            # print(dfs, file = sys.stdout)   
+           
             for key in dfs_dict.keys():
                 try:
                     df = dfs_dict[key]
                     df.columns = df.columns.str.strip()
                     ITN = df.iloc[:1].values[0][0] 
-                    df = df.rename(columns={'Гранд Енерджи Дистрибюшън ЕООД':'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})
+                    
+                    # df = df.rename(columns={'Гранд Енерджи Дистрибюшън ЕООД':'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})
+                    df = df.rename(columns={'Юропиан Трейд Оф Енерджи АД':'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})
                     df_for_db = create_db_df_eepro_evn(df, ITN)
-                    if(not df_for_db.empty): 
-                        print(df_for_db, file = sys.stdout)                  
-                        # update_or_insert(engine, df_for_db, SCHEDULE_TABLE)
+                    # print(f'FROM INSERT EVN {df_for_db}')
+                    if(not df_for_db.empty):  
+                       
+                        curr_sub_measuring_type = SubContract.query.filter(SubContract.itn == ITN,\
+                            SubContract.start_date <= df_for_db.iloc[0].utc.to_pydatetime(),\
+                            SubContract.end_date >= df_for_db.iloc[0].utc.to_pydatetime()).first().measuring_type.code
+                        
+                        # if curr_sub_measuring_type in ['DIRECT', 'UNDIRECT']:
+                                           
+                        # update_reported_volume(df_for_db, ItnSchedule.__table__.name)
                     else:
                         print('Values in file ', key, ' was only 0 !')
                 except Exception as e:
-                    print('File ', key, ' was NOT proceeded !')
-                    print (str(e))
-
+                    print(f'File {key} was NOT proceeded .Exception message: {e}!')
                 
 def get_df_eso_direct(path_csv):
-#     PATH = r'C:\WORK\GED\input\chavdar\06_2020\данни ЕСО\2020 06\преки\АГРОПОЛИХИМ.csv'
+
     df = pd.read_csv(path_csv,sep=';',skiprows=2)
     itn = df[df.eq('RefBGCode').any(1)].values[0][1]
     df = df[4:]
@@ -388,7 +481,8 @@ def fill_direct(dir_path):
 
                 try:
                     df = get_df_eso_direct(os.path.join(root, filename))
-                    update_or_insert(engine, df, SCHEDULE_TABLE)
+                    update_reported_volume(df, ItnSchedule.__table__.name)
+                    # update_or_insert(engine, df, SCHEDULE_TABLE)
                 except Exception as e:
                     print('File ', filename, ' was NOT proceeded !')
                     print (str(e))

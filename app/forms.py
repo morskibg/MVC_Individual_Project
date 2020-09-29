@@ -6,7 +6,7 @@ from wtforms import (
 # from wtforms.fields import DateField
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional,NumberRange
-from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType
+from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp
 import re
 import sys
 import datetime as dt
@@ -99,6 +99,7 @@ class NewContractForm(FlaskForm):
     contractor_id = SelectField('Contractor Name', validators=[DataRequired()])
     subject = TextField('Subject')
     parent_contract_internal_id = SelectField('Parent Contract Number')
+    time_zone = QuerySelectField(query_factory = lambda: TimeZone.query.order_by(TimeZone.id), allow_blank = False, get_label='code', validators=[DataRequired()])
     signing_date = StringField(id='sign_datepicker', validators = [DataRequired()])
     start_date = StringField(id='start_datepicker', validators = [Optional()])
     end_date = StringField(id='end_datepicker', validators = [Optional()])
@@ -148,9 +149,9 @@ class NewContractForm(FlaskForm):
         else:
 
             if dt_start_obj > dt_end_obj:
-                raise ValidationError('Start date must be before End date')            
+                raise ValidationError('Start Date must be before End Date')            
             if (dt_start_obj + dt.timedelta(days = self.duration_in_days.data - 1) != dt_end_obj ):                
-                raise ValidationError('Mismatch between start date, end date and duration')
+                raise ValidationError('Mismatch between Start Date, End Date and duration')
 
     def validate_collateral_warranty(self, collateral_warranty):
 
@@ -181,7 +182,7 @@ class CreateSubForm(FlaskForm):
     measuring_type = QuerySelectField(query_factory = lambda: MeasuringType.query, allow_blank = False,get_label='code', validators=[DataRequired()])
     zko = DecimalField('Zko',validators=[NumberRange(min = 0.01, max = 100),DataRequired()], default = 21.47)
     akciz = DecimalField('Akciz',validators=[NumberRange(min = 0.01, max = 100),DataRequired()],default = 2.00)
-    forecast_vol = DecimalField('Forecasted Monthly Consumption [MWh]',validators=[Optional()])
+    forecast_vol = DecimalField('Forecasted Monthly Consumption [MWh]',validators=[Optional()], default = 0)
     file_ = FileField('Browse for hourly forcast schedule',validators=[Optional()])
     
     has_grid_services = BooleanField('Include Grid Services', default = True)
@@ -190,14 +191,56 @@ class CreateSubForm(FlaskForm):
 
     submit = SubmitField('Create SubContract')
 
+    def validate_end_date(self, end_date):
+
+        dt_start_obj = dt.datetime.strptime(self.start_date.data, '%Y-%m-%d')
+        dt_end_obj = dt.datetime.strptime(end_date.data, '%Y-%m-%d')
+        if dt_start_obj > dt_end_obj:
+                raise ValidationError('Start Date must be before End Date')
+
+
+class EditSubForm(FlaskForm):
+
+    contract_data = QuerySelectField(query_factory = lambda: Contract.query, allow_blank = False,get_label=Contract.__str__  , validators=[DataRequired()])
+    itn = QuerySelectField(query_factory = lambda: ItnMeta.query, allow_blank = False,get_label='itn', validators=[DataRequired()])
+    
+    # start_date = StringField(id='start_datepicker', validators = [DataRequired()])
+    # end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    # invoice_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label='name', validators=[DataRequired()])
+    # price = DecimalField('Price',validators=[NumberRange(min = 0.01, max = 300),DataRequired()], default = 100)
+    # object_name = StringField('Object Name', validators=[Optional()])
+    # measuring_type = QuerySelectField(query_factory = lambda: MeasuringType.query, allow_blank = False,get_label='code', validators=[DataRequired()])
+    # zko = DecimalField('Zko',validators=[NumberRange(min = 0.01, max = 100),DataRequired()], default = 21.47)
+    # akciz = DecimalField('Akciz',validators=[NumberRange(min = 0.01, max = 100),DataRequired()],default = 2.00)
+    # forecast_vol = DecimalField('Forecasted Monthly Consumption [MWh]',validators=[Optional()], default = 0)
+    # file_ = FileField('Browse for hourly forcast schedule',validators=[Optional()])
+    
+    # has_grid_services = BooleanField('Include Grid Services', default = True)
+    # has_spot_price = BooleanField('Has Spot Price', default = False)
+    # has_balancing = BooleanField('Include Balancing Services', default = True)
+
+    # submit = SubmitField('Create SubContract')
+
+    # def validate_end_date(self, end_date):
+
+    #     dt_start_obj = dt.datetime.strptime(self.start_date.data, '%Y-%m-%d')
+    #     dt_end_obj = dt.datetime.strptime(end_date.data, '%Y-%m-%d')
+    #     if dt_start_obj > dt_end_obj:
+    #             raise ValidationError('Start Date must be before End Date')
+
 
 class TestForm(FlaskForm):
-    file_1 = FileField('Browse for Test File')
-
+    # file_1 = FileField('Browse for Test File')
+    start_date = StringField(id='start_datepicker', validators = [Optional()])
+    end_date = StringField(id='end_datepicker', validators = [Optional()])
+    erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
+    invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
     submit = SubmitField('Test')
 
 class ErpForm(FlaskForm):
-    file_1 = FileField('Browse for ERP Zip File')
+    file_cez = FileField('Browse for CEZ Zip File')
+    file_epro = FileField('Browse for E_PRO Zip File')
+    file_evn = FileField('Browse for EVN Zip File')
 
     submit = SubmitField('Upload')
 
@@ -211,6 +254,10 @@ class UploadInitialForm(FlaskForm):
     file_contractors = FileField('Browse for Contracors CSV File')
     file_stp = FileField('Browse for Stp File')
     file_inv_group = FileField('Browse for Invoice Group File')
+    file_hum_contractors = FileField('Browse for Humne Contractors File')
+    file_hum_contracts = FileField('Browse for Humne Contracts File')
+    file_hum_inv_groups = FileField('Browse for Humne Invoice Groups File')
+    file_hum_itn = FileField('Browse for Humne Itn File')
 
 
 
