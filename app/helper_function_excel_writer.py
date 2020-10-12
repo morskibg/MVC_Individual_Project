@@ -59,7 +59,7 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     dest_folder_path = 'app/static/generated_excel_files'
 
    
-    contractor = df['Contractor'].iloc[0]
+    contractor = df['contractor_name'].iloc[0]
     # print(f'contractor --> {contractor}')
     period = f'{calendar.month_name[period_start_date.month]}/{period_start_date.year}'
     # print(f'period --> {calendar.month_name[period_start_date.month]}/{period_start_date.year}')
@@ -93,7 +93,7 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     ws.column_dimensions['B'].width = 38
     # ws.column_dimensions['C'].width = 20
     # ws.column_dimensions['D'].width = 38
-    ws.column_dimensions['C'].width = 40
+    ws.column_dimensions['C'].width = 60
     ws.column_dimensions['D'].width = 20  
     ws.column_dimensions['E'].width = 20
     ws.column_dimensions['F'].width = 20

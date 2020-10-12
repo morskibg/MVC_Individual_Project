@@ -22,7 +22,9 @@ def get_inv_group_itn_sub_query(invoicing_group_name, period_start_date, period_
             SubContract.zko.label('zko'),
             SubContract.akciz.label('akciz'),                
             Contractor.name.label('contractor_name'),
-            Contractor.eic.label('contractor_eic')
+            Contractor.eic.label('contractor_eic'),
+            InvoiceGroup.name.label('invoice_group_name'),
+            InvoiceGroup.description.label('invoice_group_description')
         )
         .join(SubContract, SubContract.itn == ItnMeta.itn)
         .join(InvoiceGroup)
@@ -132,5 +134,70 @@ def get_grid_service_sub_query(inv_group_itn_sub_query, invoice_start_date, invo
             .subquery()
         )    
     return grid_service_sub_query
+
+def get_summary_records_with_grid_services(inv_group_itn_sub_query, single_tariff_consumption_records_sub, grid_service_sub_query, period_start_date, period_end_date):
+
+    summary_records_with_grid_services = (
+        db.session.query(
+            ItnSchedule.itn.label('Обект (ИТН №)'),
+            grid_service_sub_query.c.grid_services.label('Мрежови услуги (лв.)'),
+            AddressMurs.name.label('Адрес'),
+            single_tariff_consumption_records_sub.c.single_tariff_consumption.label('Потребление (kWh)'),            
+            Tariff.price_day,  
+            func.round(single_tariff_consumption_records_sub.c.single_tariff_consumption * Tariff.price_day, MONEY_ROUND).label('Сума за енергия'),
+            func.round(single_tariff_consumption_records_sub.c.single_tariff_consumption * inv_group_itn_sub_query.c.zko, MONEY_ROUND).label('Задължение към обществото'),   
+            func.round(single_tariff_consumption_records_sub.c.single_tariff_consumption * inv_group_itn_sub_query.c.akciz, MONEY_ROUND).label('Акциз'),                
+            inv_group_itn_sub_query.c.zko,
+            inv_group_itn_sub_query.c.akciz,                        
+            inv_group_itn_sub_query.c.contractor_name,
+            inv_group_itn_sub_query.c.invoice_group_name,
+            inv_group_itn_sub_query.c.invoice_group_description
+            )
+            .outerjoin(single_tariff_consumption_records_sub, single_tariff_consumption_records_sub.c.itn_single == ItnSchedule.itn)            
+            .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn) 
+            .join(grid_service_sub_query, grid_service_sub_query.c.itn_id == ItnSchedule.itn)                        
+            .join(ItnMeta, ItnMeta.itn == ItnSchedule.itn)                        
+            .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id) 
+            .join(Tariff, Tariff.id == ItnSchedule.tariff_id)                       
+            .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)                 
+            .group_by(ItnSchedule.itn, inv_group_itn_sub_query.c.zko, inv_group_itn_sub_query.c.akciz, Tariff.price_day, 
+                    single_tariff_consumption_records_sub.c.single_tariff_consumption,  inv_group_itn_sub_query.c.invoice_group_name,inv_group_itn_sub_query.c.invoice_group_description )                        
+            .all()
+    )
+    return summary_records_with_grid_services
+
+
+def get_summary_records_without_grid_services(inv_group_itn_sub_query, single_tariff_consumption_records_sub, grid_service_sub_query, period_start_date, period_end_date):
+
+    summary_records_without_grid_services = (
+        db.session.query(
+            ItnSchedule.itn.label('Обект (ИТН №)'),                
+            AddressMurs.name.label('Адрес'),
+            single_tariff_consumption_records_sub.c.single_tariff_consumption.label('Потребление (kWh)'),  
+            Tariff.price_day,   
+            func.round(single_tariff_consumption_records_sub.c.single_tariff_consumption * Tariff.price_day, MONEY_ROUND).label('Сума за енергия'),
+            func.round(single_tariff_consumption_records_sub.c.single_tariff_consumption * inv_group_itn_sub_query.c.zko, MONEY_ROUND).label('Задължение към обществото'),   
+            func.round(single_tariff_consumption_records_sub.c.single_tariff_consumption * inv_group_itn_sub_query.c.akciz, MONEY_ROUND).label('Акциз'),                
+            inv_group_itn_sub_query.c.zko,
+            inv_group_itn_sub_query.c.akciz,                                 
+            inv_group_itn_sub_query.c.contractor_name,
+            inv_group_itn_sub_query.c.invoice_group_name,
+            inv_group_itn_sub_query.c.invoice_group_description
+            )
+            .outerjoin(single_tariff_consumption_records_sub, single_tariff_consumption_records_sub.c.itn_single == ItnSchedule.itn)            
+            .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn)                                        
+            .join(ItnMeta, ItnMeta.itn == ItnSchedule.itn) 
+            .join(SubContract, SubContract.itn == ItnSchedule.itn)                       
+            .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id)
+            .filter(SubContract.start_date <= period_start_date, SubContract.end_date >= period_end_date, SubContract.has_grid_services == False)
+            .join(Tariff, Tariff.id == ItnSchedule.tariff_id)                      
+            .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)  
+            .group_by(ItnSchedule.itn, inv_group_itn_sub_query.c.zko, inv_group_itn_sub_query.c.akciz, Tariff.price_day, 
+                    single_tariff_consumption_records_sub.c.single_tariff_consumption, inv_group_itn_sub_query.c.invoice_group_name,inv_group_itn_sub_query.c.invoice_group_description)                                           
+            .all()
+    )
+    return summary_records_without_grid_services
+
+
 
 

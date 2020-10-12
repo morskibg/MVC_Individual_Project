@@ -65,7 +65,8 @@ from app.helper_functions_queries import (get_inv_group_itn_sub_query,
                                          get_single_tariff_consumption_records_sub,
                                          get_grid_services_distrib_records, 
                                          get_grid_service_sub_query,                                       
-                    
+                                         get_summary_records_with_grid_services,
+                                         get_summary_records_without_grid_services,
 )
 
 from zipfile import ZipFile
@@ -671,55 +672,60 @@ def test():
                                                                                             period_start_date, 
                                                                                             period_end_date)
 
-        # summary_records_with_grid_services = get_summary_records_with_grid_services(inv_group_itn_sub_query,
-        #                                                                             single_tariff_consumption_records_sub, 
-        #                                                                             grid_service_sub_query, 
-        #                                                                             period_start_date, 
-        #                                                                             period_end_date)
+        summary_records_with_grid_services = get_summary_records_with_grid_services(inv_group_itn_sub_query,
+                                                                                    single_tariff_consumption_records_sub, 
+                                                                                    grid_service_sub_query, 
+                                                                                    period_start_date, 
+                                                                                    period_end_date)
+        # temp_df = pd.DataFrame.from_records(summary_records_with_grid_services, columns = summary_records_with_grid_services[0].keys())
+        # print(f'{temp_df}')
 
-        # summary_records_without_grid_services = get_summary_records_without_grid_services(inv_group_itn_sub_query,
-        #                                                                                     single_tariff_consumption_records_sub, 
-        #                                                                                     grid_service_sub_query, 
-        #                                                                                     period_start_date, 
-        #                                                                                     period_end_date)
+
+        summary_records_without_grid_services = get_summary_records_without_grid_services(inv_group_itn_sub_query,
+                                                                                            single_tariff_consumption_records_sub, 
+                                                                                            grid_service_sub_query, 
+                                                                                            period_start_date, 
+                                                                                            period_end_date)
         
-        # df = pd.DataFrame()
-        # if len(summary_records_with_grid_services) != 0:
-        #     try:
-        #         temp_df = pd.DataFrame.from_records(summary_records_with_grid_services, columns = summary_records_with_grid_services[0].keys())
-        #         print(f'from with shape = {df.shape[0]}')
+        df = pd.DataFrame()
+        if len(summary_records_with_grid_services) != 0:
+            try:
+                temp_df = pd.DataFrame.from_records(summary_records_with_grid_services, columns = summary_records_with_grid_services[0].keys())
+                print(f'from with shape = {df.shape[0]}')
 
-        #     except Exception as e:
-        #         print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
+            except Exception as e:
+                print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
 
-        #     else:
-        #         if df.empty:
-        #             df = temp_df
-        #         else:
-        #             df = df.append(temp_df, ignore_index=True) 
-        # try: 
-        #     if len(summary_records_without_grid_services) > 0:           
-        #         temp_df = pd.DataFrame.from_records(summary_records_without_grid_services, columns = summary_records_without_grid_services[0].keys())
+            else:
+                if df.empty:
+                    df = temp_df
+                else:
+                    df = df.append(temp_df, ignore_index=True) 
+        try: 
+            if len(summary_records_without_grid_services) > 0:           
+                temp_df = pd.DataFrame.from_records(summary_records_without_grid_services, columns = summary_records_without_grid_services[0].keys())
 
-        #         temp_df.insert(loc=1, column = 'Мрежови услуги (лв.)', value = 0)                 
-        #         print(f'from WITHOUT shape = {temp_df.shape[0]}')
-        #         if df.empty:
-        #             df = temp_df
-        #         else:
-        #             df = df.append(temp_df, ignore_index=True)  
+                temp_df.insert(loc=1, column = 'Мрежови услуги (лв.)', value = 0)                 
+                print(f'from WITHOUT shape = {temp_df.shape[0]}')
+                if df.empty:
+                    df = temp_df
+                else:
+                    df = df.append(temp_df, ignore_index=True)  
 
             
-        # except Exception as e:
-        #     print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
+        except Exception as e:
+            print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
 
-        # else:
-        #     df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'last')  
+        else:
+            df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'last')  
 
-        # print(f'{df.head()}')
-        # df.apply(pd.to_numeric, errors='ignore')
-        # # df.to_excel('check2.xlsx')
-        # df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])
-        # generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, period_start_date, period_end_date, time_zone)
+        print(f'{df.head()}')
+        # df = df.apply(pd.to_numeric, errors='ignore')
+        
+        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])
+        df.to_excel(f'temp/nzok.xlsx')
+        generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, period_start_date, period_end_date, time_zone)
+
     return render_template('test.html', title='Test', form=form)
     
 
