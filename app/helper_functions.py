@@ -5,6 +5,7 @@ import xlrd
 import time,re
 from decimal import Decimal,ROUND_HALF_UP
 
+from sqlalchemy.exc import ProgrammingError
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
 
@@ -79,6 +80,13 @@ def convert_date_to_utc(time_zone, dt_str, t_format = "%Y-%m-%d"):
     local = pytz.timezone (time_zone)
     local_date = local.localize(naive, is_dst=True)
     return local_date.astimezone(pytz.utc).replace(tzinfo=None)
+
+def get_tariff_offset(input_date, time_zone, t_format = "%Y-%m-%d"):
+
+    naive = dt.datetime.strptime (input_date, t_format) 
+    local = pytz.timezone (time_zone)
+    local_date = local.localize(naive, is_dst=True)
+    return local_date.utcoffset() / dt.timedelta(hours=1)
 
 def validate_ciryllic(data):
     
@@ -219,58 +227,89 @@ def generate_forecast_schedule(measuring_type, itn, forecast_vol, weekly_forecas
 
     forecast_df['itn'] = itn
     # forecast_df['price'] = price
-    forecast_df['reported_vol'] = -1
-    # forecast_df = forecast_df[['itn','utc','forecast_vol', 'reported_vol','price']]
+    forecast_df['consumption_vol'] = -1
+    # forecast_df = forecast_df[['itn','utc','forecast_vol', 'consumption_vol','price']]
     delete_sch = ItnScheduleTemp.__table__.delete()
     db.session.execute(delete_sch)
     forecast_df.set_index('utc', inplace = True)
 
-    forecast_df['tariff_id'] = tariff.id
-    forecast_df['price'] = forecast_df.apply(lambda x: generate_regards_dst_hours(x.name, tariff), axis = 1)
-    # if(tariff.name == 'single_tariff'):
-    #     forecast_df['price'] = tariff.price_day
-
-    # elif(tariff.name == 'double_tariff'):
-    #     forecast_df['price'] = forecast_df.apply(lambda x: generate_regards_dst_hours(x.name, tariff), axis = 1)
-    #     # forecast_df.loc[(forecast_df.index.hour > 6) & (forecast_df.index.hour <= 22), 'price'] = tariff.price_day
-
     forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
+    forecast_df['tariff_id'] = tariff.id
+    forecast_df['settelment_vol'] = -1
+    forecast_df['price'] = forecast_df.apply(lambda x: generate_tariff_hours(x.name, tariff), axis = 1)
     forecast_df.reset_index(inplace = True)    
-    forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'reported_vol', 'price', 'tariff_id']]    
+    forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]    
     update_or_insert(forecast_df, ItnScheduleTemp.__table__.name)
     print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Head: \n{forecast_df.head()}')
     print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Tail: \n{forecast_df.tail()}')
 
-def generate_regards_dst_hours(date, tariff):
+
+    # forecast_df['tariff_id'] = tariff.id
+    # forecast_df['price'] = forecast_df.apply(lambda x: generate_regards_dst_hours(x.name, tariff), axis = 1)
+    # forecast_df['settelment_vol'] = -1
+    # # if(tariff.name == 'single_tariff'):
+    # #     forecast_df['price'] = tariff.price_day
+
+    # # elif(tariff.name == 'double_tariff'):
+    # #     forecast_df['price'] = forecast_df.apply(lambda x: generate_regards_dst_hours(x.name, tariff), axis = 1)
+    # #     # forecast_df.loc[(forecast_df.index.hour > 6) & (forecast_df.index.hour <= 22), 'price'] = tariff.price_day
+
+    # forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
+    # forecast_df.reset_index(inplace = True)    
+    # forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]    
+    # update_or_insert(forecast_df, ItnScheduleTemp.__table__.name)
+    # print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Head: \n{forecast_df.head()}')
+    # print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Tail: \n{forecast_df.tail()}')
+
+
+def generate_tariff_hours(date, tariff):
 
     if tariff.name == 'single_tariff':
         return tariff.price_day
 
-    if (date.month >= 4) & (date.month <= 10):
-        # lqtno chasovo vreme
-        if(date.hour > 7) & (date.hour <= 23):
+    if(date.hour > 4) & (date.hour <= 20):
             # dnevna tarifa
-            if ((tariff.name == 'peak_tariff') & (((date.hour > 8) & (date.hour <= 12)) | ((date.hour > 18) & (date.hour <= 22)))):
-                # vyrhova tarifa
-                print(f'in vyrhova {date.hour}')
-                return tariff.price_peak
-            else:
-                return tariff.price_day
+        if ((tariff.name == 'peak_tariff') & (((date.hour > 5) & (date.hour <= 9)) | ((date.hour > 15) & (date.hour <= 19)))):
+            # vyrhova tarifa
+            print(f'in vyrhova {date.hour}')
+            return tariff.price_peak
         else:
-            # no6tna tarifa
-            return tariff.price_night
+            return tariff.price_day
     else:
-        # zimno chasovo vreme
-        if(date.hour > 6) & (date.hour <= 22):
-            # dnevna tarifa
-            if ((tariff.name == 'peak_tariff') & (((date.hour > 8) & (date.hour <= 11)) | ((date.hour > 20) & (date.hour <= 21)))):
-                # vyrhova tarifa
-                return tariff.price_peak
-            else:
-                return tariff.price_day
-        else:
-            # no6tna tarifa
-            return tariff.price_night
+        # no6tna tarifa
+        return tariff.price_night
+
+
+# def generate_regards_dst_hours(date, tariff):
+#     # print(f' in generate_regards_dst_hours {date} ---> {tariff}')
+#     if tariff.name == 'single_tariff':
+#         return tariff.price_day
+
+#     if (date.month >= 4) & (date.month <= 10):
+#         # lqtno chasovo vreme
+#         if(date.hour > 7) & (date.hour <= 23):
+#             # dnevna tarifa
+#             if ((tariff.name == 'peak_tariff') & (((date.hour > 8) & (date.hour <= 12)) | ((date.hour > 18) & (date.hour <= 22)))):
+#                 # vyrhova tarifa
+#                 print(f'in vyrhova {date.hour}')
+#                 return tariff.price_peak
+#             else:
+#                 return tariff.price_day
+#         else:
+#             # no6tna tarifa
+#             return tariff.price_night
+#     else:
+#         # zimno chasovo vreme
+#         if(date.hour > 6) & (date.hour <= 22):
+#             # dnevna tarifa
+#             if ((tariff.name == 'peak_tariff') & (((date.hour > 8) & (date.hour <= 11)) | ((date.hour > 20) & (date.hour <= 21)))):
+#                 # vyrhova tarifa
+#                 return tariff.price_peak
+#             else:
+#                 return tariff.price_day
+#         else:
+#             # no6tna tarifa
+#             return tariff.price_night
 
     
         
@@ -334,8 +373,8 @@ def upload_forecasted_schedule_to_temp_db(forecasted_schedule_df, itn, price, ac
     
     df['itn'] =itn
     df['price'] = price 
-    df['reported_vol'] = -1
-    df = df[['itn','utc','forecast_vol','reported_vol','price']]
+    df['consumption_vol'] = -1
+    df = df[['itn','utc','forecast_vol','consumption_vol','price']]
     
     df['utc'] = df['utc'].astype(str)
     ItnScheduleTemp.query.delete()
@@ -498,7 +537,7 @@ def upload_remaining_forecat_schedule(itn, new_subcontract_end_date, old_subcont
                 list_of_dict.append(dict(itn = schedule.itn, 
                                 utc = schedule.utc,                                                      
                                 forecast_vol = schedule.forecast_vol,
-                                reported_vol = schedule.reported_vol,
+                                consumption_vol = schedule.consumption_vol,
                                 price = schedule.price))
     #print('delete temp table from upload_remaining_forecat_schedule', file = sys.stdout)
     ItnScheduleTemp.query.delete()

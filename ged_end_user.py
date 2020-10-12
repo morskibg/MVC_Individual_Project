@@ -2,6 +2,7 @@ from app import app,db
 from app.models import *
 from sqlalchemy import func
 from sqlalchemy.sql import label
+from sqlalchemy.exc import ProgrammingError
 
 
 

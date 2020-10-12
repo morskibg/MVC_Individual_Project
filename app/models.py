@@ -197,7 +197,7 @@ class Distribution(BaseModel):
 
 class Tech(BaseModel):
     subscriber_number = db.Column(db.String(64),nullable = False)
-    place_number = db.Column(db.String(16),nullable = False)
+    # place_number = db.Column(db.String(16),nullable = False)
     customer_number = db.Column(db.String(16),nullable = False)
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     electric_meter_number = db.Column(db.String(32),nullable = False)
@@ -294,18 +294,18 @@ class ItnScheduleTemp(BaseModel):
     itn = db.Column(db.String(33), primary_key = True)
     utc = db.Column(db.DateTime, primary_key = True)
     forecast_vol = db.Column(db.Numeric(12,6), nullable=False)
-    reported_vol = db.Column(db.Numeric(12,6), nullable=False)
+    consumption_vol = db.Column(db.Numeric(12,6), nullable=False)
     price = db.Column(db.Numeric(8,7), nullable=False)
     tariff_id = db.Column(db.Integer,nullable=False, primary_key = True)
     def __repr__(self):
-        return '<itn: {}, utc: {}, forecast_vol: {}, reported_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.reported_vol, self.price)
+        return '<itn: {}, utc: {}, forecast_vol: {}, consumption_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.consumption_vol, self.price)
    
 
 class ItnSchedule(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     utc = db.Column(db.DateTime, primary_key = True)
     forecast_vol = db.Column(db.Numeric(12,6), nullable=False, default = 0)
-    reported_vol = db.Column(db.Numeric(12,6), nullable=False, default = -1)
+    consumption_vol = db.Column(db.Numeric(12,6), nullable=False, default = -1)
     settelment_vol = db.Column(db.Numeric(12,6), nullable=False, default = -1)
     price = db.Column(db.Numeric(8,7), nullable=False)
     tariff_id = db.Column(db.Integer,db.ForeignKey('tariff.id', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True,nullable=False)
@@ -314,7 +314,7 @@ class ItnSchedule(BaseModel):
     
     
     def __repr__(self):
-        return '<itn: {}, utc: {}, forecast_vol: {}, reported_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.reported_vol, self.price)
+        return '<itn: {}, utc: {}, forecast_vol: {}, consumption_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.consumption_vol, self.price)
 
     @staticmethod
     def generate_bulk_list(schedule_df):
@@ -370,13 +370,13 @@ class ItnSchedule(BaseModel):
         #                         list_of_dict.append(dict(itn = schedule.itn, 
         #                                         utc = schedule.utc,                                                      
         #                                         forecast_vol = schedule.forecast_vol,
-        #                                         reported_vol = schedule.reported_vol,
+        #                                         consumption_vol = schedule.consumption_vol,
         #                                         price = schedule.price))                                               
         #             return list_of_dict
         #         else:   
         #             df['forecast_vol'] = Decimal(str('0'))
             
-        # df['reported_vol'] = -1 
+        # df['consumption_vol'] = -1 
         
                 
         # list_of_dict = []
@@ -385,7 +385,7 @@ class ItnSchedule(BaseModel):
         #     list_of_dict.append(dict(itn = row['itn'], 
         #                     utc = dt.datetime.strptime(np.datetime_as_string(row['utc'], unit='s'), '%Y-%m-%dT%H:%M:%S'),                                                      
         #                     forecast_vol = row['forecast_vol'],
-        #                     reported_vol = Decimal(str(row['reported_vol'])),
+        #                     consumption_vol = Decimal(str(row['consumption_vol'])),
         #                     price = Decimal(str(row['price']))))
                             
         # return list_of_dict
