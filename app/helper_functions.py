@@ -176,6 +176,7 @@ def has_overlaping_subcontracts(itn, date):
     return True if len(sub_contract) > 1 else False
 
 def generate_forecast_schedule(measuring_type, itn, forecast_vol, weekly_forecast_df, activation_date_utc, curr_contract, tariff, subcontract_end_date = None): 
+    """ generate time schedule with tariff prices and forecast volumes and insert to ItnScheduleTemp"""
 
     # generate_forecast_schedule(curr_measuring_type, itn, row['forecast_montly_consumption'], forecast_df, activation_date_utc, curr_contract, tariffs, sub_end_date_utc)   
 
@@ -310,17 +311,6 @@ def generate_tariff_hours(date, tariff):
 #         else:
 #             # no6tna tarifa
 #             return tariff.price_night
-
-    
-        
-        
-
-    
-    
-
-    
-        
-        
 
 
 def check_and_load_hourly_schedule(measuring_type_code, itn, form_price, forecast_vol, form_forecast_df, activation_date, curr_contract):
@@ -538,7 +528,8 @@ def upload_remaining_forecat_schedule(itn, new_subcontract_end_date, old_subcont
                                 utc = schedule.utc,                                                      
                                 forecast_vol = schedule.forecast_vol,
                                 consumption_vol = schedule.consumption_vol,
-                                price = schedule.price))
+                                price = schedule.price,
+                                settelment_vol = schedule.settelment_vol))
     #print('delete temp table from upload_remaining_forecat_schedule', file = sys.stdout)
     ItnScheduleTemp.query.delete()
     db.session.commit()
@@ -547,7 +538,7 @@ def upload_remaining_forecat_schedule(itn, new_subcontract_end_date, old_subcont
 
     # return remaining_schedule
 
-def apply_collision_function(new_subcontract, old_subcontract, measuring_type_code, itn, form_price, forecast_vol, form_forecast_df, activation_date, curr_contract):
+def apply_collision_function(new_subcontract, old_subcontract, measuring_type_code, itn, forecast_vol, form_forecast_df, activation_date, curr_contract):
 
     if new_subcontract.start_date <= old_subcontract.start_date and new_subcontract.end_date >= old_subcontract.end_date:
         old_is_inner(old_subcontract)
@@ -566,7 +557,7 @@ def apply_collision_function(new_subcontract, old_subcontract, measuring_type_co
         additional_sub_contract = SubContract(itn = old_subcontract.itn,
                             contract_id = old_subcontract.contract_id, \
                             object_name = old_subcontract.object_name,\
-                            price = old_subcontract.price , \
+                            # price = old_subcontract.price , \
                             invoice_group_id = old_subcontract.invoice_group_id, \
                             measuring_type_id = old_subcontract.measuring_type_id, \
                             start_date = new_subcontract.end_date + dt.timedelta(hours = 1) ,\

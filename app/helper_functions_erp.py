@@ -6,7 +6,7 @@ import time,re
 from decimal import Decimal
 from flask import  flash
 from app.models import *    
-from app.helper_functions import update_or_insert, stringifyer, convert_date_to_utc
+from app.helper_functions import update_or_insert, stringifyer, convert_date_to_utc, get_subcontracts_by_itn_and_utc_dates
 import collections
 from zipfile import ZipFile
 from io import BytesIO
@@ -340,28 +340,28 @@ def get_extra_points(incoming_records, db_records):
 
     return res
 
-def get_distribution_stp(erp_name ,start_date, end_date):
+# def get_distribution_stp(erp_name ,start_date, end_date):
 
-    start = time.time()
-    distribution_stp_records = (
-        db.session 
-            .query(Distribution.itn)   
-            .join(SubContract, SubContract.itn == Distribution.itn)                       
-            .join(MeasuringType)
-            .join(ItnMeta, ItnMeta.itn == Distribution.itn)    
-            .join(Erp, Erp.id == ItnMeta.erp_id)         
-            .join(ErpInvoice,ErpInvoice.id == Distribution.erp_invoice_id)
-            .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
-            .filter(~((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT'))) 
-            .filter(ErpInvoice.date >= start_date, ErpInvoice.date <= end_date)
-            .filter(Erp.name == erp_name)
-            .distinct()
-            .all()
-    )
+#     start = time.time()
+#     distribution_stp_records = (
+#         db.session 
+#             .query(Distribution.itn)   
+#             .join(SubContract, SubContract.itn == Distribution.itn)                       
+#             .join(MeasuringType)
+#             .join(ItnMeta, ItnMeta.itn == Distribution.itn)    
+#             .join(Erp, Erp.id == ItnMeta.erp_id)         
+#             .join(ErpInvoice,ErpInvoice.id == Distribution.erp_invoice_id)
+#             .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
+#             .filter(~((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT'))) 
+#             .filter(ErpInvoice.date >= start_date, ErpInvoice.date <= end_date)
+#             .filter(Erp.name == erp_name)
+#             .distinct()
+#             .all()
+#     )
     
-    end = time.time()
-    print(f'Time elapsed for get_distribution_stp : {end - start}  !')
-    return  distribution_stp_records
+#     end = time.time()
+#     print(f'Time elapsed for get_distribution_stp : {end - start}  !')
+#     return  distribution_stp_records
 
 def get_distribution_non_stp(erp_name ,start_date, end_date):
 
@@ -515,16 +515,15 @@ def update_non_stp_consumption_settelment_vol(input_df, min_date, max_date):
                 .filter(ItnSchedule.utc >= min_date, ItnSchedule.utc <= max_date) 
                 .distinct()
                 .all()
-        ) 
-           
-    
+        )
+        
     if len(non_stp_records) > 0:
 
         non_stp_records_df = pd.DataFrame.from_records(non_stp_records, columns=non_stp_records[0].keys()) 
         non_stp_df = input_df.merge(non_stp_records_df, on = 'itn', how = 'right') 
         non_stp_df['settelment_vol'] = non_stp_df['consumption_vol']
         non_stp_df.drop(columns = 'measuring_id', inplace = True)
-        print(f'Non STP df = \n {non_stp_df}')
+
         update_reported_volume(non_stp_df, ItnSchedule.__table__.name)
 
 def update_stp_settelment_vol(input_df, stp_records_df, stp_records):
@@ -780,7 +779,7 @@ def insert_settlment_evn(zip_obj,separator):
                     if(not df_for_db.empty):  
                         min_date = min(df_for_db['utc']).to_pydatetime()                    
                         max_date = max(df_for_db['utc']).to_pydatetime()
-                        print(f'min max date {min_date} --- {max_date}')                         
+                        print(f'min max date {min_date} --- {max_date} ---- {df_for_db.iloc[0].itn}')                         
                         
                         if distribution_stp_records == 0:
 
@@ -804,10 +803,17 @@ def insert_settlment_evn(zip_obj,separator):
                             # print(f'stp records df \n{stp_records_df}')
 
                         if(not df_for_db.empty):
-                            
-                            incoming_non_stp_records.append(list(zip(set(df_for_db.itn), )))
-                            update_non_stp_consumption_settelment_vol(df_for_db, min_date, max_date)
-                        
+                            incoming_non_stp_records.append(list(zip(set(df_for_db.itn), )))               
+
+                            applicable_subcontracts = get_subcontracts_by_itn_and_utc_dates(df_for_db.iloc[0]['itn'], min_date, max_date)
+
+                            for subcontarct in applicable_subcontracts:
+                                # print(f'$$$$$$$$$$$$$$$ applicable_subcontracts  $$$$$$$$$$$$$$$$\n{subcontarct}')
+                                partial_df = df_for_db[((df_for_db.utc >= subcontarct.start_date) & (df_for_db.utc <= subcontarct.end_date))].copy()
+                                # print(f'$$$$$$$$$$$$$$$ applicable_subcontracts -- partial_df $$$$$$$$$$$$$$$$\n{partial_df}')
+                                incoming_non_stp_records.append(list(zip(set(partial_df.itn), )))
+                                update_non_stp_consumption_settelment_vol(partial_df, subcontarct.start_date, subcontarct.end_date)
+                   
                     else:
                         print('Values in file ', key, ' was only 0 !')
         
@@ -858,7 +864,8 @@ def get_stp_from_db(erp_name, start_date, end_date):
             .join(MeasuringType) 
             .join(ItnMeta, ItnMeta.itn == SubContract.itn)
             .join(Erp)
-            .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
+            # .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
+            .filter( ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
             .filter(~((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT'))) 
             .filter(Erp.name == erp_name)
             .distinct()
@@ -872,6 +879,7 @@ def get_stp_from_db(erp_name, start_date, end_date):
 def get_non_stp_from_db(erp_name, start_date, end_date):
 
     start = time.time()
+    
     non_stp_records = (
         db.session 
             .query(SubContract.itn) 
@@ -879,7 +887,8 @@ def get_non_stp_from_db(erp_name, start_date, end_date):
             .join(MeasuringType) 
             .join(ItnMeta, ItnMeta.itn == SubContract.itn)
             .join(Erp)
-            .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
+            # .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
+            .filter( ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
             .filter(((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT'))) 
             .filter(Erp.name == erp_name)
             .distinct()
