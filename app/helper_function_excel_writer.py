@@ -61,9 +61,9 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
    
     contractor = df['contractor_name'].iloc[0]
     # print(f'contractor --> {contractor}')
-    period = f'{calendar.month_name[period_start_date.month]}/{period_start_date.year}'
+    period = f'{calendar.month_name[period_end_date.month]}/{period_end_date.year}'
     # print(f'period --> {calendar.month_name[period_start_date.month]}/{period_start_date.year}')
-    file_name =f'{period_start_date.year}-{period_start_date.month}_{df.iloc[0].invoice_group_description}%{df.iloc[0].invoice_group_name}%invoice_reference.xlsx' 
+    file_name =f'{period_end_date.year}-{period_end_date.month}_{df.iloc[0].invoice_group_description}%{df.iloc[0].invoice_group_name}%invoice_reference.xlsx' 
     #  print(f'file_name --> {file_name}')    
     
     writer = pd.ExcelWriter(f'{dest_folder_path}/{file_name}', engine='xlsxwriter')
@@ -187,6 +187,7 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     ws['F15'].number_format = '# ##0.00'
 
     df = df[['№', 'Обект (ИТН №)', 'Адрес', 'Потребление (kWh)','Сума за енергия','Акциз', 'Задължение към обществото','Мрежови услуги (лв.)']]
+    df['Мрежови услуги (лв.)'] = df['Мрежови услуги (лв.)'].apply(lambda x: 0 if x is None else x)
     df['Обща сума (без ДДС)'] = df['Сума за енергия'] + df['Акциз'] + df['Задължение към обществото'] + df['Мрежови услуги (лв.)']
 
     rows = dataframe_to_rows(df,index=False)

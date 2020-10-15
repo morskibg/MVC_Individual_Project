@@ -54,21 +54,16 @@ from app.helper_function_excel_writer import (generate_excel,)
 
 
 from app.helper_functions_queries import (                                         
-                                        #  get_grid_services_tech_records,                                         
-                                        #  get_single_tariff_consumption_records_sub,
-                                        #  get_grid_services_distrib_records, 
-                                        #  get_grid_service_sub_query,                                       
-                                        #  get_summary_records_with_grid_services,
-                                        #  get_summary_records_without_grid_services,
-                                        #  get_time_zone,
-                                         get_itn_by_inv_group_for_period_sub,
-                                        #  get_single_tariff_consumption_records_sub,
-                                        #  get_inv_group_itn_sub_query,
+                                        get_grid_services_tech_records,                          
+                                        get_grid_services_distrib_records,                                        
                                         get_stp_itn_by_inv_group_for_period_sub,
                                         get_stp_consumption_for_period_sub,
                                         get_non_stp_itn_by_inv_group_for_period_sub,
                                         get_non_stp_consumption_for_period_sub,
                                         get_itn_with_grid_services_sub,
+                                        get_grid_services_sub,
+                                        get_summary_records,
+                                        get_summary_records_non_stp
 )
 
 from zipfile import ZipFile
@@ -132,7 +127,7 @@ def test():
     MONEY_ROUND = 2
     ENERGY_ROUND = 3
     form = TestForm()
-    # form = CreateSubForm()
+    
     if form.validate_on_submit(): 
 
         time_zone = 'EET'
@@ -145,18 +140,77 @@ def test():
 
         invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
         invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-        invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date) 
+        invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)        
 
+        grid_itns = get_itn_with_grid_services_sub(form.invoicing_group.data.name,start_date, end_date)
 
-        # itns = get_non_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
-        # print(f'start_date --> {start_date}   end_date --> {end_date} ')
-        # a = get_non_stp_consumption_for_period_sub(itns, start_date, end_date)
-        # # print(f'{form.invoicing_group.data.name}')
-        # df =  pd.DataFrame.from_records(a, columns = a[0].keys())
-        # print(f'FROM TEST appl subs df \n{df}')
+        grid_services_sub = get_grid_services_sub(grid_itns, invoice_start_date, invoice_end_date) 
 
-        itns = get_itn_with_grid_services_sub(form.invoicing_group.data.name, start_date, end_date)
-        print(f'FROM TEST appl subs df \n{itns}')
+        grid_services_tech_records = get_grid_services_tech_records(grid_itns, invoice_start_date, invoice_end_date)
+        grid_services_distrib_records = get_grid_services_distrib_records(grid_itns, invoice_start_date, invoice_end_date)
+
+             
+
+        grid_services_df = pd.DataFrame()
+        if (len(grid_services_tech_records) == 0) :
+            grid_services_df = pd.DataFrame(columns=['Абонат №', 'А д р е с', 'Име на клиент', 'ЕГН/ЕИК',
+                                                    'Идентификационен код', 'Електромер №', 'Отчетен период от',
+                                                    'Отчетен период до', 'Брой дни', 'Номер скала', 'Код скала',
+                                                    'Часова зона', 'Показания  ново', 'Показания старо', 'Разлика (квтч)',
+                                                    'Константа', 'Корекция (квтч)', 'Приспаднати (квтч)',
+                                                    'Общо количество (квтч)', 'Тарифа/Услуга', 'Количество (кВтч/кВАрч)',
+                                                    'Единична цена (лв./кВт/ден)/ (лв./кВтч)', 'Стойност (лв)',
+                                                    'Корекция към фактура', 'Основание за издаване'])
+        else:    
+            grid_services_tech_records_df = pd.DataFrame.from_records(grid_services_tech_records, columns = grid_services_tech_records[0].keys())
+            grid_services_distrib_records_df = pd.DataFrame.from_records(grid_services_distrib_records, columns = grid_services_distrib_records[0].keys())
+            grid_services_df = pd.concat([grid_services_tech_records_df,grid_services_distrib_records_df])
+            grid_services_df = grid_services_df.sort_values(by='Идентификационен код', ascending=False, ignore_index=True)
+            
+        ###################### create stp records ##############################################################
+        stp_itns = get_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
+
+        stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_itns, invoice_start_date, invoice_end_date)
+
+        summary_stp = get_summary_records(stp_consumption_for_period_sub, grid_services_sub, stp_itns, start_date, end_date)
+
+        ###################### create stp records ##############################################################
+        non_stp_itns = get_non_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
+
+        non_stp_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
+
+        summary_non_stp = get_summary_records(non_stp_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)
+
+        df = pd.DataFrame()
+        if len(summary_stp) != 0:
+            try:
+                temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
+
+            except Exception as e:
+                print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
+
+            else:
+                if df.empty:
+                    df = temp_df
+                else:
+                    df = df.append(temp_df, ignore_index=True) 
+        try: 
+            if len(summary_non_stp) > 0:           
+                temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())      
+                print(f'from Non STP shape = {temp_df.shape[0]}')
+                if df.empty:
+                    df = temp_df
+                else:
+                    df = df.append(temp_df, ignore_index=True) 
+
+        except Exception as e:
+            print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
+
+        else:
+            df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'last')  
+        
+        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])        
+        generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date, time_zone)
 
         return render_template('test.html', title='Test', form=form)
 
