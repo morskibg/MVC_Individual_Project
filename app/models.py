@@ -295,6 +295,7 @@ class ItnScheduleTemp(BaseModel):
     utc = db.Column(db.DateTime, primary_key = True)
     forecast_vol = db.Column(db.Numeric(12,6), nullable=False)
     consumption_vol = db.Column(db.Numeric(12,6), nullable=False)
+    settelment_vol = db.Column(db.Numeric(12,6), nullable=False, default = -1)
     price = db.Column(db.Numeric(8,7), nullable=False)
     tariff_id = db.Column(db.Integer,nullable=False, primary_key = True)
     def __repr__(self):
@@ -439,7 +440,7 @@ class ItnSchedule(BaseModel):
             delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc <= hist.deleted) & (ItnSchedule.utc > target.end_date) & (ItnSchedule.itn == target.itn))
             connection.execute(delete_sch)
         
-        print('deleted in shedule successiful', file = sys.stdout)
+        # print('deleted in shedule successiful', file = sys.stdout)
 
     @classmethod
     def before_delete(cls, mapper, connection, target):

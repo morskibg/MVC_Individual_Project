@@ -24,7 +24,7 @@ def stringifyer(df):
             df[col] = df.apply(lambda x: str(x[col]), axis=1)
         
         
-def update_or_insert(df, table_name):
+def update_or_insert(df, table_name, remove_nan = False):
     """Perform bulk insert on duplicate update of pandas df to mysql table. Support native for MySql NULL insertion.
         Requirements: 1.Dataframe columns MUST be exactly the same and in the same order as SQL table.
                       2.The NULL values in datafreme MUST be respresentet by np.nan or string 'NULL' 
@@ -35,6 +35,8 @@ def update_or_insert(df, table_name):
     if df.empty:
         print(f'from update_or_insert ---- > df is empty {df}')
         return
+    if remove_nan:
+        df = df.fillna(0)
     stringifyer(df)        
     SPLIT_SIZE = 40000
     df.fillna(value='NULL', inplace = True)
@@ -181,13 +183,13 @@ def generate_forecast_schedule(measuring_type, itn, forecast_vol, weekly_forecas
     # generate_forecast_schedule(curr_measuring_type, itn, row['forecast_montly_consumption'], forecast_df, activation_date_utc, curr_contract, tariffs, sub_end_date_utc)   
 
     time_zone = TimeZone.query.filter(TimeZone.id == curr_contract.time_zone_id).first().code
-    print(f'time zone: {time_zone}, sub_und_date: {subcontract_end_date}')
+    # print(f'time zone: {time_zone}, sub_und_date: {subcontract_end_date}')
     local_start_date = convert_date_from_utc(time_zone, activation_date_utc, False)    
     local_end_date = convert_date_from_utc(time_zone, curr_contract.end_date, False)  
 
     if subcontract_end_date is not None:        
         local_end_date = convert_date_from_utc(time_zone, subcontract_end_date, False)
-    print(f'local end date: {local_end_date}')
+    # print(f'local end date: {local_end_date}')
     # #print(f'from generate_forecast_schedule ---> end date is {local_end_date}')
     time_series = pd.date_range(start = local_start_date, end = local_end_date , freq='h', tz = time_zone)
     #print(f'from generate_forecast_schedule time_series is : {time_series}')
@@ -241,27 +243,8 @@ def generate_forecast_schedule(measuring_type, itn, forecast_vol, weekly_forecas
     forecast_df.reset_index(inplace = True)    
     forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]    
     update_or_insert(forecast_df, ItnScheduleTemp.__table__.name)
-    print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Head: \n{forecast_df.head()}')
-    print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Tail: \n{forecast_df.tail()}')
-
-
-    # forecast_df['tariff_id'] = tariff.id
-    # forecast_df['price'] = forecast_df.apply(lambda x: generate_regards_dst_hours(x.name, tariff), axis = 1)
-    # forecast_df['settelment_vol'] = -1
-    # # if(tariff.name == 'single_tariff'):
-    # #     forecast_df['price'] = tariff.price_day
-
-    # # elif(tariff.name == 'double_tariff'):
-    # #     forecast_df['price'] = forecast_df.apply(lambda x: generate_regards_dst_hours(x.name, tariff), axis = 1)
-    # #     # forecast_df.loc[(forecast_df.index.hour > 6) & (forecast_df.index.hour <= 22), 'price'] = tariff.price_day
-
-    # forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
-    # forecast_df.reset_index(inplace = True)    
-    # forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]    
-    # update_or_insert(forecast_df, ItnScheduleTemp.__table__.name)
     # print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Head: \n{forecast_df.head()}')
     # print(f'from generate_forecast_schedule. Uploaded to ItnCheduleTemp Tail: \n{forecast_df.tail()}')
-
 
 def generate_tariff_hours(date, tariff):
 
@@ -279,39 +262,6 @@ def generate_tariff_hours(date, tariff):
     else:
         # no6tna tarifa
         return tariff.price_night
-
-
-# def generate_regards_dst_hours(date, tariff):
-#     # print(f' in generate_regards_dst_hours {date} ---> {tariff}')
-#     if tariff.name == 'single_tariff':
-#         return tariff.price_day
-
-#     if (date.month >= 4) & (date.month <= 10):
-#         # lqtno chasovo vreme
-#         if(date.hour > 7) & (date.hour <= 23):
-#             # dnevna tarifa
-#             if ((tariff.name == 'peak_tariff') & (((date.hour > 8) & (date.hour <= 12)) | ((date.hour > 18) & (date.hour <= 22)))):
-#                 # vyrhova tarifa
-#                 print(f'in vyrhova {date.hour}')
-#                 return tariff.price_peak
-#             else:
-#                 return tariff.price_day
-#         else:
-#             # no6tna tarifa
-#             return tariff.price_night
-#     else:
-#         # zimno chasovo vreme
-#         if(date.hour > 6) & (date.hour <= 22):
-#             # dnevna tarifa
-#             if ((tariff.name == 'peak_tariff') & (((date.hour > 8) & (date.hour <= 11)) | ((date.hour > 20) & (date.hour <= 21)))):
-#                 # vyrhova tarifa
-#                 return tariff.price_peak
-#             else:
-#                 return tariff.price_day
-#         else:
-#             # no6tna tarifa
-#             return tariff.price_night
-
 
 def check_and_load_hourly_schedule(measuring_type_code, itn, form_price, forecast_vol, form_forecast_df, activation_date, curr_contract):
 
@@ -418,18 +368,6 @@ def create_tariff(name, price_day, price_night = 0, price_peak = 0):
         flash(f'Wrong tariff: {name} !','danger')
         print(f'Wrong tariff: {name} !')
 
-    # price = Decimal(str(price)) / Decimal('1000')    
-
-    # if curr_tariff is not None:
-    #     flash(f'Updating existing tarrif for itn: {itn}, start date: {start_date}, end date: {end_date}, start hour: {start_hour} and end hour: {end_hour}.','danger')
-    #     print(f'Updating existing tarrif for itn: {itn}, start date: {start_date}, end date: {end_date}, start hour: {start_hour} and end hour: {end_hour}.')
-    #     curr_tariff.update({'name':name, 'price':price})  
-
-    # else:
-    #     unique_key = itn + start_date.strftime("%Y-%m-%d %H:%M:%S") + end_date.strftime("%Y-%m-%d %H:%M:%S") + str(start_hour) + str(end_hour)
-    #     curr_tariff = Tariff(itn = itn, start_date = start_date, end_date = end_date, name = name, price = price, start_hour = start_hour, end_hour = end_hour, unique_key = unique_key)
-    #     curr_tariff.save()
-
     return curr_tariff
 
 def generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta):
@@ -441,51 +379,40 @@ def generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta):
                                                         SubContract.start_date <= activation_date_utc, \
                                                         SubContract.end_date >= activation_date_utc).all()
     if len(curr_sub_contract) == 0:
-        #print(f'metaaaaa ---> {curr_itn_meta}')
+        
         itn = curr_itn_meta.itn
         activation_date_utc, sub_end_date_utc = validate_subcontracts_dates(activation_date_utc, sub_end_date_utc, curr_contract)
 
         if activation_date_utc is None:
             flash('Wrong dates according the contract !','danger')
             return None
-            # print(f'from generate_subcontract_from_file ---- activation_date_utc = {activation_date_utc}<---> sub_end_date_utc = {sub_end_date_utc}')
+            
         curr_measuring_type = get_measuring_type(row['measuring_type']) 
 
         if curr_measuring_type is None:
             flash(f'Wrong measuring type from ITN upload {itn}. Zerro will be inserted !','danger')
             print(f'Wrong measuring type from ITN upload {itn}. Zerro will be inserted !')
-            return None              
+            return None        
         
-        # if row.price.is_nan() :
-        #     print(f'from decimal isna {row.price}')           
-        #     price = Decimal('0')
-        #     flash(f'Wrong price from ITN upload {itn}. Zerro will be inserted !','danger')
-        #     print(f'Wrong price from ITN upload {itn}. Zerro will be inserted !')
-        # else:
-        #     (f'PRICEEEEEEEEEEEEEEEEE -------> is not evaluate to NONE {row.price}')
-        #     price = round(Decimal(str(row['price'])) , MONEY_ROUND)
-        
-        curr_tariff = create_tariff(row['tariff_name'], row['price_day'], row['price_night'])
-       
+        curr_tariff = create_tariff(row['tariff_name'], row['price_day'], row['price_night'])       
 
         forecast_df = validate_forecasting_df(df, itn)
-        # #print(f'from generate_subcontract_from_file -> forecast_df: {forecast_df.head()}', file = sys.stdout)
+        
         generate_forecast_schedule(curr_measuring_type, itn, row['forecast_montly_consumption'], forecast_df, activation_date_utc, curr_contract, curr_tariff, sub_end_date_utc)
        
         # try:
-        curr_sub_contract = SubContract(itn = itn,
-                                    contract_id = curr_contract.id, \
-                                    object_name = '',\
-                                    # price = price, \
-                                    invoice_group_id = get_invoicing_group(row['invoice_group']).id, \
-                                    measuring_type_id = get_measuring_type(row['measuring_type']).id, \
-                                    start_date = activation_date_utc,\
-                                    end_date =  sub_end_date_utc, \
-                                    zko = round(Decimal(str(row['zko'])) , MONEY_ROUND), \
-                                    akciz = round(Decimal(str(row['akciz'])) , MONEY_ROUND), \
-                                    has_grid_services = row['has_grid_services'], \
-                                    has_spot_price = row['has_spot_price'], \
-                                    has_balancing = row['has_balancing'])            
+        curr_sub_contract = (SubContract(itn = itn,
+                                    contract_id = curr_contract.id, 
+                                    object_name = '',                                    
+                                    invoice_group_id = get_invoicing_group(row['invoice_group']).id, 
+                                    measuring_type_id = get_measuring_type(row['measuring_type']).id, 
+                                    start_date = activation_date_utc,
+                                    end_date =  sub_end_date_utc,
+                                    zko = round(Decimal(str(row['zko'])) , MONEY_ROUND),
+                                    akciz = round(Decimal(str(row['akciz'])) , MONEY_ROUND),
+                                    has_grid_services = row['has_grid_services'],
+                                    has_spot_price = row['has_spot_price'],
+                                    has_balancing = row['has_balancing']) )           
         # except:
         #     flash(f'Unsuccesiful sub_contract creation from ITN upload {itn}. Skipping !','danger')
         #     print(f'Unsuccesiful sub_contract creation from ITN upload {itn}. Skipping !')
@@ -498,6 +425,32 @@ def generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta):
     else:
         pass
     return curr_sub_contract
+
+def generate_provisional_subcontract(input_df, curr_subcontract):
+
+    new_start_date =  dt.datetime.strptime(str(input_df.iloc[0]['utc']), "%Y-%m-%d %H:%M:%S") 
+
+    upload_remaining_forecat_schedule (curr_subcontract.itn, new_start_date - dt.timedelta(hours = 1), curr_subcontract.end_date)
+    
+    
+    new_measuring_type = get_measuring_type('UNDIRECT') 
+
+    provisional_sub_contract = (SubContract(itn = curr_subcontract.itn,
+                            contract_id = curr_subcontract.contract_id, 
+                            object_name = curr_subcontract.object_name,                            
+                            invoice_group_id = curr_subcontract.invoice_group_id, 
+                            measuring_type_id = new_measuring_type.id, 
+                            start_date = new_start_date ,
+                            end_date =  curr_subcontract.end_date, 
+                            zko = curr_subcontract.zko , 
+                            akciz = curr_subcontract.akciz, 
+                            has_grid_services = curr_subcontract.has_grid_services, 
+                            has_spot_price = curr_subcontract.has_spot_price, 
+                            has_balancing = curr_subcontract.has_balancing))
+    print(f'from generate_provisional_subcontract %%%%%%%%%%%% \n old sub end date: {new_start_date - dt.timedelta(hours = 1)} \n new sub start date :{new_start_date}')                       
+    curr_subcontract.update({'end_date':new_start_date - dt.timedelta(hours = 1)})
+    provisional_sub_contract.save()  
+    
 
 def convert_datetime64_to_datetime(dt_obj):
 
@@ -517,27 +470,39 @@ def generate_utc_time_series(start_date, end_date, tz ="Europe/Sofia"):
     
 
 
-def upload_remaining_forecat_schedule(itn, new_subcontract_end_date, old_subcontract_end_date):
-    remaining_schedule = ItnSchedule.query \
-                                    .filter(ItnSchedule.itn == itn, ItnSchedule.utc > new_subcontract_end_date, ItnSchedule.utc <= old_subcontract_end_date) \
-                                    .all()
-    list_of_dict = []
-    for schedule in remaining_schedule: 
+def upload_remaining_forecat_schedule(itn, remaining_start_date, remaining_end_date):
+    remaining_schedule = (db.session
+                            .query(ItnSchedule.itn,
+                                    ItnSchedule.utc,
+                                    ItnSchedule.forecast_vol,
+                                    ItnSchedule.consumption_vol,
+                                    ItnSchedule.price,
+                                    ItnSchedule.settelment_vol,
+                                    ItnSchedule.tariff_id) 
+                                .filter(ItnSchedule.itn == itn, ItnSchedule.utc > remaining_start_date, ItnSchedule.utc <= remaining_end_date) 
+                                .all())
+    
+    # list_of_dict = []
+    # for schedule in remaining_schedule: 
                             
-                list_of_dict.append(dict(itn = schedule.itn, 
-                                utc = schedule.utc,                                                      
-                                forecast_vol = schedule.forecast_vol,
-                                consumption_vol = schedule.consumption_vol,
-                                price = schedule.price,
-                                settelment_vol = schedule.settelment_vol))
-    #print('delete temp table from upload_remaining_forecat_schedule', file = sys.stdout)
-    ItnScheduleTemp.query.delete()
-    db.session.commit()
-    db.session.bulk_insert_mappings(ItnScheduleTemp, list_of_dict)
-    #print('bulk_insert_mappings temp table from upload_remaining_forecat_schedule', file = sys.stdout)
-
-    # return remaining_schedule
-
+    #             list_of_dict.append(dict(itn = schedule.itn, 
+    #                             utc = schedule.utc,                                                      
+    #                             forecast_vol = schedule.forecast_vol,
+    #                             consumption_vol = schedule.consumption_vol,
+    #                             price = schedule.price,
+    #                             settelment_vol = schedule.settelment_vol,
+    #                             tariff_id = schedule.tariff_id))
+    if len(remaining_schedule) == 0:
+        print(f'Remaining schedule is 0. Subcontracts are in order !')
+    else:
+        df = pd.DataFrame.from_records(remaining_schedule, columns = remaining_schedule[0].keys()) 
+        stringifyer(df)
+        list_of_dict =  df.to_dict(orient='records')
+        # print(f'list of dict \n {list_of_dict}')
+        ItnScheduleTemp.query.delete()
+        db.session.commit()
+        db.session.bulk_insert_mappings(ItnScheduleTemp, list_of_dict)
+    
 def apply_collision_function(new_subcontract, old_subcontract, measuring_type_code, itn, forecast_vol, form_forecast_df, activation_date, curr_contract):
 
     if new_subcontract.start_date <= old_subcontract.start_date and new_subcontract.end_date >= old_subcontract.end_date:
@@ -610,30 +575,9 @@ def validate_input_df(df):
     start_idx = df[df.columns[0]].first_valid_index()
     end_idx = df[df.columns[0]].last_valid_index()
     df = df[start_idx:end_idx+1].copy()
-    #print(f'input_df validated {df.iloc[0]}')
+    
     return df
 
-
-
-# def validate_itn_row(row):
-
-
-#     activation_date_utc = convert_date_to_utc(TimeZone.query.filter(TimeZone.id == curr_contract.time_zone_id).first().code,row['activation_date'])
-#     sub_end_date_utc = convert_date_to_utc(TimeZone.query.filter(TimeZone.id == curr_contract.time_zone_id).first().code, curr_contract.end_date)    
-
-#     curr_sub_contract =  SubContract.query.filter(SubContract.itn == row['itn'], \
-#                                                         SubContract.start_date <= activation_date_utc, \
-#                                                         SubContract.end_date >= activation_date_utc).all()
-
-#     invoice_group_id = get_invoicing_group(row['invoice_group']).id, \
-#     measuring_type_id = get_measuring_type(row['measuring_type']).id, \
-#     start_date = activation_date_utc,\
-#     end_date =  sub_end_date_utc, \
-#     zko = round(Decimal(str(row['zko'])) , MONEY_ROUND), \
-#     akciz = round(Decimal(str(row['akciz'])) , MONEY_ROUND), \
-#     has_grid_services = row['has_grid_services'], \
-#     has_spot_price = row['has_spot_price'], \
-#     has_balancing = row['has_balancing'])                      
 
 
 

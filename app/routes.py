@@ -170,22 +170,22 @@ def test():
         ###################### create stp records ##############################################################
         stp_itns = get_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
 
-        stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_itns, invoice_start_date, invoice_end_date)
+        stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_itns, invoice_start_date, invoice_end_date)        
 
         summary_stp = get_summary_records(stp_consumption_for_period_sub, grid_services_sub, stp_itns, start_date, end_date)
-
-        ###################### create stp records ##############################################################
+       
+        ###################### create non stp records ##############################################################
         non_stp_itns = get_non_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
 
         non_stp_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
 
         summary_non_stp = get_summary_records(non_stp_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)
-
+        #############################################################################################################
         df = pd.DataFrame()
         if len(summary_stp) != 0:
             try:
                 temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
-
+                 
             except Exception as e:
                 print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
 
@@ -196,7 +196,8 @@ def test():
                     df = df.append(temp_df, ignore_index=True) 
         try: 
             if len(summary_non_stp) > 0:           
-                temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())      
+                temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())  
+                    
                 print(f'from Non STP shape = {temp_df.shape[0]}')
                 if df.empty:
                     df = temp_df
@@ -207,9 +208,10 @@ def test():
             print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
 
         else:
-            df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'last')  
+            df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
         
-        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])        
+        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
+        # df.to_excel('temp/mvr.xlsx')      
         generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date, time_zone)
 
         return render_template('test.html', title='Test', form=form)
