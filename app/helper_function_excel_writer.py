@@ -54,10 +54,9 @@ def make_header(ws, data, row_num):
         curr_col_idx += 1
 
 
-def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_start_date, period_end_date, time_zone):
+def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_start_date, period_end_date, time_zone, is_second = False):
 
-    dest_folder_path = 'app/static/generated_excel_files'
-
+    dest_folder_path = 'app/static/generated_excel_files'    
    
     contractor = df['contractor_name'].iloc[0]
     # print(f'contractor --> {contractor}')
@@ -67,7 +66,7 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     #  print(f'file_name --> {file_name}')    
     
     writer = pd.ExcelWriter(f'{dest_folder_path}/{file_name}', engine='xlsxwriter')
-    src_df = pd.read_excel('app/static/uploads/src_dete.xlsx', header=None)
+    src_df = pd.read_excel('app/static/uploads/src_dete.xlsx', header=None) if is_second else pd.read_excel('app/static/uploads/src.xlsx', header=None)
     src_df.to_excel(writer, sheet_name="Sheet1", index=False, header=False)
     df_grid.to_excel(writer, sheet_name = 'мрежови услуги')
     writer.close()
@@ -82,9 +81,12 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
                      bottom=Side(border_style='thin', color='FF000000'))                    
 
     navy_blue_fill = PatternFill("solid", fgColor="103ca2")
-    ligh_blue_fill = PatternFill("solid", fgColor="9bc2e6")    
+    ligh_blue_fill = PatternFill("solid", fgColor="9bc2e6")
+    pink_fill = PatternFill("solid", fgColor="FCE4D6")
+    d_gray_fill = PatternFill("solid", fgColor="595959")
+    l_gray_fill = PatternFill("solid", fgColor="D9D9D9")    
 
-    img = openpyxl.drawing.image.Image('app/static/uploads/dete2.png')
+    img = openpyxl.drawing.image.Image('app/static/uploads/dete2.png') if is_second else openpyxl.drawing.image.Image('app/static/uploads/Grand_Energy_.png')
     img.anchor = 'I1'
     ws.add_image(img)
 
@@ -101,84 +103,174 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     ws.column_dimensions['H'].width = 20
     ws.column_dimensions['I'].width = 20
     ws.column_dimensions['J'].width = 20
-
-    for c in ws.iter_cols(1, 7, 11 , 11):
-        c[0].fill = navy_blue_fill
-
-    for c in ws.iter_cols(1, 7, 16 , 17):
-        c[0].fill = ligh_blue_fill
-
-    for c in ws.iter_cols(1, 7, 18 , 19):
-        c[0].fill = ligh_blue_fill
-
-    for c in ws.iter_cols(1, 7, 20 , 21):
-        c[0].fill = navy_blue_fill
-   
-
     ws.merge_cells('A11:D11')
-    # ws.merge_cells('A4:J4')
 
-    ws['A3'].font =  Font(size=12, color='000000', bold=True, italic=False) 
-    # ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
-    ws['A7'].value = f"""КЛИЕНТ: {contractor}"""
-    ws['A7'].font =  Font(size=12, color='000000', bold=True, italic=False)
+    if is_second:
+        for c in ws.iter_cols(1, 7, 11 , 11):
+            c[0].fill = navy_blue_fill 
 
-    ws['A27'].font =  Font(size=12, color='000000', bold=True, italic=False) 
-    ws['A9'].value = f"""ПЕРИОД: {period}"""
-    ws['A9'].font =  Font(size=12, color='000000', bold=True, italic=False) 
-    ws['A11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
-    ws['A11'].alignment = Alignment(wrap_text=True,horizontal='center')
-    ws['E11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
-    ws['E11'].alignment = Alignment(horizontal='center')
-    ws['F11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
-    ws['F11'].alignment = Alignment(horizontal='center')
-    ws['G11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
-    ws['G11'].alignment = Alignment(horizontal='center')
-    ws['A20'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        for c in ws.iter_cols(1, 7, 16 , 17):
+            c[0].fill = ligh_blue_fill
 
-    total_consumption = round(df['Потребление (kWh)'].sum() /1000 ,ENERGY_ROUND_MW)
-    print(f'{total_consumption}')
-    ws['E12'].value = total_consumption 
-    ws['E12'].number_format = '### ### ###.00000' if total_consumption != 0 else '0'
+        for c in ws.iter_cols(1, 7, 18 , 19):
+            c[0].fill = ligh_blue_fill
 
-    total_value = df['Сума за енергия'].sum()
-    ws['F12'].value = round(((total_value/total_consumption)), MONEY_ROUND) if(total_consumption != 0) else 0
-    ws['F12'].number_format = '### ### ##0.00 лв.'
+        for c in ws.iter_cols(1, 7, 20 , 21):
+            c[0].fill = navy_blue_fill
 
-    ws['G12'].value = ws['F12'].value * ws['E12'].value
-    ws['G12'].number_format = '### ### ##0.00 лв.'
+        ws['A3'].font =  Font(size=12, color='000000', bold=True, italic=False) 
+        # ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
+        ws['A7'].value = f"""КЛИЕНТ: {contractor}"""
+        ws['A7'].font =  Font(size=12, color='000000', bold=True, italic=False)
 
-    grid_services = df['Мрежови услуги (лв.)'].sum()
-    ws['E13'].value = total_consumption if grid_services > 0 else ''
-    ws['E13'].number_format = '# ###.00000' if total_consumption != 0 else '0'
-    ws['E14'].value = total_consumption 
-    ws['E14'].number_format = '# ###.00000' if total_consumption != 0 else '0'
-    ws['E15'].value = total_consumption 
-    ws['E15'].number_format = '# ###.00000' if total_consumption != 0 else '0'
-    ws['E16'].value = total_consumption 
-    ws['E16'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['A27'].font =  Font(size=12, color='000000', bold=True, italic=False) 
+        ws['A9'].value = f"""ПЕРИОД: {period}"""
+        ws['A9'].font =  Font(size=12, color='000000', bold=True, italic=False) 
+        ws['A11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['A11'].alignment = Alignment(wrap_text=True,horizontal='center')
+        ws['E11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['E11'].alignment = Alignment(horizontal='center')
+        ws['F11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['F11'].alignment = Alignment(horizontal='center')
+        ws['G11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['G11'].alignment = Alignment(horizontal='center')
+        ws['A20'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
 
-    
-    ws['G13'].value = round(grid_services, MONEY_ROUND)
-    ws['G13'].number_format = '### ### ##0.00 лв.'
+        total_consumption = round(df['Потребление (kWh)'].sum() /1000 ,ENERGY_ROUND_MW)
+        print(f'{total_consumption}')
+        ws['E12'].value = total_consumption 
+        ws['E12'].number_format = '### ### ###.00000' if total_consumption != 0 else '0'
 
-    zko = df['Задължение към обществото'].sum()
-    ws['G14'].value = round(zko, MONEY_ROUND)
-    ws['G14'].number_format = '### ### ##0.00 лв.'
+        total_value = df['Сума за енергия'].sum()
+        ws['F12'].value = round(((total_value/total_consumption)), MONEY_ROUND) if(total_consumption != 0) else 0
+        ws['F12'].number_format = '### ### ##0.00 лв.'
 
-    akciz = df['Акциз'].sum()
-    ws['G15'].value = round(akciz, MONEY_ROUND)
-    ws['G15'].number_format = '### ### ##0.00 лв.'
+        ws['G12'].value = ws['F12'].value * ws['E12'].value
+        ws['G12'].number_format = '### ### ##0.00 лв.'
 
-    ws['G16'].value = ws['G12'].value + ws['G13'].value + ws['G14'].value + ws['G15'].value 
-    ws['G16'].number_format = '### ### ##0.00 лв.'
+        grid_services = df['Мрежови услуги (лв.)'].sum()
+        ws['E13'].value = total_consumption if grid_services > 0 else ''
+        ws['E13'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E14'].value = total_consumption 
+        ws['E14'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E15'].value = total_consumption 
+        ws['E15'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E16'].value = total_consumption 
+        ws['E16'].number_format = '# ###.00000' if total_consumption != 0 else '0'
 
-    ws['G18'].value = round((ws['G16'].value * Decimal('0.2')),MONEY_ROUND)
-    ws['G18'].number_format = '### ### ##0.00 лв.'
+        
+        ws['G13'].value = round(grid_services, MONEY_ROUND)
+        ws['G13'].number_format = '### ### ##0.00 лв.'
 
-    ws['G20'].value = round((ws['G16'].value + ws['G18'].value),MONEY_ROUND)
-    ws['G20'].number_format = '### ### ##0.00 лв.'
-    ws['G20'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        zko = df['Задължение към обществото'].sum()
+        ws['G14'].value = round(zko, MONEY_ROUND)
+        ws['G14'].number_format = '### ### ##0.00 лв.'
+
+        akciz = df['Акциз'].sum()
+        ws['G15'].value = round(akciz, MONEY_ROUND)
+        ws['G15'].number_format = '### ### ##0.00 лв.'
+
+        ws['G16'].value = ws['G12'].value + ws['G13'].value + ws['G14'].value + ws['G15'].value 
+        ws['G16'].number_format = '### ### ##0.00 лв.'
+
+        ws['G18'].value = round((ws['G16'].value * Decimal('0.2')),MONEY_ROUND)
+        ws['G18'].number_format = '### ### ##0.00 лв.'
+
+        ws['G20'].value = round((ws['G16'].value + ws['G18'].value),MONEY_ROUND)
+        ws['G20'].number_format = '### ### ##0.00 лв.'
+        ws['G20'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+
+        # ws['F14'].value = df.iloc[0].zko * 1000 
+        # ws['F14'].number_format = '# ##0.00'
+
+        # ws['F15'].value = df.iloc[0].akciz * 1000 
+        # ws['F15'].number_format = '# ##0.00'
+
+    else:
+        for c in ws.iter_cols(1, 7, 11 , 11):
+            c[0].fill = d_gray_fill
+
+        for c in ws.iter_cols(1, 7, 17 , 17):
+            c[0].fill = l_gray_fill
+
+        for c in ws.iter_cols(1, 7, 19 , 19):
+            c[0].fill = pink_fill
+
+        for c in ws.iter_cols(1, 7, 21 , 21):
+            c[0].fill = d_gray_fill
+
+        ws.merge_cells('A4:J4') 
+
+        ws['A4'].font =  Font(size=12, color='000000', bold=True, italic=False) 
+        ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
+        ws['A7'].value = f"""КЛИЕНТ: {contractor}"""
+        ws['A7'].font =  Font(size=12, color='000000', bold=True, italic=False)
+
+        ws['A27'].font =  Font(size=12, color='000000', bold=True, italic=False) 
+        ws['A9'].value = f"""ПЕРИОД: {period}"""
+        ws['A9'].font =  Font(size=12, color='000000', bold=True, italic=False) 
+        ws['A11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['A11'].alignment = Alignment(wrap_text=True,horizontal='center')
+        ws['E11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['E11'].alignment = Alignment(horizontal='center')
+        ws['F11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['F11'].alignment = Alignment(horizontal='center')
+        ws['G11'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+        ws['G11'].alignment = Alignment(horizontal='center')
+        ws['A21'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+
+
+        total_consumption = df['Потребление (kWh)'].sum() / 1000
+        ws['E12'].value = total_consumption 
+        ws['E12'].number_format = '### ### ###.00000' if total_consumption != 0 else '0'
+        # # ws['E12'].value = "{:.2f}".format(total_consumption)
+
+        total_value = df['Сума за енергия'].sum()
+        ws['F12'].value = round(((total_value/total_consumption)), MONEY_ROUND) if(total_consumption != 0) else 0
+        ws['F12'].number_format = '### ### ##0.00 лв.'
+
+        ws['G12'].value = ws['F12'].value * ws['E12'].value
+        ws['G12'].number_format = '### ### ##0.00 лв.'
+
+        ws['E13'].value = total_consumption 
+        ws['E13'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E14'].value = total_consumption 
+        ws['E14'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E15'].value = total_consumption 
+        ws['E15'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E16'].value = total_consumption 
+        ws['E16'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+
+        grid_services = df['Мрежови услуги (лв.)'].sum()
+        ws['G13'].value = round(grid_services, MONEY_ROUND)
+        ws['G13'].number_format = '### ### ##0.00 лв.'
+
+        zko = df['Задължение към обществото'].sum()
+        ws['G14'].value = round(zko, MONEY_ROUND)
+        ws['G14'].number_format = '### ### ##0.00 лв.'
+
+        akciz = df['Акциз'].sum()
+        ws['G15'].value = round(akciz, MONEY_ROUND)
+        ws['G15'].number_format = '### ### ##0.00 лв.'
+
+        ws['G16'].value = 0
+        ws['G16'].number_format = '### ### ##0.00 лв.'
+
+        ws['G17'].value = ws['G12'].value + ws['G13'].value + ws['G14'].value + ws['G15'].value + ws['G16'].value
+        ws['G17'].number_format = '### ### ##0.00 лв.'
+
+        ws['G19'].value = round((ws['G17'].value * Decimal('0.2')),MONEY_ROUND)
+        ws['G19'].number_format = '### ### ##0.00 лв.'
+
+        ws['G21'].value = round((ws['G17'].value + ws['G19'].value),MONEY_ROUND)
+        ws['G21'].number_format = '### ### ##0.00 лв.'
+        ws['G21'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
+
+        # ws['F14'].value = ZKO #round((ZKO * Decimal('1000')),MONEY_ROUND)
+        # ws['F14'].number_format = '# ##0.00'
+
+        # ws['F15'].value = AKCIZ #round((AKCIZ * Decimal('1000')),MONEY_ROUND)
+        # ws['F15'].number_format = '# ##0.00'
 
     ws['F14'].value = df.iloc[0].zko * 1000 
     ws['F14'].number_format = '# ##0.00'
@@ -186,16 +278,16 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     ws['F15'].value = df.iloc[0].akciz * 1000 
     ws['F15'].number_format = '# ##0.00'
 
-    df = df[['№', 'Обект (ИТН №)', 'Адрес', 'Потребление (kWh)','Сума за енергия','Акциз', 'Задължение към обществото','Мрежови услуги (лв.)']]
-    df['Мрежови услуги (лв.)'] = df['Мрежови услуги (лв.)'].apply(lambda x: 0 if x is None else x)
-    df['Обща сума (без ДДС)'] = df['Сума за енергия'] + df['Акциз'] + df['Задължение към обществото'] + df['Мрежови услуги (лв.)']
+    final_df = df[['№', 'Обект (ИТН №)', 'Адрес', 'Потребление (kWh)','Сума за енергия','Задължение към обществото', 'Мрежови услуги (лв.)','Акциз']]
+    
+    final_df['Мрежови услуги (лв.)'] = final_df['Мрежови услуги (лв.)'].apply(lambda x: 0 if x is None else x)
+    final_df['Обща сума (без ДДС)'] = final_df['Сума за енергия'] + final_df['Акциз'] + final_df['Задължение към обществото'] + final_df['Мрежови услуги (лв.)']
 
-    rows = dataframe_to_rows(df,index=False)
-    itn_count = df.shape[0]
+    rows = dataframe_to_rows(final_df,index=False)
+    itn_count = final_df.shape[0]
     ws['A10'].value = f"""БРОЙ ОБЕКТИ: {itn_count}"""
     ws['A10'].font =  Font(size=12, color='000000', bold=True, italic=False) 
-
-
+    
     for r_idx, row in enumerate(rows, 29):
 
         for c_idx, value in enumerate(row, 1):
@@ -210,7 +302,9 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
             ws.cell(row=r_idx, column=c_idx).alignment = Alignment(horizontal='center')
             ws.cell(row=r_idx, column=c_idx).font =  Font(size=12, color='000000', bold=False, italic=False)
 
-    make_header(ws, COL_NAMES, 28)
+    col_names = list(final_df.columns)
+    # col_names.append('Обща сума (без ДДС)')
+    make_header(ws, col_names, 28)
     l_row = len(ws['A'])
 
     ws.print_area = f"""A1:J{l_row}"""

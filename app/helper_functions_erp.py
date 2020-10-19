@@ -52,8 +52,9 @@ def insert_erp_invoice(df):
 
     return erp_inv_df
 
-def reader_csv(df, file_name):   
-    
+def reader_csv(df, file_name, erp_name):   
+
+        
         df.columns = df.columns.str.replace('"','')        
 
         df = replace_char(df,'"','')
@@ -63,6 +64,10 @@ def reader_csv(df, file_name):
                      'end_date','4','scale_number','scale_code','scale_type','time_zone','new_readings','old_readings','readings_difference','constant','correction','storno',
                      'total_amount','tariff','calc_amount','price','value','correction_note','event']
         df.columns = col_names
+
+        itn_list = get_list_all_itn_in_db_by_erp(erp_name)
+        df = df[df['itn'].isin(itn_list)]
+
         cols_to_drop = ['1','4','6','7','8','9','10','erp_code']
         df = df.drop(cols_to_drop, axis = 1)
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)        
@@ -109,7 +114,7 @@ def get_tech_point(df, erp_invoice = None):
             df.rename(columns = {'id':'erp_invoice_id'}, inplace = True)
         
     except Exception as e: 
-        print(e)
+        print(f'{e}  \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
     else:
         # print(f'from tech ----> df: \n {df}')
         # print(f'df tech has null ---- > {df.erp_invoice_id.isnull().values.any()}')
@@ -148,9 +153,9 @@ def get_distrib_point(df, erp_invoice_df = None):
         # print(f'from distr ----> df: \n {df}')
         return df     
 
-def insert_mrus(raw_df, file_name):  
+def insert_mrus(raw_df, file_name, erp_name):  
             
-    input_df = reader_csv(raw_df, file_name)
+    input_df = reader_csv(raw_df, file_name, erp_name)
     
     input_df['date'] = input_df['date'].apply(lambda x: convert_date_to_utc('EET', x))
     # print(f'input df insert erp invoice \n{input_df}')
@@ -177,7 +182,7 @@ def insert_mrus(raw_df, file_name):
             print(f'empty distribution point')
 
     except Exception as e:
-        print(f'distribution is None {e}')
+        print(f'distribution is None {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
 
     try:
         if((tech_tbl.empty) & (tech_point is not None)):
@@ -202,7 +207,7 @@ def insert_mrus(raw_df, file_name):
             # print(f'distrib_tbl to DB \n{distr_tbl}')
             update_or_insert(distr_tbl, Distribution.__table__.name)
         except Exception as e:
-            print(f'Exception from writing distribution to DB, with message: {e}')
+            print(f'Exception from writing distribution to DB, with message: {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
 
     if tech_tbl.empty:
         print(f'tech table is empty') 
@@ -214,21 +219,21 @@ def insert_mrus(raw_df, file_name):
             tech_tbl = tech_tbl.replace(np.nan,0)
             update_or_insert(tech_tbl, Tech.__table__.name)
         except Exception as e:
-            print(f'Exception from writing tech to DB, with message: {e}') 
+            print(f'Exception from writing tech to DB, with message: {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}') 
 
 def insert_settlment_cez(zip_obj,separator): 
 
-    PASSWORD = 'XY3R9TAPAB4BZEKDTU9L'
+    # PASSWORD = 'XY3R9TAPAB4BZEKDTU9L'
+    PASSWORD = 'SRE9N7TXUUQ56ZHCEXB7'
     ENCODING = 'utf-8'
+    ERP = 'CEZ'
 
     ordered_dict = order_files_by_size(zip_obj)
     db_stp_records = 0
-    
+    incoming_points = []
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.zip'):
-            
-            # print(f'in ZIP $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ {file_name}')           
-
+          
             inner_zfiledata = BytesIO(zip_obj.read(file_name))
             inner_zip =  ZipFile(inner_zfiledata)
 
@@ -240,18 +245,17 @@ def insert_settlment_cez(zip_obj,separator):
                     df = dfs_csv_dict[key]
 
                 except Exception as e:
-                    print(f'File {key} was NOT proceeded .Exception message: {e}!') 
+                    print(f'File {key} was NOT proceeded .Exception message: {e}! \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}') 
 
                 else:
-                    insert_mrus(df, key)            
+                    insert_mrus(df, key, ERP)            
 
         elif file_name.endswith('.xlsx'):
             
-            # print(f'in XLXS $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ {file_name}')            
+                     
             try:
                 df = pd.read_excel(zip_obj.read(file_name))
-                initial_rows_count = df.shape[0]
-                # df.columns = df.columns.str.strip()
+                initial_rows_count = df.shape[0]               
                 
                 df.drop(['DD.MM.YYYY hh:mm','Име на Клиент, ЕСО:','Сетълмент период:'], axis=1, inplace = True)
                 
@@ -260,9 +264,9 @@ def insert_settlment_cez(zip_obj,separator):
                 
                 s_date = df_cols[0] if isinstance(df_cols[0], dt.date) else dt.datetime.strptime(df_cols[0], '%d/%m/%Y %H:%M')
                 e_date = df_cols[-1] if isinstance(df_cols[-1], dt.date) else dt.datetime.strptime(df_cols[-1], '%d/%m/%Y %H:%M')
-                # print(f's date, e date {s_date- dt.timedelta(hours = 1)} --- {e_date- dt.timedelta(hours =1)}')
+                
                 time_series = pd.date_range(start = s_date - dt.timedelta(hours = 1), end = e_date - dt.timedelta(hours =1), tz = 'EET', freq='h')
-                # print(f'Time series {time_series}')
+               
                 df.columns = time_series.insert(0,df.columns[0])
                 
                 df = pd.melt(df, id_vars=['Уникален Идентификационен Номер:'], var_name = ['utc'], value_name = 'consumption_vol')
@@ -271,20 +275,21 @@ def insert_settlment_cez(zip_obj,separator):
                 df.drop(columns= 'utc', inplace = True)
 
             except Exception as e:
-                print(f'File {file_name} was NOT proceeded .Exception message: {e}!')  
+                print(f'File {file_name} was NOT proceeded .Exception message: {e}! \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')  
 
             else: 
                 try:
                     df.index = df.index.tz_convert('UTC').tz_convert(None)
 
                 except Exception as e:
-                    print(f'Exception from cez hourly loading: {e}')
+                    print(f'Exception from cez hourly loading: {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
 
                 else:
                     if(not df.empty):
                         df.reset_index(inplace = True)
-                        # df = df.dropna()
-                    
+                        incoming_itns = df['itn'].tolist() 
+                        incoming_points += incoming_itns                      
+                        
                         min_date = min(df['utc']).to_pydatetime()                    
                         max_date = max(df['utc']).to_pydatetime() 
 
@@ -294,9 +299,9 @@ def insert_settlment_cez(zip_obj,separator):
                             
                             if db_stp_records == 0:
                                 db_stp_records = get_stp_from_db('CEZ', min_date, max_date)                              
-                                get_missing_points(incoming_stp_records, db_stp_records)
+                                # get_missing_points(incoming_stp_records, db_stp_records)
        
-                            get_extra_points(incoming_stp_records, db_stp_records)
+                            # get_extra_points(incoming_stp_records, db_stp_records)
 
                             stp_records_df = pd.DataFrame.from_records(incoming_stp_records, columns=incoming_stp_records[0].keys()) 
                                              
@@ -306,15 +311,20 @@ def insert_settlment_cez(zip_obj,separator):
                         else:
                             db_non_stp_records = get_non_stp_from_db('CEZ', min_date, max_date)
                             incoming_non_stp_records = get_incoming_non_stp_records(df,min_date, max_date)
-                            get_missing_points(incoming_non_stp_records, db_non_stp_records)
-                            get_extra_points(incoming_non_stp_records, db_non_stp_records)
+                            # get_missing_points(incoming_non_stp_records, db_non_stp_records)
+                            # get_extra_points(incoming_non_stp_records, db_non_stp_records)
 
                             update_non_stp_consumption_settelment_vol(df, min_date, max_date) 
 
+    get_missing_extra_points_by_erp(ERP, incoming_points)
+
+
 def insert_settlment_e_pro(zip_obj, separator):
 
+    ERP = 'E-PRO'
     ordered_dict = order_files_by_date(zip_obj)
-    
+    incomming_points = []
+    # incoming_stp_itns_list = []
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.zip'):
             # continue
@@ -325,7 +335,7 @@ def insert_settlment_e_pro(zip_obj, separator):
          
             dfs = {text_file.filename: pd.read_excel(inner_zip.read(text_file.filename))
             for text_file in inner_zip.infolist() if text_file.filename.endswith('.xlsx')}
-            incomming_points = []
+            
             for key in dfs.keys():               
                 
                 # try:                     
@@ -362,38 +372,48 @@ def insert_settlment_e_pro(zip_obj, separator):
                 df = pd.read_csv(zip_obj.open(file_name),sep=separator,  encoding="cp1251", engine='python',skiprows = 1)
 
             except Exception as e:
-                print(f'File {file_name} was NOT proceeded .Exception message: {e}!') 
+                print(f'File {file_name} was NOT proceeded .Exception message: {e}! \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}') 
 
             else:
-                insert_mrus(df, file_name) 
+                insert_mrus(df, file_name, ERP) 
                 # print(f'from e pro csv reading ----- >\n{df}')
 
-        elif file_name == '070CIN03.xlsx':
-            proceed_e_pro_stp_excel_file(zip_obj, file_name)
+        elif file_name == '021CIN03.xlsx':
 
+            incoming_stp_itns_list = proceed_e_pro_stp_excel_file(zip_obj, file_name)
+            # print(f'incoming_stp_itns_list\n{incoming_stp_itns_list}')
+            
+            # print(f'incomming_points\n{incomming_points}')
+            
+
+    incomming_points = [x[0] for x in incomming_points if len(x) > 0]
+    incomming_points += incoming_stp_itns_list
+    get_missing_extra_points_by_erp(ERP, incomming_points)
     # print(f'FROM NON stp E-Pro')
     
-    incomming_points = [x[0] for x in incomming_points if len(x) > 0]
-    # print(f'INCOMING POINTS -----------------------> \n{incomming_points}')
-    db_non_stp_records = get_non_stp_from_db('E-PRO', min_date, max_date)
-    get_missing_points(incomming_points, db_non_stp_records)
-    get_extra_points(incomming_points, db_non_stp_records)
+    # incomming_points = [x[0] for x in incomming_points if len(x) > 0]
+    # # print(f'INCOMING POINTS -----------------------> \n{incomming_points}')
+    # db_non_stp_records = get_non_stp_from_db('E-PRO', min_date, max_date)
+    # get_missing_points(incomming_points, db_non_stp_records)
+    # get_extra_points(incomming_points, db_non_stp_records)
 
 def insert_settlment_evn(zip_obj,separator):
     
-    # PASSWORD = '8yc#*3-Q5ADt'
-    PASSWORD = '79+Kg+*rLA7P'
+    PASSWORD = '8yc#*3-Q5ADt'
+    # PASSWORD = '79+Kg+*rLA7P'
     ENCODING = 'utf-8'
+    ERP = 'EVN'
     
     ordered_dict = order_files_by_size(zip_obj)
     distribution_stp_records = 0
     distribution_non_stp_records = 0
     incoming_non_stp_records = []
+    incomming_points = []
     # ordered_dict = order_files_by_date(zip_obj)
-    # print(ordered_dict, file = sys.stdout)
+    print(ordered_dict, file = sys.stdout)
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.zip'):
-            # print(file_name, file = sys.stdout)
+            print(file_name, file = sys.stdout)
 
             inner_zfiledata = BytesIO(zip_obj.read(file_name))
             inner_zip =  ZipFile(inner_zfiledata)
@@ -409,7 +429,7 @@ def insert_settlment_evn(zip_obj,separator):
                     print(f'File {key} was NOT proceeded .Exception message: {e}!') 
 
                 else:
-                    insert_mrus(df, key)
+                    insert_mrus(df, key, ERP)
 
             dfs_dict = {text_file.filename: pd.read_excel(inner_zip.read(text_file.filename,pwd=bytes(PASSWORD, ENCODING)))
             for text_file in inner_zip.infolist() if text_file.filename.endswith('.xlsx')}
@@ -420,8 +440,8 @@ def insert_settlment_evn(zip_obj,separator):
                     df.columns = df.columns.str.strip()
                     ITN = df.iloc[:1].values[0][0] 
                     
-                    # df = df.rename(columns={'Гранд Енерджи Дистрибюшън ЕООД':'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})
-                    df = df.rename(columns={'Юропиан Трейд Оф Енерджи АД':'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})
+                    df = df.rename(columns={'Гранд Енерджи Дистрибюшън ЕООД':'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})
+                    # df = df.rename(columns={'Юропиан Трейд Оф Енерджи АД':'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})
                     df_for_db = create_db_df_eepro_evn(df, ITN) 
                     # print(f'df for db \n{df_for_db}')                   
                     if(not df_for_db.empty):  
@@ -431,9 +451,9 @@ def insert_settlment_evn(zip_obj,separator):
                         
                         if distribution_stp_records == 0:
 
-                            db_stp_records = get_stp_from_db('EVN', min_date, max_date)                            
+                            db_stp_records = get_stp_from_db(ERP, min_date, max_date)                            
                             
-                            db_non_stp_records = get_non_stp_from_db('EVN', min_date, max_date)
+                            db_non_stp_records = get_non_stp_from_db(ERP, min_date, max_date)
                            
                             # min_date_inv = min_date.replace(min_date.year, min_date.month, 11,0,0,0)
                             # max_date_inv = max_date.replace(max_date.year, max_date.month + 1, 10,23,0,0) 
@@ -441,13 +461,15 @@ def insert_settlment_evn(zip_obj,separator):
                             invoice_start_date = min_date + dt.timedelta(hours = (10 * 24 + 1))
                             invoice_end_date = max_date + dt.timedelta(hours = (10 * 24))
 
-                            distribution_stp_records = get_distribution_stp_records('EVN',min_date,max_date)
+                            # print(f'invoice_start_date invoice_end_date date {invoice_start_date} --- {invoice_end_date} ---- {df_for_db.iloc[0].itn}') 
+
+                            distribution_stp_records = get_distribution_stp_records(ERP,min_date,max_date)
 
                             stp_records_df = pd.DataFrame.from_records(distribution_stp_records, columns=distribution_stp_records[0].keys())
                             
                             update_stp_consumption_vol(stp_records_df, min_date, max_date, True)
 
-                            distribution_non_stp_records = get_distribution_non_stp('EVN',invoice_start_date, invoice_end_date)
+                            distribution_non_stp_records = get_distribution_non_stp(ERP,invoice_start_date, invoice_end_date)
                             # print(f'stp records df \n{stp_records_df}')
 
                         if(not df_for_db.empty):
@@ -459,23 +481,26 @@ def insert_settlment_evn(zip_obj,separator):
                                 # print(f'$$$$$$$$$$$$$$$ applicable_subcontracts  $$$$$$$$$$$$$$$$\n{subcontarct}')
                                 partial_df = df_for_db[((df_for_db.utc >= subcontarct.start_date) & (df_for_db.utc <= subcontarct.end_date))].copy()
                                 # print(f'$$$$$$$$$$$$$$$ applicable_subcontracts -- partial_df $$$$$$$$$$$$$$$$\n{partial_df}')
-                                incoming_non_stp_records.append(list(zip(set(partial_df.itn), )))
+                                # incoming_non_stp_records.append(list(zip(set(partial_df.itn), )))
+                                incomming_points += partial_df.itn
                                 update_non_stp_consumption_settelment_vol(partial_df, subcontarct.start_date, subcontarct.end_date)
                    
                     else:
                         print('Values in file ', key, ' was only 0 !')
         
                 except Exception as e:
-                    print(f'Exception from EVN xlsx upload. File {key} was NOT proceeded .Exception message: {e}! \n {df_for_db}') 
+                    print(f'Exception from EVN xlsx upload. File {key} was NOT proceeded .Exception message: {e}! \n  {df_for_db} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}') 
 
     
 
     incoming_non_stp_records = [x[0] for x in incoming_non_stp_records if len(x) > 0]
+    incomming_points += incoming_non_stp_records
+    get_missing_extra_points_by_erp(ERP, incomming_points)
 
-    get_missing_points(distribution_stp_records, db_stp_records)  
-    get_extra_points(distribution_stp_records, db_stp_records)
-    get_missing_points(incoming_non_stp_records, db_non_stp_records)  
-    get_extra_points(incoming_non_stp_records, db_non_stp_records)
+    # get_missing_points(distribution_stp_records, db_stp_records)  
+    # get_extra_points(distribution_stp_records, db_stp_records)
+    # get_missing_points(incoming_non_stp_records, db_non_stp_records)  
+    # get_extra_points(incoming_non_stp_records, db_non_stp_records)
 
 def get_missing_points(incoming_records, db_records):
 
@@ -507,7 +532,7 @@ def get_distribution_non_stp(erp_name ,start_date, end_date):
             .join(Erp, Erp.id == ItnMeta.erp_id)         
             .join(ErpInvoice,ErpInvoice.id == Distribution.erp_invoice_id)
             # .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
-            .filter( ~((SubContract.start_date > max_date) | (SubContract.end_date < min_date)))
+            .filter( ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
             .filter(((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT'))) 
             .filter(ErpInvoice.date >= start_date, ErpInvoice.date <= end_date)
             .filter(Erp.name == erp_name)
@@ -857,6 +882,8 @@ def proceed_e_pro_stp_excel_file(zip_obj, file_name):
                     
     if summary_df.empty:
         print(f'empty file for e-pro stp')
+        a = []
+        return a
 
     else:
         summary_df.rename(columns = {'Уникален номер':'itn'}, inplace = True)
@@ -867,13 +894,15 @@ def proceed_e_pro_stp_excel_file(zip_obj, file_name):
             # print(f'FROM stp E-Pro')                      
             stp_records_df = pd.DataFrame.from_records(incoming_stp_records, columns=incoming_stp_records[0].keys()) 
             db_stp_records = get_stp_from_db('E-PRO', s_date, e_date)                              
-            get_missing_points(incoming_stp_records, db_stp_records)
-            get_extra_points(incoming_stp_records, db_stp_records)
+            # get_missing_points(incoming_stp_records, db_stp_records)
+            # get_extra_points(incoming_stp_records, db_stp_records)
             # a = summary_df[summary_df.itn == '32Z4800110120529']
             # print(f'ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ stp_records_df  \n{a}')
 
             update_stp_settelment_vol(summary_df, stp_records_df, incoming_stp_records)             
-            update_stp_consumption_vol(stp_records_df, s_date, e_date)                  
+            update_stp_consumption_vol(stp_records_df, s_date, e_date) 
+        
+        return summary_df['itn'].tolist()               
 
 
 def create_db_df_eepro_evn(df, ITN):      
@@ -1079,5 +1108,24 @@ def have_all_itns_meta(series_itn):
         print(f'ZOMBIE ITN \n{set(series_itn) - all_metas}')
         
         return False
+
+def get_list_all_itn_in_db_by_erp(erp):
+
+    itn_records = db.session.query(ItnMeta.itn).join(Erp).filter(Erp.name == erp).distinct(ItnMeta.itn).all()
+    itn_list = [x[0] for x in itn_records]
+    return itn_list
+    
+def get_missing_extra_points_by_erp(erp, incoming_itns):
+
+    db_itns = get_list_all_itn_in_db_by_erp(erp)
+    db_itn_set = set(db_itns)
+    incoming_itns = set(incoming_itns)
+    missing = list(db_itn_set - incoming_itns)
+    print(f'This itn points are in the database but not came data for them from ERP: {erp} files ---> {missing}')
+    extra = list(incoming_itns - db_itn_set)
+    print(f'This itn points are NOT in the database but came data for them from ERP: {erp} files ---> {extra}')
+
+
+
 
 

@@ -41,7 +41,7 @@ def update_or_insert(df, table_name, remove_nan = False):
     SPLIT_SIZE = 40000
     df.fillna(value='NULL', inplace = True)
     fields = str(tuple(df.columns.values))
-    fields = re.sub('[\']',"",fields)
+    fields = re.sub('[\']',"",fields)    
     fields = re.sub('(,\))',")",fields)
     tuples_ = [tuple(r) for r in df.to_numpy()]
 
@@ -51,10 +51,10 @@ def update_or_insert(df, table_name, remove_nan = False):
         tuples_to_insert = re.sub('(NULL)',"#NULL#",tuples_to_insert)
         tuples_to_insert = re.sub('[\[\]]|(\'#)|(#\')',"", tuples_to_insert)
         tuples_to_insert = re.sub('(,\))',")", tuples_to_insert)
-        tuples_to_insert = re.sub('%',"%%", tuples_to_insert)
+        tuples_to_insert = re.sub("%","%%", tuples_to_insert)        
         # tuples_to_insert = re.sub(':',"::", tuples_to_insert)  
         sql_str = f"INSERT INTO {table_name} {fields} VALUES {tuples_to_insert} ON DUPLICATE KEY UPDATE {','.join([x + ' = VALUES(' + x + ')' for x in df.columns.values])} "
-        # print(f'from update_or_insert ----> before commit to db')
+        # print(f'from update_or_insert ----> before commit to db {sql_str}')
         db.session.execute(sql_str)
         db.session.commit()
        
@@ -342,15 +342,30 @@ def validate_subcontracts_dates(start_date_utc, end_date_utc, current_contract):
     #print(f'FROM validate_subcontracts_dates ::: s_date = {s_date} <-----> e_date = {e_date}')
     return s_date, e_date
 
-def create_tariff(name, price_day, price_night = 0, price_peak = 0):
+def create_invoicing_group(name, description, contractor_id):
 
+    name = name.strip()
+    description = description.strip()
+    curr_inv_group = InvoiceGroup.query.filter(InvoiceGroup.name == name, InvoiceGroup.contractor_id == contractor_id).first()
+    if curr_inv_group is not None:
+        print(f'founded such a invoicing group - returning {curr_inv_group}')
+        return curr_inv_group
+
+    curr_inv_group = InvoiceGroup(name = name, contractor_id = contractor_id, description = description)
+    curr_inv_group.save()
+    return curr_inv_group
+
+def create_tariff(name, price_day, price_night = 0, price_peak = 0):
+    
+    name = name.strip()
     print(f'{name} --- {price_day} --- {price_night} --- {price_peak}')    
     curr_tariff = Tariff.query.filter(Tariff.name == name, Tariff.price_day == Decimal(str(price_day)) / Decimal('1000'), Tariff.price_night == Decimal(str(price_night)) / Decimal('1000'), Tariff.price_peak == Decimal(str(price_peak)) / Decimal('1000')).first()
     if curr_tariff is not None:
         print(f'founded such a tariff - returning {curr_tariff}')
         return curr_tariff
-    
+                 
     if (name == 'single_tariff') | (name == 'double_tariff') | (name == 'peak_tariff'):
+        
         curr_tariff = Tariff(name = name, price_day = Decimal(str(price_day)) / Decimal('1000'), price_night = Decimal(str(price_night)) / Decimal('1000'), price_peak = Decimal(str(price_peak)) / Decimal('1000') )
         curr_tariff.save() 
         print(f'SAVING {curr_tariff}') 
@@ -394,7 +409,8 @@ def generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta):
             print(f'Wrong measuring type from ITN upload {itn}. Zerro will be inserted !')
             return None        
         
-        curr_tariff = create_tariff(row['tariff_name'], row['price_day'], row['price_night'])       
+        curr_tariff = create_tariff(row['tariff_name'], row['price_day'], row['price_night']) 
+        curr_inv_group = create_invoicing_group(row['invoice_group_name'], row['invoice_group_description'], curr_contract.contractor_id)      
 
         forecast_df = validate_forecasting_df(df, itn)
         
@@ -404,7 +420,7 @@ def generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta):
         curr_sub_contract = (SubContract(itn = itn,
                                     contract_id = curr_contract.id, 
                                     object_name = '',                                    
-                                    invoice_group_id = get_invoicing_group(row['invoice_group']).id, 
+                                    invoice_group_id = get_invoicing_group(row['invoice_group_name']).id, 
                                     measuring_type_id = get_measuring_type(row['measuring_type']).id, 
                                     start_date = activation_date_utc,
                                     end_date =  sub_end_date_utc,
@@ -575,6 +591,7 @@ def validate_input_df(df):
     start_idx = df[df.columns[0]].first_valid_index()
     end_idx = df[df.columns[0]].last_valid_index()
     df = df[start_idx:end_idx+1].copy()
+    df = df.rename(columns=lambda x: x.strip())
     
     return df
 

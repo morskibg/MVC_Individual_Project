@@ -11,4 +11,4 @@ def make_shell_context():
     return {'db': db, 'Contractor': Contractor, 'Contract': Contract, 'ContractType': ContractType,'AddressMurs':AddressMurs,
     'Erp':Erp, 'ItnMeta':ItnMeta,'ErpInvoice':ErpInvoice, 'Distribution':Distribution,'Tech':Tech, 'MeasuringType':MeasuringType,
     'InvoiceGroup':InvoiceGroup,'SubContract':SubContract,'StpCoeffs':StpCoeffs,'ItnSchedule':ItnSchedule,'User':User,
-    'ItnScheduleTemp':ItnScheduleTemp, 'Tariff':Tariff}
+    'ItnScheduleTemp':ItnScheduleTemp, 'Tariff':Tariff, 'TimeZone':TimeZone}

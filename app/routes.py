@@ -63,7 +63,8 @@ from app.helper_functions_queries import (
                                         get_itn_with_grid_services_sub,
                                         get_grid_services_sub,
                                         get_summary_records,
-                                        get_summary_records_non_stp
+                                        get_summary_records_non_stp,
+                                        get_contractors_names_and_411
 )
 
 from zipfile import ZipFile
@@ -72,7 +73,11 @@ from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus
                                       insert_settlment_evn,
                                       
 )
-
+MEASURE_MAP_DICT = {
+                'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
+                'G3':'EVN_G3','G4':'EVN_G4', 'H0':'EVN_H0','H1':'EVN_H1','H2':'EVN_H2','B1':'CEZ_B1','B2':'CEZ_B2','B3':'CEZ_B3','B4':'CEZ_B4','B5':'CEZ_B5','H1':'CEZ_H1','H2':'CEZ_H2','S1':'CEZ_S1',
+                'DIRECT':'DIRECT','UNDIRECT':'UNDIRECT'    
+            }
 MONEY_ROUND = 9
 
 
@@ -124,6 +129,88 @@ def erp():
 @app.route('/test', methods=['GET', 'POST'])
 @login_required
 def test():
+    # form = TestForm()
+    # if form.validate_on_submit():
+
+    #     time_zone = 'EET'
+    #     start_date = convert_date_to_utc(time_zone, form.start_date.data)
+    #     end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+
+    #     invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
+    #     invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
+    #     invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
+
+    #     invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
+    #     invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
+    #     invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)     
+
+    #     pleven = db.session.query(ItnMeta.itn).join(SubContract).join(Contract).join(Contractor).filter(Contractor.acc_411 == '411-4-41').all()
+    #     print(len(pleven))
+    #     # df = pd.DataFrame.from_records(pleven, columns = pleven[0].keys()) 
+    #     # df.to_excel('temp/pleven_itns.xlsx')
+    #     inv_gr_pleven = db.session.query(ItnMeta.itn).join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == '411-4-41_0').all()
+    #     print(len(inv_gr_pleven))
+    #     inv_group_name = form.invoicing_group.data.name
+    #     stp_itn_by_inv_group_for_period_sub = (
+    #         db.session
+    #             .query(
+    #                 SubContract.itn.label('sub_itn'), 
+    #                 SubContract.zko.label('zko'),
+    #                 SubContract.akciz.label('akciz') , 
+    #                 Contractor.name.label('contractor_name'), 
+    #                 InvoiceGroup.description.label('invoice_group_description'), 
+    #                 InvoiceGroup.name.label('invoice_group_name')       
+    #             )
+    #             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
+    #             .join(MeasuringType)  
+    #             .join(Contractor)                    
+    #             .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))) 
+    #             .filter(InvoiceGroup.name == inv_group_name)
+    #             .filter(~((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT')))
+    #             .distinct(SubContract.itn) 
+    #             .all())
+
+        
+
+    #     itn_non_stp_records = (
+    #         db.session
+    #             .query(
+    #                 SubContract.itn.label('sub_itn'), 
+    #                 SubContract.zko.label('zko'),
+    #                 SubContract.akciz.label('akciz') , 
+    #                 Contractor.name.label('contractor_name'), 
+    #                 InvoiceGroup.description.label('invoice_group_description'), 
+    #                 InvoiceGroup.name.label('invoice_group_name')       
+    #             )
+    #             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
+    #             .join(MeasuringType)  
+    #             .join(Contractor)                    
+    #             .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))) 
+    #             .filter(InvoiceGroup.name == inv_group_name)
+    #             .filter(((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT')))
+    #             .distinct(SubContract.itn) 
+    #             .subquery())
+
+        
+        
+    #     # total_consumption_records = (
+    #     #     db.session
+    #     #         .query(Distribution.itn.label('itn'), 
+    #     #             func.sum(Distribution.calc_amount).label('total_consumption')) 
+                
+    #     #         .join(ErpInvoice, ErpInvoice.id == Distribution.erp_invoice_id) 
+    #     #         .join(stp_itn_by_inv_group_for_period_sub, stp_itn_by_inv_group_for_period_sub.c.sub_itn == Distribution.itn)                         
+    #     #         .filter(Distribution.tariff.in_(['Достъп','Пренос през електропреносната мрежа', 'Разпределение'])) 
+    #     #         .filter(ErpInvoice.date >= invoice_start_date, ErpInvoice.date <= invoice_end_date) 
+    #     #         .group_by(Distribution.itn)
+    #     #         .all()
+    #     # )
+    #     df = pd.DataFrame.from_records(stp_itn_by_inv_group_for_period_sub, columns = stp_itn_by_inv_group_for_period_sub[0].keys()) 
+    #     df.to_excel('temp/pleven_stp_itns.xlsx')
+
+
+    # return render_template('test.html', title='Test', form=form)
+    #############################################################################################################
     MONEY_ROUND = 2
     ENERGY_ROUND = 3
     form = TestForm()
@@ -211,7 +298,7 @@ def test():
             df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
         
         df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
-        # df.to_excel('temp/mvr.xlsx')      
+        # df.to_excel('temp/burgas.xlsx')      
         generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date, time_zone)
 
         return render_template('test.html', title='Test', form=form)
@@ -836,7 +923,8 @@ def upload_initial_data():
             raw_contractor_df['Head_Address'] = np.nan
             raw_contractor_df = raw_contractor_df[['Name', 'EIC','Address','Vat_Number','E_Mail','Acc_411']]
             raw_contractor_df.rename(columns = {'Name':'name', 'EIC':'eic','Address':'address','Vat_Number':'vat_number','E_Mail':'email','Acc_411':'acc_411'}, inplace = True)
-   
+            raw_contractor_df = raw_contractor_df.replace( ':','-', regex=True)
+           
             update_or_insert(raw_contractor_df, Contractor.__table__.name)
 
         if request.files.get('file_measuring').filename != '':
@@ -950,7 +1038,7 @@ def upload_initial_data():
             flash('upload was successiful','info')
             # t_format = '%Y-%m-%dT%H:%M'
             
-        
+        #######################################################################################################################################################
         if request.files.get('file_hum_itn').filename != '':
 
             STP_MAP_DICT = {
@@ -1003,7 +1091,7 @@ def upload_initial_data():
                     print(f'Itn: {row.itn} was uploaded successifuly !')        
         
 
-        
+        #######################################################################################################################################################
         if request.files.get('file_hum_inv_groups').filename != '':  
             df = pd.read_excel(request.files.get('file_hum_inv_groups'), sheet_name=None, usecols='E,F,T')
             df = validate_input_df(df['data'])
@@ -1266,74 +1354,94 @@ def upload_itns():
     # template_cols = ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group_name', 'invoice_group_description', 'price', 'zko', 
     #                 'akciz', 'has_grid_services', 'has_spot_price', 'erp','grid_voltage', 'address', 'description', 'is_virtual',
     #                 'virtual_parent_itn', 'forecast_montly_consumption','has_balancing', 'acc_411']
-    template_cols = ['itn', 'activation_date', 'internal_id', 'measuring_type', 'invoice_group_name', 'invoice_group_description',  'zko', 
-                    'akciz', 'has_grid_services', 'has_spot_price', 'erp','grid_voltage', 'address', 'description', 'is_virtual',
-                    'virtual_parent_itn', 'forecast_montly_consumption','has_balancing', 'acc_411']
+    template_cols = ['itn', 'activation_date', 'internal_id', 'measuring_type',
+                    'invoice_group_name', 'invoice_group_description', 'zko', 'akciz',
+                    'has_grid_services', 'has_spot_price', 'erp', 'grid_voltage', 'address',
+                    'description', 'is_virtual', 'virtual_parent_itn',
+                    'forecast_montly_consumption', 'has_balancing', '411-3', 'time_zone',
+                    'tariff_name', 'price_day', 'price_night']
     form = UploadItnsForm()
     if form.validate_on_submit():
         df = pd.read_excel(request.files.get('file_'), sheet_name=None)
+
+        if df.get('data') is None:
+            flash(f'Upload failed from missing data spreadsheet in excel file', 'danger')
+            return redirect(url_for('upload_itns'))
+
         if set(df['data'].columns).issubset(template_cols):
             
-            # df['data']['price'] = df['data']['price'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
-            df['data']['zko'] = df['data']['zko'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
-            df['data']['akciz'] = df['data']['akciz'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
+            input_df = validate_input_df(df['data'])            
+            input_df['zko'] = input_df['zko'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
+            input_df['akciz'] = input_df['akciz'].apply(lambda x: Decimal(str(x)) / Decimal('1000'))
 
-            df['data']['forecast_montly_consumption'] = df['data']['forecast_montly_consumption'].apply(lambda x: Decimal(str(x)) * Decimal('1000'))
-            df['data'].rename(columns = {'invoice_group_name':'invoice_group'}, inplace = True)
-            arr = []
-            for index,row in df['data'].iterrows():
-                
+            input_df['forecast_montly_consumption'] = input_df['forecast_montly_consumption'].apply(lambda x: Decimal(str(x)) * Decimal('1000'))
+            # input_df.rename(columns = {'invoice_group_name':'invoice_group'}, inplace = True)
+            contractors = get_contractors_names_and_411()
+            contractors_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())
+            input_df = input_df.merge(contractors_df, on = '411-3', how = 'left' )
+            input_df['measuring_type'] = input_df['measuring_type'].apply(lambda x: MEASURE_MAP_DICT.get(x) if MEASURE_MAP_DICT.get(x) is not None else np.nan)
+            
+            itns_for_deletion = input_df[pd.isnull(input_df['measuring_type'])].itn.values
+            if len(itns_for_deletion) > 0:
+                print(f'Folowing itn will not be inserted because of wrong measuring type ! \n{itns_for_deletion}')
+                input_df = input_df.dropna()
+
+            for index,row in input_df.iterrows():
+                #print(f'in rows --------------->>{row.internal_id}')
                 curr_contract = get_contract_by_internal_id(row['internal_id'])
                 #print(f'From upload itns: current contract ----> {curr_contract}', file = sys.stdout)
-                
                 if curr_contract is None :
-                    flash(f'Itn: {row.itn} does\'t have an contract ! Skipping !')
+                    flash(f'Itn: {row.itn} does\'t have an contract ! Skipping !','danger')
+                    print(f'Itn: {row.itn} does\'t have an contract ! Skipping !')
                     continue
                 if curr_contract.start_date is None:
                     set_contarct_dates(curr_contract, row['activation_date'])
-                
                 curr_itn_meta = create_itn_meta(row)                    
                 if curr_itn_meta is None:
 
                     flash(f'Itn: {row.itn} already exist ! Skipping !','info')
+                    print(f'Itn: {row.itn} already exist ! Skipping !')
                     continue
                 else:
+                    
                     curr_sub_contr = generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta)
                     if curr_sub_contr is not None:
+                        #print(f'currrrr sub contr--->{curr_sub_contr} %%%%% curr_meta ----->{curr_itn_meta}')
+                        curr_itn_meta.save()
                         curr_sub_contr.save()
-                        
-                        flash(f'Sucontract {curr_sub_contr} was created !','info')
+                       
+                        flash(f'Subcontract {curr_sub_contr} was created !','info')
+                        print(f'Subcontract {curr_sub_contr} was created !','info')
+
                     else:
                         flash(f'Itn: {row.itn} faled to create subcontract ! Skipping !')
                         continue   
 
-                    flash(f'Itn: {row.itn} was uploaded successifuly !','success')        
-        else:
-            flash(f'Upload failed from mismatched columns: {set(df.get("data").columns).difference(set(template_cols))}','danger') 
-
+                    flash(f'Itn: {row.itn} was uploaded successifuly !','success') 
+                    print(f'Itn: {row.itn} was uploaded successifuly !')        
+            
     return render_template('upload_itns.html', title='Upload ITNs', form=form)
 
 
-@app.route('/upload_contracts/<start>/<end>/', methods=['GET', 'POST'])
+@app.route('/upload_contracts', methods=['GET', 'POST'])
 @login_required
-def upload_contracts(start,end):
+def upload_contracts():
 
     
     form = UploadContractsForm()
     if form.validate_on_submit():
         
-        df = pd.read_excel(request.files.get('file_'),usecols = 'D:M,O:R')
+        df = pd.read_excel(request.files.get('file_'))
         
-        df = df.fillna(0)
-        df = df[int(start):int(end)]
-        flash(df.columns)
-        if set(df.columns).issubset(['parent_id', 'internal_id', 'contractor', 'sign_date', 'start_date',
-                                    'end_date', 'invoicing_interval', 'maturity_interval', 'contract_type',
+        
+        if set(df.columns).issubset(['411-3', 'parent_contract_internal_id', 'internal_id', 'contractor',
+                                    'signing_date', 'start_date', 'end_date', 'duration',
+                                    'invoicing_interval', 'maturity_interval', 'contract_type',
                                     'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
-                                    'notes','time_zone']):
+                                    'notes', 'time_zone']):
 
             tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
-            parent_tks = df['parent_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
+            parent_tks = df['parent_contract_internal_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
             all_cyr = tks.all()
             all_cyr_parent = parent_tks.all()
             
@@ -1342,19 +1450,24 @@ def upload_contracts(start,end):
                 return redirect(url_for('upload_contracts'))
 
             df = df.fillna(0)
+
+            contractors = get_contractors_names_and_411()
+            contractors_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())
+            df = df.merge(contractors_df, on = '411-3', how = 'left' )            
+
             df['parent_id_initial_zero'] = 0
             df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
-            df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days + 1, axis = 1)
+            df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days, axis = 1)
             df['time_zone'] = df['time_zone'].apply(lambda x: TimeZone.query.filter(TimeZone.code == x).first() if TimeZone.query.filter(TimeZone.code == x).first() is not None else x)
             
             renewal_dict = {'удължава се автоматично с още 12 м. ако никоя от страните не заяви писмено неговото прекратяване':12,'Подновява се автоматично за 1 година , ако никоя от страните не възрази писмено за прекратяването му поне 15 дни преди изтичането му':12,
                         'удължава се автоматично с още 6 м. ако никоя от страните не заяви писмено неговото прекратяване':6,'удължава се автоматично за 3 м. ако никоя от страните не заяви писмено неговото прекратяване с допълнително споразумение.':3,'За срок от една година. Подновява се с ДС / не се изготвя справка към ф-ра':12,
-                        'За срок от една година. Подновява се с ДС / не се изготвя справка към ф-ра':12}
+                        'За срок от една година. Подновява се с ДС.':12}
             df['automatic_renewal_interval'] = df['notes'].apply(lambda x: renewal_dict[x.strip()] if(renewal_dict.get(str(x).strip())) else 0 )
 
             invoicing_dict = {'до 12-то число, следващ месеца на доставката':42,'на 10 дни':10,'на 15 дни':15,'последно число':31,'конкретна дата':-1}
             df['invoicing_interval'] = df['invoicing_interval'].apply(lambda x: invoicing_dict[x.strip()] if(invoicing_dict.get(str(x).strip())) else 0 )
-            contract_type_dict = {'OTC':'End_User','ОП':'Procurement'}
+            contract_type_dict = {'OTC':'End_User','ОП':'Procurement',}
 
             df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
             df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
@@ -1362,38 +1475,37 @@ def upload_contracts(start,end):
             work_day_dict = {'календарни дни':0, 'работни дни':1}
             df['is_work_day'] = df['is_work_day'].apply(lambda x: work_day_dict[x.strip()] if(work_day_dict.get(str(x).strip())) else 0 )
             t_format = '%Y-%m-%dT%H:%M'
-            contracts = [Contract(internal_id = x[1]['internal_id'], contractor_id = Contractor.query.filter(Contractor.name == x[1]['contractor']).first().id, subject = 'None', parent_id =  x[1]['parent_id_initial_zero'], \
-                        signing_date =  convert_date_to_utc(x[1]['time_zone'].code,x[1]['sign_date'].strftime(t_format),t_format)  , \
+                          
+            contracts = [Contract(internal_id = x[1]['internal_id'], contractor_id = x[1]['contractor_id'], subject = 'None', parent_id =  x[1]['parent_id_initial_zero'], \
+                        signing_date =  convert_date_to_utc(x[1]['time_zone'].code,x[1]['signing_date'].strftime(t_format),t_format)  , \
                         start_date = convert_date_to_utc(x[1]['time_zone'].code, x[1]['start_date'].strftime(t_format),t_format), \
                         end_date = convert_date_to_utc(x[1]['time_zone'].code, x[1]['end_date'].strftime(t_format),t_format) , \
                         duration_in_days = x[1]['duration_in_days'], invoicing_interval = x[1]['invoicing_interval'], maturity_interval = x[1]['maturity_interval'], \
                         contract_type_id = x[1]['contract_type'], is_work_days = x[1]['is_work_day'], automatic_renewal_interval = x[1]['automatic_renewal_interval'], \
                         collateral_warranty = x[1]['collateral_warranty'], notes =  x[1]['notes'],time_zone_id = x[1]['time_zone'].id) \
                         for x in df.iterrows()]
-            # start = time.time() 
-            # flash(contracts)
-            # db.session.add_all(contracts)
+           
             db.session.bulk_save_objects(contracts)
             db.session.commit()
-            flash(f'Contracts from {start} to {end} successifully uploaded','success')
+            # flash(f'Contracts from {start} to {end} successifully uploaded','success')
             
-            has_parrent_df = df[df['parent_id'] != 0]
+            has_parrent_df = df[df['parent_contract_internal_id'] != 0]
             
             for index, row in has_parrent_df.iterrows():
                 child = Contract.query.filter(Contract.internal_id == row['internal_id']).first()
                 
-                child.update({'parent_id':Contract.query.filter(Contract.internal_id == row['parent_id']).first().id})
+                child.update({'parent_contract_internal_id':Contract.query.filter(Contract.internal_id == row['parent_contract_internal_id']).first().id})
                 flash(f'parent {Contract.query.filter(Contract.id == child.parent_id).first().internal_id} added to {child.internal_id}','success')
                 
             
-            # end = time.time()
+            
             
             
         else:
             flash('Upload failed','danger')  
             flash(df.shape,'info')      
 
-    return render_template('upload_contracts.html', title='Upload Invoicing Group', form=form)
+    return render_template('upload_contracts.html', title='Upload Contracts', form=form)
 
 
 
