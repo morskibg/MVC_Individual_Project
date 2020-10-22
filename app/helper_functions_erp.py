@@ -45,14 +45,14 @@ def insert_erp_invoice(df):
     erp_inv_df.reset_index(inplace = True, drop = True)
     # erp_inv_df['correction_note'] = erp_inv_df['correction_note'].apply(lambda x: 0 if x == 0.0 else x)
     erp_inv_df['date'] =erp_inv_df['date'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
-    print(f'erp_inv_df \n {erp_inv_df}')
+    # print(f'erp_inv_df \n {erp_inv_df}')
     erp_inv_df['composite_key'] = erp_inv_df['correction_note'].apply(str) + erp_inv_df['event'].apply(str) + erp_inv_df['number'].apply(str) + erp_inv_df['date']
     erp_inv_df = erp_inv_df.fillna('')
     update_or_insert(erp_inv_df, ErpInvoice.__table__.name)
 
     return erp_inv_df
 
-def reader_csv(df, file_name, erp_name):   
+def reader_csv(df, file_name, erp_name, is_temp = False):   
 
         
         df.columns = df.columns.str.replace('"','')        
@@ -65,8 +65,9 @@ def reader_csv(df, file_name, erp_name):
                      'total_amount','tariff','calc_amount','price','value','correction_note','event']
         df.columns = col_names
 
-        itn_list = get_list_all_itn_in_db_by_erp(erp_name)
-        df = df[df['itn'].isin(itn_list)]
+        if not is_temp:
+            itn_list = get_list_all_itn_in_db_by_erp(erp_name)
+            df = df[df['itn'].isin(itn_list)]
 
         cols_to_drop = ['1','4','6','7','8','9','10','erp_code']
         df = df.drop(cols_to_drop, axis = 1)
@@ -85,13 +86,16 @@ def reader_csv(df, file_name, erp_name):
         df['readings_difference']= df['readings_difference'].apply(Decimal)
         df['storno'] = df['storno'].apply(Decimal)
         df['total_amount'] = df['total_amount'].apply(Decimal)
-       
+        
         inv_data = get_invoice_data(df, file_name)
-       
+    
         df['number'] = pd.Series(inv_data[0], index=df.index)
         df['date'] = pd.Series(inv_data[1], index=df.index)
         df['correction_note'] = df['correction_note'].apply(lambda x: 0 if x == 0.0 else x)
+        # print(f'FROM READER CSV DF ----------------------->{df}')
         return df  
+       
+
 
 def get_tech_point(df, erp_invoice = None):   
     
@@ -151,13 +155,31 @@ def get_distrib_point(df, erp_invoice_df = None):
         print(e)
     else:
         # print(f'from distr ----> df: \n {df}')
-        return df     
+        return df 
+
+# def create_point_df(point_df, point):
+
+#     try:
+#         if((point_df.empty) & (point is not None)):           
+#             point_df = point
+
+#         elif point is not None:           
+#             point_df = point_df.append(point, ignore_index=True)
+
+#         else:
+#             print(f'empty {point} ')
+
+#     except Exception as e:
+#         print(f'Exception from create_point_df: {point} is None {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
+    
 
 def insert_mrus(raw_df, file_name, erp_name):  
             
     input_df = reader_csv(raw_df, file_name, erp_name)
+    input_temp_df = reader_csv(raw_df, file_name, erp_name, True)
     
     input_df['date'] = input_df['date'].apply(lambda x: convert_date_to_utc('EET', x))
+    input_temp_df['date'] = input_temp_df['date'].apply(lambda x: convert_date_to_utc('EET', x))
     # print(f'input df insert erp invoice \n{input_df}')
     insert_erp_invoice(input_df)      
 
@@ -167,9 +189,27 @@ def insert_mrus(raw_df, file_name, erp_name):
     # print(f'BBBBBBBBBBBBBBBB {erp_invoice_df}')
     tech_tbl = pd.DataFrame()
     distr_tbl = pd.DataFrame()
+    distr_temp_tbl = pd.DataFrame()
 
-    tech_point = get_tech_point(input_df, erp_invoice_df)
+    tech_point = get_tech_point(input_df, erp_invoice_df)    
     distrib_point = get_distrib_point(input_df, erp_invoice_df)
+    distrib_point_temp = get_distrib_point(input_temp_df)
+    
+    # create_point_df(tech_tbl, tech_point)
+    # create_point_df(distr_tbl, distrib_point)
+    # create_point_df(distr_temp_tbl,distrib_point_temp)
+    try:
+        if((distr_temp_tbl.empty) & (distrib_point_temp is not None)):           
+            distr_temp_tbl = distrib_point_temp
+
+        elif distrib_point_temp is not None:           
+            distr_temp_tbl = distr_temp_tbl.append(distrib_point_temp, ignore_index=True)
+
+        else:
+            print(f'empty distrib_point_temp ')
+
+    except Exception as e:
+        print(f'distrib_point_temp is None {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
 
     try:
         if((distr_tbl.empty) & (distrib_point is not None)):           
@@ -202,9 +242,9 @@ def insert_mrus(raw_df, file_name, erp_name):
 
     else:
         try:
-            have_all_itns_meta(distr_tbl['itn'].values)
+            # have_all_itns_meta(distr_tbl['itn'].values)
             distr_tbl = distr_tbl.replace(np.nan,0)
-            # print(f'distrib_tbl to DB \n{distr_tbl}')
+            # print(f'distrib_tbl to DB \n{distr_tbl.head()} \n{distr_tbl.columns}')           
             update_or_insert(distr_tbl, Distribution.__table__.name)
         except Exception as e:
             print(f'Exception from writing distribution to DB, with message: {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
@@ -214,12 +254,25 @@ def insert_mrus(raw_df, file_name, erp_name):
 
     else:
         try:       
-            have_all_itns_meta(tech_tbl['itn'].values)
+            # have_all_itns_meta(tech_tbl['itn'].values)
             # print(f'tech_tbl to DB \n{tech_tbl}')
             tech_tbl = tech_tbl.replace(np.nan,0)
             update_or_insert(tech_tbl, Tech.__table__.name)
         except Exception as e:
             print(f'Exception from writing tech to DB, with message: {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}') 
+    
+    if distr_temp_tbl.empty:
+        print(f'distr_temp_tbl table is empty')
+
+    else:
+        try:             
+            distr_temp_tbl = distr_temp_tbl.replace(np.nan,0)
+            # print(f'distr_temp_tbl to DB \n{distr_temp_tbl}\n{distr_temp_tbl.shape}')
+            update_or_insert(distr_temp_tbl, DistributionTemp.__table__.name)
+            
+        except Exception as e:
+            print(f'Exception from writing distr_temp_tbl to DB, with message: {e} \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
+
 
 def insert_settlment_cez(zip_obj,separator): 
 
@@ -252,7 +305,6 @@ def insert_settlment_cez(zip_obj,separator):
 
         elif file_name.endswith('.xlsx'):
             
-                     
             try:
                 df = pd.read_excel(zip_obj.read(file_name))
                 initial_rows_count = df.shape[0]               
@@ -327,7 +379,7 @@ def insert_settlment_e_pro(zip_obj, separator):
     # incoming_stp_itns_list = []
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.zip'):
-            # continue
+            
             # print(file_name, file = sys.stdout)
             
             inner_zfiledata = BytesIO(zip_obj.read(file_name))
@@ -379,7 +431,7 @@ def insert_settlment_e_pro(zip_obj, separator):
                 # print(f'from e pro csv reading ----- >\n{df}')
 
         elif file_name == '021CIN03.xlsx':
-
+            
             incoming_stp_itns_list = proceed_e_pro_stp_excel_file(zip_obj, file_name)
             # print(f'incoming_stp_itns_list\n{incoming_stp_itns_list}')
             
@@ -389,6 +441,9 @@ def insert_settlment_e_pro(zip_obj, separator):
     incomming_points = [x[0] for x in incomming_points if len(x) > 0]
     incomming_points += incoming_stp_itns_list
     get_missing_extra_points_by_erp(ERP, incomming_points)
+
+
+
     # print(f'FROM NON stp E-Pro')
     
     # incomming_points = [x[0] for x in incomming_points if len(x) > 0]
@@ -430,10 +485,10 @@ def insert_settlment_evn(zip_obj,separator):
 
                 else:
                     insert_mrus(df, key, ERP)
-
+            
             dfs_dict = {text_file.filename: pd.read_excel(inner_zip.read(text_file.filename,pwd=bytes(PASSWORD, ENCODING)))
             for text_file in inner_zip.infolist() if text_file.filename.endswith('.xlsx')}
-        
+
             for key in dfs_dict.keys():
                 try:
                     df = dfs_dict[key]
@@ -1125,6 +1180,10 @@ def get_missing_extra_points_by_erp(erp, incoming_itns):
     extra = list(incoming_itns - db_itn_set)
     print(f'This itn points are NOT in the database but came data for them from ERP: {erp} files ---> {extra}')
 
+
+
+
+    
 
 
 

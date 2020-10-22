@@ -23,7 +23,12 @@ def stringifyer(df):
             
             df[col] = df.apply(lambda x: str(x[col]), axis=1)
         
-        
+def date_format_corector(df, columns):
+    for col in columns:
+        df[col] = df[col].apply(lambda x: x.replace('.','/') if(isinstance(x,str) and ('.' in x)) else x)
+        df[col] = df[col].apply(lambda x: dt.datetime.strptime(x, '%d/%m/%Y') )
+    return df
+
 def update_or_insert(df, table_name, remove_nan = False):
     """Perform bulk insert on duplicate update of pandas df to mysql table. Support native for MySql NULL insertion.
         Requirements: 1.Dataframe columns MUST be exactly the same and in the same order as SQL table.
@@ -91,13 +96,17 @@ def get_tariff_offset(input_date, time_zone, t_format = "%Y-%m-%d"):
     return local_date.utcoffset() / dt.timedelta(hours=1)
 
 def validate_ciryllic(data):
+
+    if data.lower() == 'none':
+        return True
+
     
     no_digit_internal_id = re.sub(r'[\d]', '', str(data))
     for c in no_digit_internal_id:
-        asci = ord(c)
+        asci = ord(c)       
         if((asci >= 65)&(asci <= 90)|(asci >= 97)&(asci <= 122)) :
             return False
-    else:
+    else:       
         return True 
 
 def get_contract_by_internal_id(internal_id):
@@ -587,9 +596,11 @@ def new_is_right_inner(new_subcontract,old_subcontract):
 
 
 def validate_input_df(df):
+    
 
     start_idx = df[df.columns[0]].first_valid_index()
     end_idx = df[df.columns[0]].last_valid_index()
+    # print(f'Start valid idx --> {start_idx}\n End valid idx ---> {end_idx}')
     df = df[start_idx:end_idx+1].copy()
     df = df.rename(columns=lambda x: x.strip())
     

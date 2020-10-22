@@ -44,11 +44,7 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  stringifyer,
                                  get_tariff_offset,
                                  create_tariff,
-                                 
-                                 
-                                
-
-)
+                                 date_format_corector,)
 
 from app.helper_function_excel_writer import (generate_excel,)
 
@@ -64,15 +60,20 @@ from app.helper_functions_queries import (
                                         get_grid_services_sub,
                                         get_summary_records,
                                         get_summary_records_non_stp,
-                                        get_contractors_names_and_411
+                                        get_contractors_names_and_411,
+                                        
 )
 
 from zipfile import ZipFile
 from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
                                       insert_settlment_cez, insert_settlment_e_pro,
-                                      insert_settlment_evn,
+                                      insert_settlment_evn,                            
                                       
 )
+from app.helper_functions_reports import (create_report_from_grid)
+
+from app.helper_functions_invoicing import (create_invoicing_reference)
+
 MEASURE_MAP_DICT = {
                 'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
                 'G3':'EVN_G3','G4':'EVN_G4', 'H0':'EVN_H0','H1':'EVN_H1','H2':'EVN_H2','B1':'CEZ_B1','B2':'CEZ_B2','B3':'CEZ_B3','B4':'CEZ_B4','B5':'CEZ_B5','H1':'CEZ_H1','H2':'CEZ_H2','S1':'CEZ_S1',
@@ -129,20 +130,25 @@ def erp():
 @app.route('/test', methods=['GET', 'POST'])
 @login_required
 def test():
-    # form = TestForm()
-    # if form.validate_on_submit():
+    form = TestForm()
+    if form.validate_on_submit():
 
-    #     time_zone = 'EET'
-    #     start_date = convert_date_to_utc(time_zone, form.start_date.data)
-    #     end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+        # time_zone = 'EET'
+        # start_date = convert_date_to_utc(time_zone, form.start_date.data)
+        # end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+        
+        # df = create_invoicing_reference(form.invoicing_group.data, start_date, end_date)
+        # df.to_excel('temp/abon_stancii.xlsx')
+        # print(f'{df}')
 
-    #     invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
-    #     invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
-    #     invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
 
-    #     invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
-    #     invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-    #     invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)     
+        # invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
+        # invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
+        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
+
+        # invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
+        # invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
+        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)     
 
     #     pleven = db.session.query(ItnMeta.itn).join(SubContract).join(Contract).join(Contractor).filter(Contractor.acc_411 == '411-4-41').all()
     #     print(len(pleven))
@@ -209,105 +215,125 @@ def test():
     #     df.to_excel('temp/pleven_stp_itns.xlsx')
 
 
-    # return render_template('test.html', title='Test', form=form)
+    #   return render_template('test.html', title='Test', form=form)
     #############################################################################################################
-    MONEY_ROUND = 2
-    ENERGY_ROUND = 3
-    form = TestForm()
+    # MONEY_ROUND = 2
+    # ENERGY_ROUND = 3
+    # form = TestForm()
     
-    if form.validate_on_submit(): 
+    # if form.validate_on_submit(): 
+        
 
-        time_zone = 'EET'
-        start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+        # time_zone = 'EET'
+        # start_date = convert_date_to_utc(time_zone, form.start_date.data)
+        # end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
 
-        invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
-        invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
-        invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
+        # invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
+        # invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
+        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
 
-        invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
-        invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-        invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)        
+        # invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
+        # invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
+        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)  
 
-        grid_itns = get_itn_with_grid_services_sub(form.invoicing_group.data.name,start_date, end_date)
+        # df = create_report_from_grid(invoice_start_date, invoice_end_date)       
 
-        grid_services_sub = get_grid_services_sub(grid_itns, invoice_start_date, invoice_end_date) 
+        # erp_consumption_records = get_erp_consumption_records_by_grid(form.erp.data.name, invoice_start_date, invoice_end_date)
+        # erp_consumption_df = pd.DataFrame.from_records(erp_consumption_records, columns = erp_consumption_records[0].keys())
+        
+        # erp_money_records = get_erp_money_records_by_grid(form.erp.data.name, invoice_start_date, invoice_end_date)
+        # erp_consumption_df['Value'] =  erp_money_records[0][1]
+        # print(f'By ERP: \n{erp_consumption_df}') 
 
-        grid_services_tech_records = get_grid_services_tech_records(grid_itns, invoice_start_date, invoice_end_date)
-        grid_services_distrib_records = get_grid_services_distrib_records(grid_itns, invoice_start_date, invoice_end_date)
+        # total_consumption_by_grid = get_total_consumption_by_grid(invoice_start_date, invoice_end_date)
+        # total_df = pd.DataFrame.from_records(total_consumption_by_grid, columns = total_consumption_by_grid[0].keys())       
+
+        # total_sum_records = get_total_money_by_grid(invoice_start_date, invoice_end_date)
+        # total_df['Value'] =  total_sum_records[0][0]        
+        
+        # print(f'Total : \n{total_df}')
+
+################################################################
+
+        # grid_itns = get_itn_with_grid_services_sub(form.invoicing_group.data.name,start_date, end_date)
+
+        # grid_services_sub = get_grid_services_sub(grid_itns, invoice_start_date, invoice_end_date) 
+
+        # grid_services_tech_records = get_grid_services_tech_records(grid_itns, invoice_start_date, invoice_end_date)
+        # grid_services_distrib_records = get_grid_services_distrib_records(grid_itns, invoice_start_date, invoice_end_date)
 
              
 
-        grid_services_df = pd.DataFrame()
-        if (len(grid_services_tech_records) == 0) :
-            grid_services_df = pd.DataFrame(columns=['Абонат №', 'А д р е с', 'Име на клиент', 'ЕГН/ЕИК',
-                                                    'Идентификационен код', 'Електромер №', 'Отчетен период от',
-                                                    'Отчетен период до', 'Брой дни', 'Номер скала', 'Код скала',
-                                                    'Часова зона', 'Показания  ново', 'Показания старо', 'Разлика (квтч)',
-                                                    'Константа', 'Корекция (квтч)', 'Приспаднати (квтч)',
-                                                    'Общо количество (квтч)', 'Тарифа/Услуга', 'Количество (кВтч/кВАрч)',
-                                                    'Единична цена (лв./кВт/ден)/ (лв./кВтч)', 'Стойност (лв)',
-                                                    'Корекция към фактура', 'Основание за издаване'])
-        else:    
-            grid_services_tech_records_df = pd.DataFrame.from_records(grid_services_tech_records, columns = grid_services_tech_records[0].keys())
-            grid_services_distrib_records_df = pd.DataFrame.from_records(grid_services_distrib_records, columns = grid_services_distrib_records[0].keys())
-            grid_services_df = pd.concat([grid_services_tech_records_df,grid_services_distrib_records_df])
-            grid_services_df = grid_services_df.sort_values(by='Идентификационен код', ascending=False, ignore_index=True)
+        # grid_services_df = pd.DataFrame()
+        # if (len(grid_services_tech_records) == 0) :
+        #     grid_services_df = pd.DataFrame(columns=['Абонат №', 'А д р е с', 'Име на клиент', 'ЕГН/ЕИК',
+        #                                             'Идентификационен код', 'Електромер №', 'Отчетен период от',
+        #                                             'Отчетен период до', 'Брой дни', 'Номер скала', 'Код скала',
+        #                                             'Часова зона', 'Показания  ново', 'Показания старо', 'Разлика (квтч)',
+        #                                             'Константа', 'Корекция (квтч)', 'Приспаднати (квтч)',
+        #                                             'Общо количество (квтч)', 'Тарифа/Услуга', 'Количество (кВтч/кВАрч)',
+        #                                             'Единична цена (лв./кВт/ден)/ (лв./кВтч)', 'Стойност (лв)',
+        #                                             'Корекция към фактура', 'Основание за издаване'])
+        # else:    
+        #     grid_services_tech_records_df = pd.DataFrame.from_records(grid_services_tech_records, columns = grid_services_tech_records[0].keys())
+        #     grid_services_distrib_records_df = pd.DataFrame.from_records(grid_services_distrib_records, columns = grid_services_distrib_records[0].keys())
+        #     grid_services_df = pd.concat([grid_services_tech_records_df,grid_services_distrib_records_df])
+        #     grid_services_df = grid_services_df.sort_values(by='Идентификационен код', ascending=False, ignore_index=True)
             
-        ###################### create stp records ##############################################################
-        stp_itns = get_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
+        # ###################### create stp records ##############################################################
+        # stp_itns = get_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
 
-        stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_itns, invoice_start_date, invoice_end_date)        
+        # stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_itns, invoice_start_date, invoice_end_date)        
 
-        summary_stp = get_summary_records(stp_consumption_for_period_sub, grid_services_sub, stp_itns, start_date, end_date)
+        # summary_stp = get_summary_records(stp_consumption_for_period_sub, grid_services_sub, stp_itns, start_date, end_date)
        
-        ###################### create non stp records ##############################################################
-        non_stp_itns = get_non_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
+        # ###################### create non stp records ##############################################################
+        # non_stp_itns = get_non_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
 
-        non_stp_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
+        # non_stp_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
 
-        summary_non_stp = get_summary_records(non_stp_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)
-        #############################################################################################################
-        df = pd.DataFrame()
-        if len(summary_stp) != 0:
-            try:
-                temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
+        # summary_non_stp = get_summary_records(non_stp_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)
+        # #############################################################################################################
+        # df = pd.DataFrame()
+        # if len(summary_stp) != 0:
+        #     try:
+        #         temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
                  
-            except Exception as e:
-                print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
+        #     except Exception as e:
+        #         print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
 
-            else:
-                if df.empty:
-                    df = temp_df
-                else:
-                    df = df.append(temp_df, ignore_index=True) 
-        try: 
-            if len(summary_non_stp) > 0:           
-                temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())  
+        #     else:
+        #         if df.empty:
+        #             df = temp_df
+        #         else:
+        #             df = df.append(temp_df, ignore_index=True) 
+        # try: 
+        #     if len(summary_non_stp) > 0:           
+        #         temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())  
                     
-                print(f'from Non STP shape = {temp_df.shape[0]}')
-                if df.empty:
-                    df = temp_df
-                else:
-                    df = df.append(temp_df, ignore_index=True) 
+        #         print(f'from Non STP shape = {temp_df.shape[0]}')
+        #         if df.empty:
+        #             df = temp_df
+        #         else:
+        #             df = df.append(temp_df, ignore_index=True) 
 
-        except Exception as e:
-            print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
+        # except Exception as e:
+        #     print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {start_date} - {end_date}. Message is: {e}')
 
-        else:
-            df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
+        # else:
+        #     df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
         
-        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
-        # df.to_excel('temp/burgas.xlsx')      
-        generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date, time_zone)
+        # df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
+        # # df.to_excel('temp/burgas.xlsx')      
+        # generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date, time_zone)
 
-        return render_template('test.html', title='Test', form=form)
+        # return render_template('test.html', title='Test', form=form)
 
         
        
         # ################################# Initial Ibex  ###################################### 
         
-        # invoice_start_date = pd.to_datetime('01/07/2020', format = '%d/%m/%Y')
+        # invoice_start_date = pd.to_datetime('01/09/2020', format = '%d/%m/%Y')
         # invoice_end_date = pd.to_datetime('31/12/2021', format = '%d/%m/%Y')
         # time_series = pd.date_range(start = invoice_start_date, end = invoice_end_date , freq='h', tz = 'EET')
         # forecast_df = pd.DataFrame(time_series, columns = ['utc'])
@@ -328,14 +354,14 @@ def test():
 
         # ################################# Upload to Ibex  ###################################### 
         # print(f' IN IBEX')
-        # invoice_start_date = pd.to_datetime('01/07/2020', format = '%d/%m/%Y')
-        # invoice_end_date = pd.to_datetime('28/09/2021', format = '%d/%m/%Y')
-        # invoice_start_date = form.start_date.data
-        # invoice_end_date = form.end_date.data
+        # invoice_start_date = pd.to_datetime('01/09/2020', format = '%d/%m/%Y')
+        # invoice_end_date = pd.to_datetime('22/10/2020', format = '%d/%m/%Y')
+        # # invoice_start_date = form.start_date.data
+        # # invoice_end_date = form.end_date.data
         # ibex_df = IbexData.download_from_ibex_web_page(invoice_start_date, invoice_end_date)
         # stringifyer(ibex_df)
         # bulk_update_list = ibex_df.to_dict(orient='records')
-        # print(f' IN IBEX {bulk_update_list}')
+        # # print(f' IN IBEX {bulk_update_list}')
         # db.session.bulk_update_mappings(IbexData, bulk_update_list)
         # db.session.commit()
         
@@ -898,7 +924,7 @@ def test():
     #     # df.to_excel(f'temp/nzok.xlsx')
     #     generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, period_start_date, period_end_date, time_zone)
 
-    return render_template('test.html', title='Test', form=form)
+        return render_template('test.html', title='Test', form=form)
     
 
 @app.route('/upload_initial_data', methods=['GET', 'POST'])
@@ -1432,19 +1458,24 @@ def upload_contracts():
     if form.validate_on_submit():
         
         df = pd.read_excel(request.files.get('file_'))
+        # print(f'{df.columns}')
+        df = validate_input_df(df)
+        df = date_format_corector(df,['signing_date', 'start_date', 'end_date'])
         
         
         if set(df.columns).issubset(['411-3', 'parent_contract_internal_id', 'internal_id', 'contractor',
                                     'signing_date', 'start_date', 'end_date', 'duration',
                                     'invoicing_interval', 'maturity_interval', 'contract_type',
                                     'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
-                                    'notes', 'time_zone']):
+                                    'notes', 'time_zone','parent_contractor_411']):
 
             tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
             parent_tks = df['parent_contract_internal_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
+            # print(f'{parent_tks}')
             all_cyr = tks.all()
             all_cyr_parent = parent_tks.all()
-            
+            # print(f'all_cyr ---> {all_cyr}')
+            # print(f'all_cyr_parent ---> {all_cyr_parent}')
             if not (all_cyr & all_cyr_parent):
                 flash('There is tk in latin, aborting', 'danger')
                 return redirect(url_for('upload_contracts'))
@@ -1454,7 +1485,7 @@ def upload_contracts():
             contractors = get_contractors_names_and_411()
             contractors_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())
             df = df.merge(contractors_df, on = '411-3', how = 'left' )            
-
+            
             df['parent_id_initial_zero'] = 0
             df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
             df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days, axis = 1)
@@ -1484,22 +1515,26 @@ def upload_contracts():
                         contract_type_id = x[1]['contract_type'], is_work_days = x[1]['is_work_day'], automatic_renewal_interval = x[1]['automatic_renewal_interval'], \
                         collateral_warranty = x[1]['collateral_warranty'], notes =  x[1]['notes'],time_zone_id = x[1]['time_zone'].id) \
                         for x in df.iterrows()]
-           
+            # print(f'CONTRACTS \n{df.head()}')
             db.session.bulk_save_objects(contracts)
             db.session.commit()
-            # flash(f'Contracts from {start} to {end} successifully uploaded','success')
             
-            has_parrent_df = df[df['parent_contract_internal_id'] != 0]
+            
+            has_parrent_df = df[df['parent_contract_internal_id'] != 'none']
             
             for index, row in has_parrent_df.iterrows():
                 child = Contract.query.filter(Contract.internal_id == row['internal_id']).first()
                 
                 child.update({'parent_contract_internal_id':Contract.query.filter(Contract.internal_id == row['parent_contract_internal_id']).first().id})
                 flash(f'parent {Contract.query.filter(Contract.id == child.parent_id).first().internal_id} added to {child.internal_id}','success')
-                
-            
-            
-            
+
+            has_parent_contractor_df = df[df['parent_contractor_411'] != 'none']
+
+            for index, row in has_parent_contractor_df.iterrows():
+                parent = Contractor.query.filter(Contractor.acc_411 == row['parent_contractor_411']).first()
+                child = Contractor.query.filter(Contractor.acc_411 == row['411-3']).first()
+                child.update({'parent_id':parent.id})
+                flash(f'parent {parent.name} added to {child.name}','success')           
             
         else:
             flash('Upload failed','danger')  

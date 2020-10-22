@@ -3,10 +3,17 @@
 
 
 {% block app_content %} 
-    <div class='col-md-4'></div>             
-    <div class='col-md-4'>                      
+    <div class='col-md-3'></div>             
+    <div class='col-md-6'>                      
         <h1>TEST</h1> 
-        {{ wtf.quick_form(form) }} 
+        
+        {{ wtf.quick_form(form)}} 
+        
     </div> 
-    <div class='col-md-4'> </div>    
+    <!-- <select name='tests' class=" form-control" multiple>
+        <option value="Test1">Test1</option>
+        <option value="Test2">Test2</option>
+        <option value="Test3">Test3</option>
+    </select> -->
+    <div class='col-md-3'> </div>    
 {% endblock %}

@@ -195,6 +195,23 @@ class Distribution(BaseModel):
     def __repr__(self):
         return '<Distribution ITN: {}, Distribution tariff: {}, Distribution calc_amount: {}, Distribution value: {}, Distribution invoice_date: {}>'.format(self.itn, self.tariff, self.calc_amount,self.value, self.invoice.date)
 
+class DistributionTemp(BaseModel):
+    itn = db.Column(nullable=False)
+    start_date = db.Column(db.DateTime, primary_key = True)
+    end_date = db.Column(db.DateTime, nullable=False)
+    tariff= db.Column(db.String(256), nullable = False)
+    calc_amount = db.Column(db.Numeric(12,6),nullable = False)
+    price = db.Column(db.Numeric(10,6), primary_key = True)
+    value = db.Column(db.Numeric(10,3), primary_key = True) 
+    correction_note = db.Column(db.String(64), primary_key = True)
+    event = db.Column(db.String(128))
+    number = db.Column(db.String(64))
+    date = db.Column(db.DateTime, nullable=False)  
+
+    
+    def __repr__(self):
+        return '<Distribution ITN: {}, Distribution tariff: {}, Distribution calc_amount: {}, Distribution value: {}, Distribution invoice_date: {}>'.format(self.itn, self.tariff, self.calc_amount,self.value, self.date)
+
 class Tech(BaseModel):
     subscriber_number = db.Column(db.String(64),nullable = False)
     # place_number = db.Column(db.String(16),nullable = False)
@@ -491,7 +508,7 @@ class IbexData(BaseModel):
                         + str(date.month) + '-' # month
                         + str(date.day) + # day
                         '&lang=bg')
-            # print(f'From satic ibex s_date ={day_offset} ------- {url}')
+            print(f'From satic ibex s_date ={day_offset} ------- {url}')
             df = pd.read_excel(url, parse_dates=True, index_col='Date')
             range_date = pd.datetime(date.year, date.month, date.day)                         
             df.index = (

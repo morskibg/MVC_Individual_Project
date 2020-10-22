@@ -4,7 +4,7 @@ from wtforms import (
     SelectField, TextField, IntegerField, DecimalField, FileField)
 # from wtforms.fields.html5 import DateField
 # from wtforms.fields import DateField
-from wtforms.ext.sqlalchemy.fields import QuerySelectField
+from wtforms.ext.sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional,NumberRange
 from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp
 import re
@@ -239,7 +239,10 @@ class TestForm(FlaskForm):
     start_date = StringField(id='start_datepicker', validators = [Optional()])
     end_date = StringField(id='end_datepicker', validators = [Optional()])
     erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
-    invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
+    # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
+    invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
+    
+    
     submit = SubmitField('Test')
 
 class ErpForm(FlaskForm):

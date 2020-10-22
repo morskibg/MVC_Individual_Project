@@ -97,6 +97,41 @@ def get_summary_records(consumption_for_period_sub, grid_services_sub, itns, sta
     )
     return summary_records
 
+def get_summary_records_aggr(consumption_for_period_sub, grid_services_sub, itns, start_date, end_date):
+
+    summary_records = (
+        db.session
+            .query(
+                # ItnMeta.itn.label('Обект (ИТН №)'),
+                # # itns.c.sub_itn,
+                # grid_services_sub.c.grid_services.label('Мрежови услуги (лв.)'),
+                # (consumption_for_period_sub.c.total_consumption).label('Потребление (kWh)'),
+                # (itns.c.akciz),
+                func.sum(consumption_for_period_sub.c.total_consumption * Tariff.price_day).label('Сума за енергия'),
+                func.sum(consumption_for_period_sub.c.total_consumption * itns.c.zko).label('Задължение към обществото'),
+                func.sum(consumption_for_period_sub.c.total_consumption * itns.c.akciz).label('Акциз'),
+                # AddressMurs.name.label('Адрес'), 
+                # itns.c.contractor_name, 
+                # itns.c.invoice_group_description, 
+                # itns.c.invoice_group_name,
+                # itns.c.zko, 
+                # itns.c.akciz   
+        )
+         
+        # .join(itns, itns.c.sub_itn == ItnMeta.itn)
+        # .join(consumption_for_period_sub, consumption_for_period_sub.c.itn == itns.c.sub_itn)        
+        # .outerjoin(grid_services_sub, grid_services_sub.c.itn_id == ItnMeta.itn)        
+        # .join(ItnSchedule, ItnSchedule.itn == ItnMeta.itn)
+        # .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id)
+        # .join(Tariff, Tariff.id == ItnSchedule.tariff_id)         
+        # .filter(ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date)
+        # .group_by(itns.c.sub_itn)
+        .all()
+            
+    )
+    print(f'{summary_records}')
+    return summary_records
+
 def get_non_stp_itn_by_inv_group_for_period_sub(inv_group_name, start_date, end_date):
 
     itn_records = (
@@ -262,7 +297,64 @@ def get_grid_services_distrib_records(itn_with_grid_services_sub, invoice_start_
         .all()
         )
     return grid_services_distrib_records
+
+def get_erp_consumption_records_by_grid(erp_name, invoice_start_date, invoice_end_date):
+
+    erp_consumption_records = (
+            db.session
+                .query(  
+                    Erp.name,                                   
+                    func.sum(DistributionTemp.calc_amount).label('total_consumption'))                 
+                .join(ItnMeta,ItnMeta.itn == DistributionTemp.itn )
+                .join(Erp, Erp.id == ItnMeta.erp_id)
+                .filter(Erp.name == erp_name)                     
+                .filter(DistributionTemp.tariff.in_(['Достъп','Пренос през електропреносната мрежа', 'Разпределение'])) 
+                .filter(DistributionTemp.date >= invoice_start_date, DistributionTemp.date <= invoice_end_date) 
+                # .group_by(Erp.name)
+                # .distinct()
+                .all()
+        )
+    return erp_consumption_records
     
+def get_erp_money_records_by_grid(erp_name, invoice_start_date, invoice_end_date):
 
+    erp_money_records = (
+        db.session
+            .query(  
+                Erp.name,                                   
+                func.sum(DistributionTemp.value).label('value'))              
+            .join(ItnMeta,ItnMeta.itn == DistributionTemp.itn )
+            .join(Erp, Erp.id == ItnMeta.erp_id)
+            # .filter(Erp.name == erp_name)             
+            .filter(DistributionTemp.date >= invoice_start_date, DistributionTemp.date <= invoice_end_date) 
+            .group_by(Erp.name)
+            # .distinct()
+            .all()
+    )    
+    return erp_money_records
 
+def get_total_consumption_by_grid(invoice_start_date, invoice_end_date):
+
+    total_consumption_records = (
+        db.session
+            .query(                  
+                func.sum(DistributionTemp.calc_amount).label('total_consumption'))   
+            .filter(DistributionTemp.tariff.in_(['Достъп','Пренос през електропреносната мрежа', 'Разпределение']))               
+            .filter(DistributionTemp.date >= invoice_start_date, DistributionTemp.date <= invoice_end_date)                 
+            .distinct()
+            .all()
+    )
+    return total_consumption_records
+
+def get_total_money_by_grid(invoice_start_date, invoice_end_date):
+
+    total_sum_records = (
+        db.session
+            .query(                  
+                func.sum(DistributionTemp.value).label('value'))                  
+            .filter(DistributionTemp.date >= invoice_start_date, DistributionTemp.date <= invoice_end_date)                 
+            .distinct()
+            .all()
+    )    
+    return total_sum_records
 
