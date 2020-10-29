@@ -273,9 +273,9 @@ def test():
 ########################## KKKKKKKKKKKKKKKKKKKKKKKK ######################
 
         # time_zone = get_time_zone(form.invoicing_group.data[0].name, form.start_date.data, form.end_date.data)
-        time_zone = 'EET'
-        start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+        # time_zone = 'EET'
+        # start_date = convert_date_to_utc(time_zone, form.start_date.data)
+        # end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
 
         # invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
         # invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
@@ -290,9 +290,18 @@ def test():
         # inv_group_name = form.invoicing_group.data[0].name
         
         start = time.time()
-        inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]
+        weighted_price = None
+        if form.by_contract.data:
+            
+            time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
+            start_date = convert_date_to_utc(time_zone, form.start_date.data)
+            end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+            inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
+            weighted_price = get_weighted_price(inv_groups, start_date, end_date)
 
-        # print(f'invoic groups \n {inv_groups}')
+        else:            
+            inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]            
+            # print(f'invoic groups \n {inv_groups}')
 
         for inv_group_name in inv_groups:
             print(f'{inv_group_name}')
@@ -304,9 +313,50 @@ def test():
             if not is_spot:
                 get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_date, invoice_end_date)
             else:
-                get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
+                get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
+
+
+
+
+
+        
+
+        # if form.by_contract.data:
+
+        #     time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
+        #     start_date = convert_date_to_utc(time_zone, form.start_date.data)
+        #     end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+        #     inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
+
+        #     for inv_group_name in inv_groups:
+
+            
+            
+            
+        #     # a = get_weighted_price(inv_groups, start_date, end_date, form.contracts.data.internal_id)
+            
+
+        # else:
+
+            
+        #     inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]            
+        #     # print(f'invoic groups \n {inv_groups}')
+
+        #     for inv_group_name in inv_groups:
+        #         print(f'{inv_group_name}')
+        #         start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
+        #         if start_date is None:
+        #             continue
+        #         is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
+                
+        #         if not is_spot:
+        #             get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_date, invoice_end_date)
+        #         else:
+        #             get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
+        #     end = time.time()
+        #     print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
 
 

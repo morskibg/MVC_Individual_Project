@@ -115,28 +115,25 @@ def get_grid_services(inv_group_name, start_date, end_date, invoice_start_date, 
 #         # return weighted_price.quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)
 #         return weighted_price
 
-def get_weighted_price(inv_group_names, start_date, end_date, internal_id = None):   
-
-    
-    if internal_id is not None:   
-        inv_group_names = get_list_inv_groups_by_contract(internal_id, start_date, end_date)
+def get_weighted_price(inv_group_names, start_date, end_date):   
 
     spot_itns_sub = get_spot_itns(inv_group_names, start_date, end_date) 
     fin_res = get_spot_fin_results(spot_itns_sub, start_date, end_date)
+
     if len(fin_res) ==  0:
         return fin_res
 
-    res_df = pd.DataFrame.from_records(fin_res, columns = res[0].keys())
+    fin_res_df = pd.DataFrame.from_records(fin_res, columns = fin_res[0].keys())
     # print(f'res df {res_df}')
     limits = get_tariff_limits(spot_itns_sub, start_date, end_date)
     if len(limits[0]) > 2:
-        print(f'Wrong lower, upper limits count for this invoicing group: {inv_group_name} for period :{start_date} - {end_date}')
+        print(f'Wrong lower, upper limits count for this invoicing group: {inv_group_names} for period :{start_date} - {end_date}')
         return Decimal('0')
     else:
         lower_limit = Decimal(str(limits[0][0]))
         upper_limit = Decimal(str(limits[0][1]))
         # print(f'{lower_limit} --- {upper_limit} ')
-        weighted_price = Decimal(res_df['fin_res'].sum()) / Decimal(res_df['total_consumption'].sum())
+        weighted_price = Decimal(fin_res_df['fin_res'].sum()) / Decimal(fin_res_df['total_consumption'].sum())
        
 
         if weighted_price.compare(lower_limit) == -1:            
@@ -145,7 +142,7 @@ def get_weighted_price(inv_group_names, start_date, end_date, internal_id = None
         elif ((weighted_price.compare(upper_limit) == 1) & (upper_limit.compare(Decimal('0')) != 0)):            
             weighted_price = upper_limit
 
-        res_df['Сума за енергия'] = res_df['total_consumption'].apply(lambda x: Decimal(x) * weighted_price)
+        fin_res_df['Сума за енергия'] = fin_res_df['total_consumption'].apply(lambda x: Decimal(x) * weighted_price)
         # weighted_price = weighted_price.quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)        
         # return weighted_price.quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)
         # print(f'weighted price = {weighted_price}')
@@ -211,11 +208,14 @@ def get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_
             generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date)
        
 
-def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_date, invoice_end_date):    
+def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_date, invoice_end_date, weighted_price):  
+
+    if weighted_price is None:
+        weighted_price = get_weighted_price(inv_group_names, start_date, end_date)  
 
     grid_services_sub, grid_services_df = get_grid_services(inv_group_names[0], start_date, end_date, invoice_start_date, invoice_end_date)   
    
-    weighted_price = get_weighted_price(inv_group_names, start_date, end_date)
+    
     ###################### create stp records ##############################################################
    
     stp_spot_itns = get_stp_itn_by_inv_group_for_period_spot_sub(inv_group_names[0], start_date, end_date)   
@@ -239,7 +239,7 @@ def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_dat
             temp_df = pd.DataFrame.from_records(summary_records_stp_spot, columns = summary_records_stp_spot[0].keys())                
                 
         except Exception as e:
-            print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data[0].name} for period {start_date} - {end_date}. Message is: {e}')
+            print(f'Unable to create grid service dataframe for invoicing group {inv_group_names[0]} for period {start_date} - {end_date}. Message is: {e}')
 
         else:
             if df.empty:
@@ -257,7 +257,7 @@ def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_dat
                 df = df.append(temp_df, ignore_index=True) 
 
     except Exception as e:
-        print(f'Unable to proceed data for invoicing group {form.invoicing_group.data[0].name} for period {start_date} - {end_date}. Message is: {e}')
+        print(f'Unable to proceed data for invoicing group {inv_group_names[0]} for period {start_date} - {end_date}. Message is: {e}')
 
     else:
         df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
