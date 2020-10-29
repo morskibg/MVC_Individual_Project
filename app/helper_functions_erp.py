@@ -522,7 +522,7 @@ def insert_settlment_evn(zip_obj,separator):
 
                             stp_records_df = pd.DataFrame.from_records(distribution_stp_records, columns=distribution_stp_records[0].keys())
                             
-                            update_stp_consumption_vol(stp_records_df, min_date, max_date, True)
+                            update_stp_consumption_vol(stp_records_df, min_date, max_date, True) 
 
                             distribution_non_stp_records = get_distribution_non_stp(ERP,invoice_start_date, invoice_end_date)
                             # print(f'stp records df \n{stp_records_df}')
@@ -533,11 +533,15 @@ def insert_settlment_evn(zip_obj,separator):
                             applicable_subcontracts = get_subcontracts_by_itn_and_utc_dates(df_for_db.iloc[0]['itn'], min_date, max_date)
 
                             for subcontarct in applicable_subcontracts:
-                                # print(f'$$$$$$$$$$$$$$$ applicable_subcontracts  $$$$$$$$$$$$$$$$\n{subcontarct}')
+                                print(f'$$$$$$$$$$$$$$$ applicable_subcontracts  $$$$$$$$$$$$$$$$\n{subcontarct}')
                                 partial_df = df_for_db[((df_for_db.utc >= subcontarct.start_date) & (df_for_db.utc <= subcontarct.end_date))].copy()
-                                # print(f'$$$$$$$$$$$$$$$ applicable_subcontracts -- partial_df $$$$$$$$$$$$$$$$\n{partial_df}')
+                                print(f'$$$$$$$$$$$$$$$ applicable_subcontracts -- partial_df $$$$$$$$$$$$$$$$\n{partial_df}')
                                 # incoming_non_stp_records.append(list(zip(set(partial_df.itn), )))
-                                incomming_points += partial_df.itn
+                                if len(incomming_points) == 0:
+                                    incomming_points = partial_df.itn
+                                else:
+                                    [y for x in [incomming_points, partial_df.itn] for y in x]
+                                    # incomming_points += partial_df.itn
                                 update_non_stp_consumption_settelment_vol(partial_df, subcontarct.start_date, subcontarct.end_date)
                    
                     else:
@@ -549,7 +553,8 @@ def insert_settlment_evn(zip_obj,separator):
     
 
     incoming_non_stp_records = [x[0] for x in incoming_non_stp_records if len(x) > 0]
-    incomming_points += incoming_non_stp_records
+    [y for x in [incomming_points, incoming_non_stp_records] for y in x]
+    # incomming_points += incoming_non_stp_records
     get_missing_extra_points_by_erp(ERP, incomming_points)
 
     # get_missing_points(distribution_stp_records, db_stp_records)  

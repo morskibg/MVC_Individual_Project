@@ -281,6 +281,8 @@ class SubContract(BaseModel):
     has_spot_price = db.Column(db.Boolean, nullable = False, default = 0)
     has_balancing = db.Column(db.Boolean, nullable=False)
     # forecast_vol = db.Column(db.Numeric(15,3), nullable=False)
+    make_invoice = db.Column(db.Boolean, nullable = False, default = 1)
+    
     last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate = dt.datetime.utcnow)
 
 
@@ -497,8 +499,8 @@ class IbexData(BaseModel):
     def download_from_ibex_web_page(start_date, end_date):
 
         ibex_df = pd.DataFrame()
-        start_date = pd.to_datetime(start_date,format='%Y-%m-%d')
-        end_date =  pd.to_datetime(end_date,format='%Y-%m-%d')
+        start_date = pd.to_datetime(start_date,format='%Y-%m-%d') - dt.timedelta(hours = 24)
+        end_date =  pd.to_datetime(end_date,format='%Y-%m-%d') + dt.timedelta(hours = 24)
         
         for day_offset in range(0, (end_date - start_date).days):
             date = start_date + dt.timedelta(days = day_offset)
@@ -539,6 +541,8 @@ class Tariff(BaseModel):
     custom_week_day_start = db.Column(db.String(3), nullable = False, default = 'Mon')
     custom_week_day_end = db.Column(db.String(3), nullable = False, default = 'Sun')
     custom_price = db.Column(db.Numeric(8,7), nullable=False, default = 0)
+    upper_limit = db.Column(db.Numeric(8,7), nullable=False, default = 0)
+    lower_limit = db.Column(db.Numeric(8,7), nullable=False, default = 0)
     # itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'),  nullable=False)
     
 

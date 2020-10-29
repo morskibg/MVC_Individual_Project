@@ -238,9 +238,14 @@ class TestForm(FlaskForm):
     # file_1 = FileField('Browse for Test File')
     start_date = StringField(id='start_datepicker', validators = [Optional()])
     end_date = StringField(id='end_datepicker', validators = [Optional()])
-    erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
+    # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
     invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
+    bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
+    by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
+    contracts = QuerySelectField(query_factory = lambda: Contract.query, allow_blank = False,get_label=Contract.__str__, validators=[Optional()])
+    by_contract = BooleanField('Create invoice reference by Contract', default = False)
+
     
     
     submit = SubmitField('Test')

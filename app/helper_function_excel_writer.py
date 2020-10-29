@@ -19,7 +19,8 @@ from openpyxl.styles import Border, Side
 import openpyxl
 import calendar
 
-MONEY_ROUND = 2
+# MONEY_ROUND = 2
+MONEY_ROUND = 6
 ENERGY_ROUND = 3
 ENERGY_ROUND_MW = 6
 
@@ -54,15 +55,17 @@ def make_header(ws, data, row_num):
         curr_col_idx += 1
 
 
-def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_start_date, period_end_date, time_zone, is_second = False):
+def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_start_date, period_end_date, is_second = False):
 
     dest_folder_path = 'app/static/generated_excel_files'    
    
-    contractor = df['contractor_name'].iloc[0]
+    # contractor = df['contractor_name'].iloc[0]
+    contractor = df['invoice_group_description'].iloc[0]
+    
     # print(f'contractor --> {contractor}')
     period = f'{calendar.month_name[period_end_date.month]}/{period_end_date.year}'
     # print(f'period --> {calendar.month_name[period_start_date.month]}/{period_start_date.year}')
-    file_name =f'{period_end_date.year}-{period_end_date.month}_{df.iloc[0].invoice_group_description}%{df.iloc[0].invoice_group_name}%invoice_reference.xlsx' 
+    file_name =f'{period_end_date.year}-{period_end_date.month}_{df.iloc[0].invoice_group_description}_{df.iloc[0].invoice_group_name}_invoice_reference.xlsx' 
     #  print(f'file_name --> {file_name}')    
     
     writer = pd.ExcelWriter(f'{dest_folder_path}/{file_name}', engine='xlsxwriter')
@@ -137,7 +140,7 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
         ws['A20'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
 
         total_consumption = round(df['Потребление (kWh)'].sum() /1000 ,ENERGY_ROUND_MW)
-        print(f'{total_consumption}')
+        # print(f'{total_consumption}')
         ws['E12'].value = total_consumption 
         ws['E12'].number_format = '### ### ###.00000' if total_consumption != 0 else '0'
 
@@ -228,6 +231,7 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
         total_value = df['Сума за енергия'].sum()
         ws['F12'].value = round(((total_value/total_consumption)), MONEY_ROUND) if(total_consumption != 0) else 0
         ws['F12'].number_format = '### ### ##0.00 лв.'
+        # ws['F12'].number_format = '### ### ##0.00000 лв.'
 
         ws['G12'].value = ws['F12'].value * ws['E12'].value
         ws['G12'].number_format = '### ### ##0.00 лв.'
