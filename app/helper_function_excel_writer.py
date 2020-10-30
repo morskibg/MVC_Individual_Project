@@ -19,14 +19,17 @@ from openpyxl.styles import Border, Side
 import openpyxl
 import calendar
 
-# MONEY_ROUND = 2
+MONEY_FINAL_ROUND = 2
 MONEY_ROUND = 6
 ENERGY_ROUND = 3
 ENERGY_ROUND_MW = 6
+INV_REFS_PATH = 'app/static/inv_ref_files'
+INTEGRA_PATH = 'app/static/integra_files' 
 
-# COL_NAMES = ['№', 'Обект (ИТН №)', 'Град/Село', 'Адрес', 'Потребление (kWh)',
-#             'Сума за енергия', 'Задължение към обществото', 'Акциз',
-#             'Мрежови услуги (лв.)', 'Обща сума (без ДДС)']
+GOODES_CODE = {'Сума за енергия':'304-1', 'Мрежови услуги (лв.)':'498-56','Задължение към обществото':'459-2','Акциз':'456-1'}
+PRICES = {'304-1':'price', '498-56':'Мрежови услуги (лв.)','459-2':'zko','456-1':'akciz'}
+
+
 COL_NAMES = ['№', 'Обект (ИТН №)',  'Адрес', 'Потребление (kWh)',
             'Сума за енергия', 'Задължение към обществото', 'Акциз',
             'Мрежови услуги (лв.)', 'Обща сума (без ДДС)']
@@ -54,10 +57,7 @@ def make_header(ws, data, row_num):
         ws.merge_cells(start_row = curr_row_idx, start_column = curr_col_idx, end_row = curr_row_idx + 1, end_column = curr_col_idx)
         curr_col_idx += 1
 
-
-def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_start_date, period_end_date, is_second = False):
-
-    dest_folder_path = 'app/static/generated_excel_files'    
+def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period_start_date, period_end_date, is_second = False):        
    
     # contractor = df['contractor_name'].iloc[0]
     contractor = df['invoice_group_description'].iloc[0]
@@ -68,13 +68,13 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     file_name =f'{period_end_date.year}-{period_end_date.month}_{df.iloc[0].invoice_group_description}_{df.iloc[0].invoice_group_name}_invoice_reference.xlsx' 
     #  print(f'file_name --> {file_name}')    
     
-    writer = pd.ExcelWriter(f'{dest_folder_path}/{file_name}', engine='xlsxwriter')
+    writer = pd.ExcelWriter(f'{INV_REFS_PATH}/{file_name}', engine='xlsxwriter')
     src_df = pd.read_excel('app/static/uploads/src_dete.xlsx', header=None) if is_second else pd.read_excel('app/static/uploads/src.xlsx', header=None)
     src_df.to_excel(writer, sheet_name="Sheet1", index=False, header=False)
     df_grid.to_excel(writer, sheet_name = 'мрежови услуги')
     writer.close()
 
-    wb = load_workbook(filename = f'{dest_folder_path}/{file_name}')
+    wb = load_workbook(filename = f'{INV_REFS_PATH}/{file_name}')
 
     ws = wb.active
     
@@ -173,13 +173,13 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
         ws['G15'].value = round(akciz, MONEY_ROUND)
         ws['G15'].number_format = '### ### ##0.00 лв.'
 
-        ws['G16'].value = ws['G12'].value + ws['G13'].value + ws['G14'].value + ws['G15'].value 
+        ws['G16'].value = round((ws['G12'].value + ws['G13'].value + ws['G14'].value + ws['G15'].value),MONEY_FINAL_ROUND) 
         ws['G16'].number_format = '### ### ##0.00 лв.'
 
-        ws['G18'].value = round((ws['G16'].value * Decimal('0.2')),MONEY_ROUND)
+        ws['G18'].value = round((ws['G16'].value * Decimal('0.2')),MONEY_FINAL_ROUND)
         ws['G18'].number_format = '### ### ##0.00 лв.'
 
-        ws['G20'].value = round((ws['G16'].value + ws['G18'].value),MONEY_ROUND)
+        ws['G20'].value = ws['G16'].value + ws['G18'].value
         ws['G20'].number_format = '### ### ##0.00 лв.'
         ws['G20'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
 
@@ -260,13 +260,13 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
         ws['G16'].value = 0
         ws['G16'].number_format = '### ### ##0.00 лв.'
 
-        ws['G17'].value = ws['G12'].value + ws['G13'].value + ws['G14'].value + ws['G15'].value + ws['G16'].value
+        ws['G17'].value = round((ws['G12'].value + ws['G13'].value + ws['G14'].value + ws['G15'].value + ws['G16'].value),MONEY_FINAL_ROUND)
         ws['G17'].number_format = '### ### ##0.00 лв.'
 
-        ws['G19'].value = round((ws['G17'].value * Decimal('0.2')),MONEY_ROUND)
+        ws['G19'].value = round((ws['G17'].value * Decimal('0.2')),MONEY_FINAL_ROUND)
         ws['G19'].number_format = '### ### ##0.00 лв.'
 
-        ws['G21'].value = round((ws['G17'].value + ws['G19'].value),MONEY_ROUND)
+        ws['G21'].value = ws['G17'].value + ws['G19'].value
         ws['G21'].number_format = '### ### ##0.00 лв.'
         ws['G21'].font =  Font(size=12, color='FFFFFF', bold=True, italic=False) 
 
@@ -282,9 +282,11 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     ws['F15'].value = df.iloc[0].akciz * 1000 
     ws['F15'].number_format = '# ##0.00'
 
-    final_df = df[['№', 'Обект (ИТН №)', 'Адрес', 'Потребление (kWh)','Сума за енергия','Задължение към обществото', 'Мрежови услуги (лв.)','Акциз']]
+    final_df = df[['№', 'Обект (ИТН №)', 'Адрес', 'Потребление (kWh)','Сума за енергия','Задължение към обществото', 'Мрежови услуги (лв.)','Акциз']].copy()
     
     final_df['Мрежови услуги (лв.)'] = final_df['Мрежови услуги (лв.)'].apply(lambda x: 0 if x is None else x)
+    # final_df.drop(columns = ['Мрежови услуги (лв.)'], inplace = True)
+    # final_df.rename(columns = {'Мрежови услуги (лв.)_':'Мрежови услуги (лв.)'}, inplace = True)
     final_df['Обща сума (без ДДС)'] = final_df['Сума за енергия'] + final_df['Акциз'] + final_df['Задължение към обществото'] + final_df['Мрежови услуги (лв.)']
 
     rows = dataframe_to_rows(final_df,index=False)
@@ -315,4 +317,75 @@ def generate_excel(df, df_grid, invoice_start_date, invoice_end_date, period_sta
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToHeight = False
     ws.print_title_rows = '28:29'
-    wb.save(f'{dest_folder_path}/{file_name}')
+    wb.save(f'{INV_REFS_PATH}/{file_name}')
+   
+    
+
+def generate_num_and_name(first_digit, num_411, inv_group, name):
+    
+    prefix = num_411.rsplit('-',1)[1]    
+    suffix = inv_group.rsplit('_',1)[1]
+    prefix_zeroes = (5-len(prefix)) * '0'
+    suffix_zeroes = (3-len(suffix)) * '0'
+    num_str = f'{first_digit}{prefix_zeroes}{prefix}{suffix_zeroes}{suffix}'
+    # name_str =  name + ' ' + str(suffix) if suffix != '0' else name
+    name_str =  name + ' ' + str(suffix) if suffix != '1' else name
+            
+    return (num_str, name_str)    
+
+def generate_integra_file(df, start_date, end_date):
+    
+    df = df.fillna(Decimal('0'))
+   
+    inv_group_name = df.iloc[0]['invoice_group_name']   
+    curr_contract = db.session.query(Contract).join(SubContract).join(InvoiceGroup).filter(SubContract.start_date <= start_date, SubContract.end_date > start_date).first()
+    
+    df['price'] = (df['Сума за енергия'].sum()) / (df['Потребление (kWh)'].sum())
+
+    for_invoice_df = df[['Потребление (kWh)','Сума за енергия','Мрежови услуги (лв.)','Задължение към обществото','Акциз']].sum()
+    
+    for_invoice_df = for_invoice_df.to_frame().T   
+    for_invoice_df['inv_group']=df.iloc[0]['invoice_group_name'] 
+    for_invoice_df['Получател']=df.iloc[0]['contractor_name']    
+    for_invoice_df['сметка 411']=df['invoice_group_name'].iloc[0].split('_')[0]
+
+    last_month_date = end_date.replace(day = calendar.monthrange(end_date.year, end_date.month)[1])
+    for_invoice_df['Дата на издаване'] = last_month_date.strftime('%d/%m/%Y')
+    for_invoice_df['Падеж'] = (dt.date.today() + pd.offsets.BDay(curr_contract.maturity_interval)).strftime('%d/%m/%Y')
+    reason_date_str = last_month_date.strftime('%m.%Y') 
+    for_invoice_df['Основание'] = f' за м.{reason_date_str}г.'
+    
+    epay_code, epay_name =  generate_num_and_name(1, for_invoice_df.iloc[0]['сметка 411'], for_invoice_df.iloc[0]['inv_group'],for_invoice_df.iloc[0]['Получател'])
+    for_invoice_df['easy_pay_num'] = epay_code
+    for_invoice_df['easy_pay_name'] = epay_name
+    for_invoice_df = pd.melt(for_invoice_df, id_vars=['Потребление (kWh)', 'inv_group','Получател','сметка 411','Дата на издаване','Падеж','Основание','easy_pay_num','easy_pay_name'],var_name = 'Код на стоката',value_name = 'Стойност без ДДС')
+    print(f'aaaaaaaaaaaaaaaaaa \n{for_invoice_df}')
+    for_invoice_df['Стойност без ДДС'] = for_invoice_df['Стойност без ДДС'].apply(lambda x: round(Decimal(x) ,2))
+
+    
+    for_invoice_df['Код на стоката'] = for_invoice_df['Код на стоката'].apply(lambda x: GOODES_CODE[x])
+    for_invoice_df['Основание'] = for_invoice_df.apply(lambda x: x['Основание'] if x['Код на стоката'] == '304-1' else '', axis = 1)
+    for_invoice_df['Количество'] = for_invoice_df.apply(lambda x: x['Потребление (kWh)']if x['Код на стоката'] != '498-56' else 1, axis = 1)
+    for_invoice_df['Цена без ДДС'] = for_invoice_df['Код на стоката'].apply(lambda x: df.iloc[0][PRICES[x]] * 1000)
+    for_invoice_df['номер на фактура'] = ''
+    for_invoice_df['Дименсия на количество'] = ''
+    for_invoice_df['ЕИК'] = ''
+    for_invoice_df['Валутен курс'] = 1
+    for_invoice_df['ТИП на сделката по ДДС'] = 256
+    for_invoice_df['ДДС %'] = 20
+    for_invoice_df['ДДС'] = for_invoice_df['Стойност без ДДС'].apply(lambda x: round(Decimal(x) * Decimal('0.2') ,2))
+    for_invoice_df['Крайна сума'] = for_invoice_df['Стойност без ДДС'].apply(lambda x: round(x * Decimal('1.2') ,2))
+    for_invoice_df['email'] = curr_contract.contractor.email
+    for_invoice_df['Код на валутата'] = 'лв'
+
+    date_str = last_month_date.strftime('%Y-%m')
+    file_name =f'{date_str}_{df.iloc[0].invoice_group_description}_{df.iloc[0].invoice_group_name}_integra.xlsx' 
+    for_invoice_df['file_name'] = file_name    
+
+    for_invoice_df = for_invoice_df[['Получател','сметка 411','ЕИК','номер на фактура','Дата на издаване','Падеж', 'Основание','Код на стоката', 'Количество', 'Дименсия на количество', 
+                                    'Цена без ДДС', 'Код на валутата', 'Валутен курс','Стойност без ДДС','ТИП на сделката по ДДС','ДДС %',
+                                    'ДДС','Крайна сума', 'inv_group', 'email', 'file_name','easy_pay_num', 'easy_pay_name']]
+    
+    for_invoice_df.insert(loc=0, column = '№ по ред', value = 1 )
+    for_invoice_df.to_excel(INTEGRA_PATH + '/' + file_name)
+    

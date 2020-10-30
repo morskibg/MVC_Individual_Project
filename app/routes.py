@@ -1,4 +1,6 @@
 import os
+import glob as gl
+import os.path
 import xlrd
 import time,re
 import sys, pytz, datetime as dt
@@ -9,7 +11,7 @@ from app import app
 from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
     UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm,
-    UploadInitialForm)
+    UploadInitialForm, IntegraForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
@@ -17,7 +19,8 @@ from werkzeug.urls import url_parse
 # from app import dbgrid_services_distrib_records,
 
 from werkzeug.utils import secure_filename
-# from app.helper_functions_erp import ( get_distribution_stp,)
+from app.helper_function_excel_writer import INV_REFS_PATH
+
 from app.helper_functions import (get_contract_by_internal_id,
                                  convert_date_to_utc,
                                  convert_date_from_utc,
@@ -44,29 +47,14 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  stringifyer,
                                  get_tariff_offset,
                                  create_tariff,
-                                 date_format_corector,)
+                                 date_format_corector,
+                                 get_invoice_excel_files,)
 
-from app.helper_function_excel_writer import (generate_excel,)
+from app.helper_function_excel_writer import (generate_ref_excel,)
 
 
 from app.helper_functions_queries import (                                         
-                                        # get_grid_services_tech_records,                          
-                                        # get_grid_services_distrib_records,                                        
-                                        # get_stp_itn_by_inv_group_for_period_sub,
-                                        # get_stp_consumption_for_period_sub,
-                                        # get_non_stp_itn_by_inv_group_for_period_sub,
-                                        # get_non_stp_consumption_for_period_sub,
-                                        # get_itn_with_grid_services_sub,
-                                        # get_grid_services_sub,
-                                        # get_summary_records,
-                                        # # get_summary_records_non_stp,
-                                        # get_summary_records_spot,
-                                        # get_contractors_names_and_411,
-                                        # get_stp_itn_by_inv_group_for_period_spot_sub,
-                                        # get_non_stp_itn_by_inv_group_for_period_spot_sub,
-                                        # get_all_stp_itn_by_inv_group_for_period_sub,
-                                        # get_spot_itns,
-                                        # get_spot_fin_results,
+                                        get_contractors_names_and_411,
                                         is_spot_inv_group,
                                         get_all_inv_groups,
                                         get_time_zone,
@@ -81,9 +69,9 @@ from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus
 )
 from app.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
                                          get_summary_spot_df, get_weighted_price, create_utc_dates,
-                                         get_weighted_price )
+                                         get_weighted_price, create_excel_files)
 
-from app.helper_functions_invoicing import (create_invoicing_reference)
+# from app.helper_functions_invoicing import (create_invoicing_reference, )
 
 MEASURE_MAP_DICT = {
                 'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
@@ -180,119 +168,12 @@ def test():
     #     db.session.commit()
     # return render_template('test.html', title='Test', form=form)
     # #######################################################################
-        # time_zone = 'EET'
-        # start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        # end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-        
-        # df = create_invoicing_reference(form.invoicing_group.data, start_date, end_date)
-        # df.to_excel('temp/abon_stancii.xlsx')
-        # print(f'{df}')
 
 
-        # invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
-        # invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
-        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
-
-        # invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
-        # invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)     
-
-    #     pleven = db.session.query(ItnMeta.itn).join(SubContract).join(Contract).join(Contractor).filter(Contractor.acc_411 == '411-4-41').all()
-    #     print(len(pleven))
-    #     # df = pd.DataFrame.from_records(pleven, columns = pleven[0].keys()) 
-    #     # df.to_excel('temp/pleven_itns.xlsx')
-    #     inv_gr_pleven = db.session.query(ItnMeta.itn).join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == '411-4-41_0').all()
-    #     print(len(inv_gr_pleven))
-    #     inv_group_name = form.invoicing_group.data.name
-    #     stp_itn_by_inv_group_for_period_sub = (
-    #         db.session
-    #             .query(
-    #                 SubContract.itn.label('sub_itn'), 
-    #                 SubContract.zko.label('zko'),
-    #                 SubContract.akciz.label('akciz') , 
-    #                 Contractor.name.label('contractor_name'), 
-    #                 InvoiceGroup.description.label('invoice_group_description'), 
-    #                 InvoiceGroup.name.label('invoice_group_name')       
-    #             )
-    #             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
-    #             .join(MeasuringType)  
-    #             .join(Contractor)                    
-    #             .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))) 
-    #             .filter(InvoiceGroup.name == inv_group_name)
-    #             .filter(~((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT')))
-    #             .distinct(SubContract.itn) 
-    #             .all())
-
-        
-
-    #     itn_non_stp_records = (
-    #         db.session
-    #             .query(
-    #                 SubContract.itn.label('sub_itn'), 
-    #                 SubContract.zko.label('zko'),
-    #                 SubContract.akciz.label('akciz') , 
-    #                 Contractor.name.label('contractor_name'), 
-    #                 InvoiceGroup.description.label('invoice_group_description'), 
-    #                 InvoiceGroup.name.label('invoice_group_name')       
-    #             )
-    #             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
-    #             .join(MeasuringType)  
-    #             .join(Contractor)                    
-    #             .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))) 
-    #             .filter(InvoiceGroup.name == inv_group_name)
-    #             .filter(((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT')))
-    #             .distinct(SubContract.itn) 
-    #             .subquery())
-
-        
-        
-    #     # total_consumption_records = (
-    #     #     db.session
-    #     #         .query(Distribution.itn.label('itn'), 
-    #     #             func.sum(Distribution.calc_amount).label('total_consumption')) 
-                
-    #     #         .join(ErpInvoice, ErpInvoice.id == Distribution.erp_invoice_id) 
-    #     #         .join(stp_itn_by_inv_group_for_period_sub, stp_itn_by_inv_group_for_period_sub.c.sub_itn == Distribution.itn)                         
-    #     #         .filter(Distribution.tariff.in_(['Достъп','Пренос през електропреносната мрежа', 'Разпределение'])) 
-    #     #         .filter(ErpInvoice.date >= invoice_start_date, ErpInvoice.date <= invoice_end_date) 
-    #     #         .group_by(Distribution.itn)
-    #     #         .all()
-    #     # )
-    #     df = pd.DataFrame.from_records(stp_itn_by_inv_group_for_period_sub, columns = stp_itn_by_inv_group_for_period_sub[0].keys()) 
-    #     df.to_excel('temp/pleven_stp_itns.xlsx')
-
-
-    #   return render_template('test.html', title='Test', form=form)
-    ############################################################################################################
-    # MONEY_ROUND = 2
-    # ENERGY_ROUND = 3
-    # form = TestForm()
-    
-    # if form.validate_on_submit(): 
-        
-########################## KKKKKKKKKKKKKKKKKKKKKKKK ######################
-
-        # time_zone = get_time_zone(form.invoicing_group.data[0].name, form.start_date.data, form.end_date.data)
-        # time_zone = 'EET'
-        # start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        # end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-
-        # invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
-        # invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
-        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
-
-        # invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
-        # invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)
-
-       
-        
-        # inv_group_name = form.invoicing_group.data[0].name
-        
         start = time.time()
         weighted_price = None
-        if form.by_contract.data:
-            
+
+        if form.by_contract.data:            
             time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
             start_date = convert_date_to_utc(time_zone, form.start_date.data)
             end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
@@ -300,857 +181,46 @@ def test():
             weighted_price = get_weighted_price(inv_groups, start_date, end_date)
 
         else:            
-            inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]            
-            # print(f'invoic groups \n {inv_groups}')
+            inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]   
+
+        result_df = None
+
+        invoice_ref_path = inetgra_src_path = None
 
         for inv_group_name in inv_groups:
-            print(f'{inv_group_name}')
+            # print(f'{inv_group_name}')
             start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
+            print(f'{start_date} -- {end_date} -- {invoice_start_date} -- {invoice_end_date}')
             if start_date is None:
+                print(f'ssss')
                 continue
             is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
             
-            if not is_spot:
-                get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_date, invoice_end_date)
+            if is_spot:
+                print(f'in spot {weighted_price}')
+                summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
+                create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
+                
             else:
-                get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
+                summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
+                create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
+                
+                
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
-
-
-
-
-        
-
-        # if form.by_contract.data:
-
-        #     time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
-        #     start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        #     end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-        #     inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
-
-        #     for inv_group_name in inv_groups:
-
-            
-            
-            
-        #     # a = get_weighted_price(inv_groups, start_date, end_date, form.contracts.data.internal_id)
-            
-
-        # else:
-
-            
-        #     inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]            
-        #     # print(f'invoic groups \n {inv_groups}')
-
-        #     for inv_group_name in inv_groups:
-        #         print(f'{inv_group_name}')
-        #         start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
-        #         if start_date is None:
-        #             continue
-        #         is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
-                
-        #         if not is_spot:
-        #             get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_date, invoice_end_date)
-        #         else:
-        #             get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
-        #     end = time.time()
-        #     print(f'Time elapsed for generate excel file(s) : {end - start}  !')
-
-
-
-
-
-
-
-        # if form.bulk_creation.data:
-        #     inv_groups = get_all_inv_groups()
-        #     for inv_group in inv_groups:
-        #         start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group.name, form.start_date.data, form.end_date.data)
-        #         if start_date is None:
-        #             continue
-        #         is_spot = is_spot_inv_group(inv_group.name, start_date, end_date)
-                
-        #         if not is_spot:
-        #             get_summary_df_non_spot(inv_group.name, start_date, end_date, invoice_start_date, invoice_end_date)
-        #         else:
-        #             get_summary_spot_df(inv_group.name, start_date, end_date, invoice_start_date, invoice_end_date)
-        #     end = time.time()
-        #     print(f'Time elapsed for generate excel for all inv.groups : {end - start}  !')
-        # elif form.by_inv_group.data:
-        #     for iv in form.invoicing_group.data:
-        #         print(f'{iv.name}')
-        #     start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(form.invoicing_group.data[0].name, form.start_date.data, form.end_date.data)
-
-        #     if start_date is not None:                
-        #         is_spot = is_spot_inv_group([form.invoicing_group.data[0].name], start_date, end_date)
-                
-        #         if not is_spot:            
-        #             get_summary_df_non_spot(form.invoicing_group.data[0].name, start_date, end_date, invoice_start_date, invoice_end_date)
-
-        #         else:          
-        #             get_summary_spot_df([form.invoicing_group.data[0].name], start_date, end_date, invoice_start_date, invoice_end_date)
-        #         end = time.time()
-        #         print(f'Time elapsed for generate excel for {form.invoicing_group.data[0].name} inv.group : {end - start}  !')
-        # elif form.by_contract.data:
-        #     pass
-
-
-        
-        # inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
-        # a = get_weighted_price(inv_groups, start_date, end_date)
-        # print(f'{inv_groups}')
-        
-
-        
-        
-           
-        # is_spot = is_spot_inv_group(inv_group_name, start_date, end_date)
-        # print(f'{inv_group_name}---{is_spot}')   
-        # if not is_spot:            
-        #     get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_date, invoice_end_date)
-
-        # else:          
-        #     get_summary_spot_df(inv_group_name, start_date, end_date, invoice_start_date, invoice_end_date)
-
-        
-########################## KKKKKKKKKKKKKKKKKKKKKKKK ######################
-      
-        # inv_groups = get_all_inv_groups()
-
-        # for inv_group in inv_groups:
-            
-        #     tokens = inv_group.name.split('_',1)
-        #     # print(f'{a}')
-        #     if tokens[1] == '0':
-        #         new_group = tokens[0] + '_1'
-        #         print(f'{inv_group.name}   ----   {new_group}')
-        #         # inv_group.update({'name':new_group})
-
-        
-
-        # get_summary_df_non_spot(inv_group_name, start_date, end_date)
-        # get_summary_spot_df(inv_group_name, start_date, end_date)
-        # get_weighted_price(inv_group_name, start_date, end_date)
-        # ###################################### get weighted spot price ###################       
-
-        # spot_itns_sub = get_spot_itns(inv_group_name, start_date, end_date)
-        # res = get_spot_fin_results(spot_itns_sub, start_date, end_date)
-        # res_df = pd.DataFrame.from_records(res, columns = res[0].keys())
-        
-        # weighted_price = Decimal(res_df['fin_res'].sum()) / Decimal(res_df['total_consumption'].sum())
-        # res_df['Сума за енергия'] = res_df['total_consumption'].apply(lambda x: Decimal(x) * weighted_price)
-        # print(f'{res_df} \n {weighted_price}')
-        # ##########################################################################################
-
-        # itn_records = (
-        #     db.session
-        #         .query(
-        #             SubContract.itn.label('sub_itn'), 
-        #             SubContract.zko.label('zko'),
-        #             SubContract.akciz.label('akciz') , 
-        #             Contractor.name.label('contractor_name'), 
-        #             InvoiceGroup.description.label('invoice_group_description'),
-        #             InvoiceGroup.name.label('invoice_group_name')              
-        #         )
-        #         .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
-        #         .join(MeasuringType)  
-        #         .join(Contractor)        
-        #         .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))) 
-        #         .filter(InvoiceGroup.name == inv_group_name)
-        #         .filter(((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT')))
-        #         .distinct(SubContract.itn) 
-        #         .subquery())
-
-
-       
-
-        # total_consumption_records = (
-        #     db.session
-        #         .query(ItnSchedule.itn.label('itn'), 
-        #             func.sum(ItnSchedule.consumption_vol).label('total_consumption'))            
-        #         .join(itn_records, itn_records.c.sub_itn == ItnSchedule.itn)
-        #         .filter(ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date)            
-        #         .group_by(ItnSchedule.itn)
-        #         .all()
-        # )
-
-        # print(f'{total_consumption_records}')
-#         # df = create_report_from_grid(invoice_start_date, invoice_end_date)       
-
-#         # erp_consumption_records = get_erp_consumption_records_by_grid(form.erp.data.name, invoice_start_date, invoice_end_date)
-#         # erp_consumption_df = pd.DataFrame.from_records(erp_consumption_records, columns = erp_consumption_records[0].keys())
-        
-#         # erp_money_records = get_erp_money_records_by_grid(form.erp.data.name, invoice_start_date, invoice_end_date)
-#         # erp_consumption_df['Value'] =  erp_money_records[0][1]
-#         # print(f'By ERP: \n{erp_consumption_df}') 
-
-#         # total_consumption_by_grid = get_total_consumption_by_grid(invoice_start_date, invoice_end_date)
-#         # total_df = pd.DataFrame.from_records(total_consumption_by_grid, columns = total_consumption_by_grid[0].keys())       
-
-#         # total_sum_records = get_total_money_by_grid(invoice_start_date, invoice_end_date)
-#         # total_df['Value'] =  total_sum_records[0][0]        
-        
-#         # print(f'Total : \n{total_df}')
-
-# # ###############################################################
-
-#         grid_itns = get_itn_with_grid_services_sub(form.invoicing_group.data[0].name,start_date, end_date)
-
-#         grid_services_sub = get_grid_services_sub(grid_itns, invoice_start_date, invoice_end_date) 
-
-# #         grid_services_tech_records = get_grid_services_tech_records(grid_itns, invoice_start_date, invoice_end_date)
-# #         grid_services_distrib_records = get_grid_services_distrib_records(grid_itns, invoice_start_date, invoice_end_date)
-
-             
-
-# #         grid_services_df = pd.DataFrame()
-# #         if (len(grid_services_tech_records) == 0) :
-# #             grid_services_df = pd.DataFrame(columns=['Абонат №', 'А д р е с', 'Име на клиент', 'ЕГН/ЕИК',
-# #                                                     'Идентификационен код', 'Електромер №', 'Отчетен период от',
-# #                                                     'Отчетен период до', 'Брой дни', 'Номер скала', 'Код скала',
-# #                                                     'Часова зона', 'Показания  ново', 'Показания старо', 'Разлика (квтч)',
-# #                                                     'Константа', 'Корекция (квтч)', 'Приспаднати (квтч)',
-# #                                                     'Общо количество (квтч)', 'Тарифа/Услуга', 'Количество (кВтч/кВАрч)',
-# #                                                     'Единична цена (лв./кВт/ден)/ (лв./кВтч)', 'Стойност (лв)',
-# #                                                     'Корекция към фактура', 'Основание за издаване'])
-# #         else:    
-# #             grid_services_tech_records_df = pd.DataFrame.from_records(grid_services_tech_records, columns = grid_services_tech_records[0].keys())
-# #             grid_services_distrib_records_df = pd.DataFrame.from_records(grid_services_distrib_records, columns = grid_services_distrib_records[0].keys())
-# #             grid_services_df = pd.concat([grid_services_tech_records_df,grid_services_distrib_records_df])
-# #             grid_services_df = grid_services_df.sort_values(by='Идентификационен код', ascending=False, ignore_index=True)
-            
-#         ###################### create stp records ##############################################################
-#         stp_all_itns = get_all_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data[0].name, start_date, end_date)
-
-#         stp_non_spot_itns = get_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data[0].name, start_date, end_date)
-
-#         stp_spot_itns = get_stp_itn_by_inv_group_for_period_spot_sub(form.invoicing_group.data[0].name, start_date, end_date)
-        
-
-#         stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_itns, invoice_start_date, invoice_end_date) 
-#         stp_consumption_for_period_spot_sub = get_stp_consumption_for_period_sub(stp_spot_itns, invoice_start_date, invoice_end_date)       
-
-        # summary_stp = get_summary_records(stp_consumption_for_period_spot_sub, grid_services_sub, stp_itns, start_date, end_date)
-       
-#         # ###################### create non stp records ##############################################################
-#         non_stp_itns = get_non_stp_itn_by_inv_group_for_period_sub(form.invoicing_group.data[0].name, start_date, end_date)
-#         non_stp_spot_itns = get_non_stp_itn_by_inv_group_for_period_spot_sub(form.invoicing_group.data[0].name, start_date, end_date)
-
-#         # non_stp_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
-#         non_stp_spot_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_spot_itns, start_date, end_date)
-        
-#         summary_non_stp = get_summary_records_spot(non_stp_spot_consumption_for_period_sub, grid_services_sub, non_stp_spot_itns, start_date, end_date)
-#         print(f'ssssssssssssssssssssssssssssssssssssssssssssss \n{summary_non_stp}')
-#         # #############################################################################################################
-        
-        # df = pd.DataFrame()
-        # if len(summary_stp) != 0:
-        #     try:
-        #         temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
-                 
-        #     except Exception as e:
-        #         print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data[0].name} for period {start_date} - {end_date}. Message is: {e}')
-
-        #     else:
-        #         if df.empty:
-        #             df = temp_df
-        #         else:
-        #             df = df.append(temp_df, ignore_index=True) 
-        # try: 
-        #     if len(summary_non_stp) > 0:           
-        #         temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())  
-                    
-        #         print(f'from Non STP shape = {temp_df.shape[0]}')
-        #         if df.empty:
-        #             df = temp_df
-        #         else:
-        #             df = df.append(temp_df, ignore_index=True) 
-
-        # except Exception as e:
-        #     print(f'Unable to proceed data for invoicing group {form.invoicing_group.data[0].name} for period {start_date} - {end_date}. Message is: {e}')
-
-        # else:
-        #     df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
-        
-        # df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
-        # print(f'{summary_stp}')
-        # # df.to_excel('temp/burgas.xlsx')      
-        # # generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date, time_zone)
-
-
-
     return render_template('test.html', title='Test', form=form)
 
-        
-       
-        
-
-        
-        
-        # ########################### v1 ############################################
-        # start = time.time()
-        # erp_itn_sub = ItnMeta.query.join(Erp).filter(Erp.name == form.erp.data.name).subquery()
-        # invoice_end_date = convert_date_to_utc('EET', form.end_date.data) + dt.timedelta(hours = 23)
-
-        # reported_vol_sum = (ItnSchedule.query.with_entities(func.sum(ItnSchedule.consumption_vol))             
-        #     .filter( ItnSchedule.utc >= convert_date_to_utc('EET',form.start_date.data), ItnSchedule.utc <= invoice_end_date) 
-        #     .join(erp_itn_sub, erp_itn_sub.c.itn == ItnSchedule.itn)             
-        #     .all())
-        # end = time.time()
-
-        # flash(f'From join with subquery, elapsed time:{end - start}. Calculated sum for erp:{form.erp.data.name} is :{reported_vol_sum}. Period is from: {form.start_date.data} to:{invoice_end_date}', 'success')
-        # ##########################################################################
-
-        # ########################### v2 ############################################
-        # start = time.time()
-        # invoice_end_date = convert_date_to_utc('EET', form.end_date.data) + dt.timedelta(hours = 23)
-
-        # reported_vol_by_erp_all = ItnSchedule.query.with_entities(func.sum(ItnSchedule.consumption_vol)) \
-        #     .join(ItnMeta) \
-        #     .join(SubContract) \
-        #     .join(Erp) \
-        #     .join(InvoiceGroup) \
-        #     .filter( ItnSchedule.utc >= convert_date_to_utc('EET',form.start_date.data), ItnSchedule.utc <= invoice_end_date, Erp.name == form.erp.data.name) \
-        #     .all()
-        # end = time.time()
-        # flash(f'From multiple joins, elapsed time:{end - start}. Calculated sum for erp:{form.erp.data.name} is :{reported_vol_by_erp_all}. Period is from: {form.start_date.data} to:{invoice_end_date}', 'info')
-
-        # ########################### by invoicing groups ############################################
-        # start = time.time()
-        # inv_group_itn_sub = ItnMeta.query.join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name).subquery()
-        
-        # time_zone = TimeZone.query.join(Contract).join(SubContract).join(inv_group_itn_sub, inv_group_itn_sub.c.itn == SubContract.itn).first().code
-        # invoice_start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        # invoice_end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-
-        # reported_vol_sum = (ItnSchedule.query.with_entities(func.sum(ItnSchedule.consumption_vol))             
-        #     .filter( ItnSchedule.utc >= invoice_start_date, ItnSchedule.utc <= invoice_end_date) 
-        #     .join(inv_group_itn_sub, inv_group_itn_sub.c.itn == ItnSchedule.itn)             
-        #     .all())[0][0].quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
-        # end = time.time()
-
-        # flash(f'From by invoicing groups, elapsed time:{end - start}. Calculated sum for erp:{form.erp.data.name} is :{reported_vol_sum} kWh. Period is from: {invoice_start_date} to:{invoice_end_date} time zone {time_zone}', 'success')
-        # ##########################################################################  
-
-        # ########################### by invoicing groups and itn ############################################
-        # start = time.time()
-        # inv_group_itn_sub = ItnMeta.query.join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name).subquery()
-
-        # time_zone = TimeZone.query.join(Contract).join(SubContract).join(inv_group_itn_sub, inv_group_itn_sub.c.itn == SubContract.itn).first().code
-        # invoice_start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        # invoice_end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-
-        # reported_vol_sum = (ItnSchedule.query.with_entities(func.sum(ItnSchedule.consumption_vol))             
-        #     .filter( ItnSchedule.utc >= invoice_start_date, ItnSchedule.utc <= invoice_end_date) 
-        #     .join(inv_group_itn_sub, inv_group_itn_sub.c.itn == ItnSchedule.itn)  
-        #     .group_by(ItnSchedule.itn)           
-        #     .all())
-        # end = time.time()
-
-        # flash(f'reported_vol_sum {reported_vol_sum} kWh')
-        # inv_group_itn = ItnMeta.query.join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name).all()
-        # flash(f'inv_group_itn {inv_group_itn}')
-        # ####################### DELETE ALL ###################################################  
-        # metas = ItnMeta.query.all()
-        # for meta in metas:
-        #     print(f'itn {meta.itn}  deleted !')
-        #     meta.delete()
-        # db.session.commit()
-        # print(f'all itn deleted')
-        # ########################################################################## 
-
-        ######################### DELETE BY INv GROUP ################################################ 
-
-        # metas = ItnMeta.query.join(SubContract,SubContract.itn == ItnMeta.itn).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name ).all()
-        # for meta in metas:
-        #     print(f'itn {meta.itn} from inv group : {form.invoicing_group.data.name}  deleted !')
-        #     meta.delete()
-        # db.session.commit()
-        # print(f'all itn from inv group {form.invoicing_group.data.name} deleted')
-        
-        # itns = get_itn_by_inv_group_for_period_sub(form.invoicing_group.data.name, start_date, end_date)
-        # a = get_single_tariff_consumption_records_sub(itns, invoice_start_date, invoice_end_date)
-        # # print(f'{form.invoicing_group.data.name}')
-        # df =  pd.DataFrame.from_records(a, columns = a[0].keys())
-        # print(f'FROM TEST appl subs df \n{df}')
-        # return render_template('test.html', title='Test', form=form)
-        # ########################################################################## 
-
-        # ################################# DELETE CONTRACT  ###################################### 
-        # contract_to_del = Contract.query.filter(Contract.internal_id == 'ТК-36').first()
-        # # sub_to_del = SubContract.query.join(Contract).filter(Contract.internal_id == 'ТК-36').first()
-        # print(f'contract to delete {contract_to_del} \n subcontract_to_delete : ')
-        # contract_to_del.delete()
-
-        # contracts = Contract.query.all()
-        # for c in contracts:
-        #     c.delete()
-
-
-
-
-
-        # ########################################################################## 
-        # time_zone = 'EET'
-        # start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        # end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-        # stp_records = (
-        # db.session 
-        #     .query(SubContract.itn) 
-        #     .join(ItnSchedule, ItnSchedule.itn == SubContract.itn) 
-        #     .join(MeasuringType) 
-        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)
-        #     .join(Erp)
-        #     .filter(SubContract.start_date <= start_date, SubContract.end_date >= end_date) 
-        #     .filter(~((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT'))) 
-        #     .filter(Erp.name == form.erp.data.name)
-        #     .distinct()
-        #     .all()
-        # )
-
-        # # print(f'all stp ---> {len(stp_records)}')
-        # db_uniqute_stp = set([x[0] for x in stp_records])
-        # # print(f'unique db stp {db_uniqute_stp}')
-        
-
-        
-        ########################### tariff from itn schedule sum by invoicing group ############################################
-        # start = time.time()
-
-        # inv_group_itn_sub_query = (
-        #     db.session.query(
-        #         ItnMeta.itn.label('sub_itn'),
-        #         SubContract.zko.label('zko'),
-        #         SubContract.akciz.label('akciz'),                
-        #         Contractor.name.label('Contractor'),
-        #     )
-        #     .join(SubContract)
-        #     .join(InvoiceGroup)
-        #     .join(Contractor)
-        #     .filter(InvoiceGroup.name == form.invoicing_group.data.name)
-        #     .subquery()
-        # )
-        
-        # time_zone = TimeZone.query.join(Contract).join(SubContract).join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == SubContract.itn).first().code
-        
-        # invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
-        # invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
-        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
-
-        # invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
-        # invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date) 
-
-        # period_start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        # period_end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)  
-        # power_e_date_local = dt.datetime.strptime(form.end_date.data, "%Y-%m-%d") + dt.timedelta(hours = 23) 
-        
-        # # # filters = (
-        # # #     func.convert_tz(ItnSchedule.utc,'UTC',time_zone) >= form.start_date.data, func.convert_tz(ItnSchedule.utc,'UTC',time_zone) <= power_e_date_local,
-        # # #     Transaction.amount < 100,
-        # # # )
-        # # # db.session.query(Transaction).filter(*filters)
-
-       
-        # itn_t = 'BG5521900615200000000000002009103'
-        # print(f'{get_tariff_offset(form.start_date.data,time_zone)}')
-
-        # records = (
-        #     db.session.query(
-        #         ItnSchedule.itn, func.sum(ItnSchedule.consumption_vol) )
-        #         .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)
-        #         # .filter(extract('hour', ItnSchedule.utc) > 4,  extract('hour', ItnSchedule.utc) <= 20)
-        #         .filter(ItnSchedule.itn == itn_t) 
-        #         .group_by(ItnSchedule.itn)   
-        #         .all()
-        # )
-
-        # records_day = (
-        #     db.session.query(
-        #         ItnSchedule.itn, func.sum(ItnSchedule.consumption_vol) )
-        #         .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)
-        #         .filter(extract('hour', ItnSchedule.utc) > 4,  extract('hour', ItnSchedule.utc) <= 20)
-        #         .filter(ItnSchedule.itn == itn_t) 
-        #         .group_by(ItnSchedule.itn)   
-        #         .all()
-        # )
-
-        # records_night = (
-        #     db.session.query(
-        #         ItnSchedule.itn, func.sum(ItnSchedule.consumption_vol) )
-        #         .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)
-        #         .filter(or_(extract('hour', ItnSchedule.utc) <= 4,  extract('hour', ItnSchedule.utc) > 20))
-        #         .filter(ItnSchedule.itn == itn_t) 
-        #         .group_by(ItnSchedule.itn)   
-        #         .all()
-        # )
-        # print(f'{records}')
-        # records_eet = (
-        #     db.session.query(
-        #         ItnSchedule.itn, func.convert_tz(ItnSchedule.utc,'UTC',time_zone).label('eet'), ItnSchedule.consumption_vol )
-        #         .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)
-        #         # .filter(or_(extract('hour', ItnSchedule.utc) <= 5,  extract('hour', ItnSchedule.utc) > 21))
-        #         .filter(ItnSchedule.itn == itn_t) 
-                
-        #         .all()
-        # )
-
-        # temp_df = pd.DataFrame.from_records(records_eet, columns = records_eet[0].keys())
-        # records = (
-        #     db.session.query(
-        #         ItnSchedule.itn, func.sum(ItnSchedule.consumption_vol) )
-        #         .filter(func.convert_tz(ItnSchedule.utc,'UTC',time_zone) >= form.start_date.data, func.convert_tz(ItnSchedule.utc,'UTC',time_zone) <= power_e_date_local)
-        #         .filter((extract('hour',func.convert_tz(ItnSchedule.utc,'UTC',time_zone)) > tariff_start_hour_by_date(func.convert_tz(ItnSchedule.utc,'UTC',time_zone))), (extract('hour',func.convert_tz(ItnSchedule.utc,'UTC',time_zone)) <= 10))
-        #         .filter(ItnSchedule.itn == 'BG5521900615200000000000002009103') 
-        #         .group_by(ItnSchedule.itn)   
-        #         .all()
-        # )
-        
-
-        # .filter((extract('month',func.convert_tz(ITN_SCHEDULE.Utc,'UTC','EET')) == inv_month) & (extract('year',func.convert_tz(ITN_SCHEDULE.Utc,'UTC','EET')) == inv_year))
-        # print(f'{temp_df}')
-        # temp_df.to_excel('BG5521900615200000000000002009103.xlsx')
-        # print(f'$$$$$$$$$$$$$$$ --- {records} ----{records_day} ---- {records_night} $$$$$$$$$$$$$$$ \n {period_start_date} --- {period_end_date}')
-
-        ################################# multi TARIF ##############################################
-        # start = time.time()
-
-        # inv_group_itn_sub_query = (
-        #     db.session.query(
-        #         ItnMeta.itn.label('sub_itn'),
-        #         SubContract.zko.label('zko'),
-        #         SubContract.akciz.label('akciz'),                
-        #         Contractor.name.label('Contractor'),
-        #     )
-        #     .join(SubContract)
-        #     .join(InvoiceGroup)
-        #     .join(Contractor)
-        #     .filter(InvoiceGroup.name == form.invoicing_group.data.name)
-        #     .subquery()
-        # )
-        
-        # time_zone = TimeZone.query.join(Contract).join(SubContract).join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == SubContract.itn).first().code
-        
-        # invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
-        # invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
-        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
-
-        # invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
-        # invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date) 
-
-        # period_start_date = convert_date_to_utc(time_zone, form.start_date.data)
-        # period_end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)  
-        # power_e_date_local = dt.datetime.strptime(form.end_date.data, "%Y-%m-%d") + dt.timedelta(hours = 23) 
-
-        # grid_service_sub_query = (
-        #     db.session.query(
-        #         Distribution.itn.label('itn_id'),
-        #         func.round(func.sum(Distribution.value), MONEY_ROUND).label('grid_services')                
-        #     )
-        #     .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == Distribution.itn)
-        #     .join(ErpInvoice,ErpInvoice.id == Distribution.erp_invoice_id)
-        #     .filter(ErpInvoice.date >= invoice_start_date, ErpInvoice.date <= invoice_end_date)
-        #     .group_by(Distribution.itn)
-        #     .subquery()
-        # )         
-        
-        # day_tariff_consumption_records_sub = (
-        #     db.session
-        #         .query(Tech.itn.label('itn_day'), func.sum(Tech.readings_difference).label('day_tariff_consumption')) 
-        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == Tech.itn)           
-        #         .join(ErpInvoice, ErpInvoice.id == Tech.erp_invoice_id)                      
-        #         .filter(Tech.scale_code.in_(['1.8.2','Д'])) 
-        #         .filter(ErpInvoice.date >= invoice_start_date, ErpInvoice.date <= invoice_end_date)  
-        #         .group_by(Tech.itn)                  
-        #         .subquery()
-        # )       
-
-        # # df =  pd.DataFrame.from_records(day_tariff_consumption_records_sub, columns = day_tariff_consumption_records_sub[0].keys())
-        # # df = df[df['itn_day']=="BG5521900616200000000000002010152"]
-        # # print(f'{df}')
-
-        # night_tariff_consumption_records_sub = (
-        #     db.session
-        #         .query(Tech.itn.label('itn_night'), func.sum(Tech.readings_difference).label('night_tariff_consumption')) 
-        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == Tech.itn)           
-        #         .join(ErpInvoice, ErpInvoice.id == Tech.erp_invoice_id)                      
-        #         .filter(Tech.scale_code.in_(['1.8.1','Н'])) 
-        #         .filter(ErpInvoice.date >= invoice_start_date, ErpInvoice.date <= invoice_end_date)  
-        #         .group_by(Tech.itn)                  
-        #         .subquery()
-        # )
-
-        # peak_tariff_consumption_records_sub = (
-        #     db.session
-        #         .query(Tech.itn.label('itn_peak'), func.sum(Tech.readings_difference).label('peak_tariff_consumption')) 
-        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == Tech.itn)           
-        #         .join(ErpInvoice, ErpInvoice.id == Tech.erp_invoice_id)                      
-        #         .filter(Tech.scale_code.in_(['1.8.3'])) 
-        #         .filter(ErpInvoice.date >= invoice_start_date, ErpInvoice.date <= invoice_end_date)  
-        #         .group_by(Tech.itn)                  
-        #         .subquery()
-        # )
-
-        # single_tariff_consumption_records_sub = (
-        #     db.session.query(
-        #         ItnSchedule.itn.label('itn_single'),
-        #         func.round(func.sum(ItnSchedule.consumption_vol), ENERGY_ROUND).label('single_tariff_consumption'),
-        #         ) 
-        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn)           
-        #         .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)       
-        #         .group_by(ItnSchedule.itn)                  
-        #         .subquery()
-        # )
-
-        # summary_records_with_grid_services = (
-        #     db.session.query(
-        #         ItnSchedule.itn.label('Обект (ИТН №)'),
-        #         grid_service_sub_query.c.grid_services.label('Мрежови услуги (лв.)'),
-        #         AddressMurs.name.label('Адрес'),
-        #         single_tariff_consumption_records_sub.c.single_tariff_consumption,
-        #         day_tariff_consumption_records_sub.c.day_tariff_consumption,
-        #         Tariff.price_day,
-        #         night_tariff_consumption_records_sub.c.night_tariff_consumption,
-        #         Tariff.price_night,
-        #         peak_tariff_consumption_records_sub.c.peak_tariff_consumption,
-        #         Tariff.price_peak,
-        #         inv_group_itn_sub_query.c.zko,
-        #         inv_group_itn_sub_query.c.akciz,
-        #         Tariff.name,                
-        #         func.round(night_tariff_consumption_records_sub.c.night_tariff_consumption * Tariff.price_night, MONEY_ROUND).label('Сума за нощна енергия'),
-        #         func.round(peak_tariff_consumption_records_sub.c.peak_tariff_consumption * Tariff.price_peak, MONEY_ROUND).label('Сума за пикова енергия'),
-        #         inv_group_itn_sub_query.c.Contractor
-        #         )
-        #         .outerjoin(single_tariff_consumption_records_sub, single_tariff_consumption_records_sub.c.itn_single == ItnSchedule.itn)
-        #         .outerjoin(peak_tariff_consumption_records_sub, peak_tariff_consumption_records_sub.c.itn_peak == ItnSchedule.itn)
-        #         .outerjoin(night_tariff_consumption_records_sub, night_tariff_consumption_records_sub.c.itn_night == ItnSchedule.itn)
-        #         .outerjoin(day_tariff_consumption_records_sub, day_tariff_consumption_records_sub.c.itn_day == ItnSchedule.itn)
-        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn) 
-        #         .join(grid_service_sub_query, grid_service_sub_query.c.itn_id == ItnSchedule.itn)                        
-        #         .join(ItnMeta, ItnMeta.itn == ItnSchedule.itn)                        
-        #         .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id) 
-        #         .join(Tariff, Tariff.id == ItnSchedule.tariff_id)                       
-        #         .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)                 
-        #         .group_by(ItnSchedule.itn, inv_group_itn_sub_query.c.zko, inv_group_itn_sub_query.c.akciz, Tariff.price_day, 
-        #                 Tariff.price_night, Tariff.price_peak, day_tariff_consumption_records_sub.c.day_tariff_consumption, Tariff.name,
-        #                 night_tariff_consumption_records_sub.c.night_tariff_consumption, peak_tariff_consumption_records_sub.c.peak_tariff_consumption)                        
-        #         .all()
-        # )
-        # df = pd.DataFrame()
-        # if len(summary_records_with_grid_services) != 0:
-        #     try:
-        #         temp_df = pd.DataFrame.from_records(summary_records_with_grid_services, columns = summary_records_with_grid_services[0].keys())
-        #         print(f'from with shape = {df.shape[0]}')
-
-        #     except Exception as e:
-        #         print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
-
-        #     else:
-        #         if df.empty:
-        #             df = temp_df
-        #         else:
-        #             df = df.append(temp_df, ignore_index=True)       
-        
-        # summary_records_without_grid_services = (
-        #     db.session.query(
-        #         ItnSchedule.itn.label('Обект (ИТН №)'),                
-        #         AddressMurs.name.label('Адрес'),
-        #         single_tariff_consumption_records_sub.c.single_tariff_consumption,
-        #         day_tariff_consumption_records_sub.c.day_tariff_consumption,
-        #         Tariff.price_day,
-        #         night_tariff_consumption_records_sub.c.night_tariff_consumption,
-        #         Tariff.price_night,
-        #         peak_tariff_consumption_records_sub.c.peak_tariff_consumption,
-        #         Tariff.price_peak,
-        #         inv_group_itn_sub_query.c.zko,
-        #         inv_group_itn_sub_query.c.akciz,
-        #         Tariff.name,
-        #         func.round(night_tariff_consumption_records_sub.c.night_tariff_consumption * Tariff.price_night, MONEY_ROUND).label('Сума за нощна енергия'),
-        #         func.round(peak_tariff_consumption_records_sub.c.peak_tariff_consumption * Tariff.price_peak, MONEY_ROUND).label('Сума за пикова енергия'),               
-        #         inv_group_itn_sub_query.c.Contractor
-        #         )
-        #         .outerjoin(single_tariff_consumption_records_sub, single_tariff_consumption_records_sub.c.itn_single == ItnSchedule.itn)
-        #         .outerjoin(peak_tariff_consumption_records_sub, peak_tariff_consumption_records_sub.c.itn_peak == ItnSchedule.itn)
-        #         .outerjoin(night_tariff_consumption_records_sub, night_tariff_consumption_records_sub.c.itn_night == ItnSchedule.itn)
-        #         .outerjoin(day_tariff_consumption_records_sub, day_tariff_consumption_records_sub.c.itn_day == ItnSchedule.itn)
-        #         .join(inv_group_itn_sub_query, inv_group_itn_sub_query.c.sub_itn == ItnSchedule.itn)                                        
-        #         .join(ItnMeta, ItnMeta.itn == ItnSchedule.itn) 
-        #         .join(SubContract, SubContract.itn == ItnSchedule.itn)                       
-        #         .outerjoin(AddressMurs,AddressMurs.id == ItnMeta.address_id)
-        #         .filter(SubContract.start_date <= period_start_date, SubContract.end_date >= period_end_date, SubContract.has_grid_services == False)
-        #         .join(Tariff, Tariff.id == ItnSchedule.tariff_id)                      
-        #         .filter(ItnSchedule.utc >= period_start_date, ItnSchedule.utc <= period_end_date)  
-        #         .group_by(ItnSchedule.itn, inv_group_itn_sub_query.c.zko, inv_group_itn_sub_query.c.akciz, Tariff.price_day, 
-        #                 Tariff.price_night, Tariff.price_peak, day_tariff_consumption_records_sub.c.day_tariff_consumption,Tariff.name,
-        #                 night_tariff_consumption_records_sub.c.night_tariff_consumption, peak_tariff_consumption_records_sub.c.peak_tariff_consumption)                       
-        #         .all()
-        # )
-        
-        # try: 
-        #     if len(summary_records_without_grid_services) > 0:           
-        #         temp_df = pd.DataFrame.from_records(summary_records_without_grid_services, columns = summary_records_without_grid_services[0].keys())
-
-        #         temp_df.insert(loc=1, column = 'Мрежови услуги (лв.)', value = 0)                 
-        #         print(f'from WITHOUT shape = {temp_df.shape[0]}')
-        #         if df.empty:
-        #             df = temp_df
-        #         else:
-        #             df = df.append(temp_df, ignore_index=True)  
-
-            
-        # except Exception as e:
-        #     print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
-
-        # else:
-        #     df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'last')
-        #     df = df.fillna(0)
-            
-        #     df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])
-        #     df['Потребление общо (kWh)'] = df.apply(lambda x: x['day_tariff_consumption'] + x['night_tariff_consumption'] + x['peak_tariff_consumption'] if x['name'] != 'single_tariff' else x['single_tariff_consumption'], axis = 1)
-        #     df['day_tariff_consumption'] = df.apply(lambda x: x['day_tariff_consumption'] if (pd.isnull(x['peak_tariff_consumption']) & (x['name'] != 'peak_tariff')) else  x['peak_tariff_consumption'] + x['day_tariff_consumption'] , axis = 1)
-            
-        #     df['single_tariff_consumption'] = df.apply(lambda x: 0  if x['name'] != 'single_tariff' else x['single_tariff_consumption'], axis = 1)
-            
-        #     df.rename(columns = {'day_tariff_consumption':'Потребление - дневна (kWh)','night_tariff_consumption':'Потребление - нощна (kWh)','single_tariff_consumption':'Потребление - еднотарифно (kWh)'}, inplace = True)
-            
-
-        #     df['price_day'] = df['price_day'].apply(Decimal)
-        #     df['price_night'] = df['price_night'].apply(Decimal)
-        #     df['price_peak'] = df['price_peak'].apply(Decimal)
-        #     df['zko'] = df['zko'].apply(Decimal)
-        #     df['akciz'] = df['akciz'].apply(Decimal)
-        #     df['Потребление общо (kWh)'] = df['Потребление общо (kWh)'].apply(Decimal)
-
-        #     df['Нощна - пари'] = df['Потребление - нощна (kWh)'] * df['price_night']
-        #     df['Дневна - пари'] = df['Потребление - дневна (kWh)'] * df['price_day']
-        #     df['Еднотарифно - пари'] = df['Потребление - еднотарифно (kWh)'] * df['price_day']
-        #     df['акциз- пари'] = Decimal(df['Потребление общо (kWh)'].sum()) * df['akciz']
-        #     df['зко- пари'] = Decimal(df['Потребление общо (kWh)'].sum()) * df['zko']
-        #     df['пари общо'] = df.iloc[0]['акциз- пари'] + df['Еднотарифно - пари'].sum().quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) + df['Дневна - пари'].sum().quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) + \
-        #                     df['Нощна - пари'].sum().quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) + df.iloc[0]['зко- пари'].quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)  + \
-        #                     df['Мрежови услуги (лв.)'].sum().quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-        #     df['Дневна - пари общо'] = df['Дневна - пари'].sum()
-        #     df['Дневна - консумация общо'] = df['Потребление - дневна (kWh)'].sum()
-        #     df.to_excel(f'{form.invoicing_group.data.description}_{9}.xlsx')
-        #     print(f'{df}')
-       
-
-       ################################# single TARIF ##############################################
-    #     start = time.time()
-        
-    #     time_zone = TimeZone.query.join(Contract).join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == form.invoicing_group.data.name).first().code
-        
-    #     invoice_start_date = dt.datetime.strptime (form.start_date.data,"%Y-%m-%d")
-    #     invoice_start_date = invoice_start_date + dt.timedelta(hours = (10 * 24 + 1))        
-    #     invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
-
-    #     invoice_end_date = dt.datetime.strptime (form.end_date.data,"%Y-%m-%d") 
-    #     invoice_end_date = invoice_end_date + dt.timedelta(hours = (10 * 24))            
-    #     invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date) 
-
-    #     period_start_date = convert_date_to_utc(time_zone, form.start_date.data)
-    #     period_end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)  
-    #     # power_e_date_local = dt.datetime.strptime(form.end_date.data, "%Y-%m-%d") + dt.timedelta(hours = 23) 
-        
-        
-    #     inv_group_itn_sub_query = get_inv_group_itn_sub_query(form.invoicing_group.data.name, 
-    #                                                             period_start_date, 
-    #                                                             period_end_date)
-
-    #     single_tariff_consumption_records_sub = get_single_tariff_consumption_records_sub(inv_group_itn_sub_query, 
-    #                                                                                         period_start_date, 
-    #                                                                                         period_end_date)
-
-        
-    #     grid_services_tech_records = get_grid_services_tech_records(inv_group_itn_sub_query, invoice_start_date, invoice_end_date)
-    #     grid_services_distrib_records = get_grid_services_distrib_records(inv_group_itn_sub_query, invoice_start_date, invoice_end_date)
-
-        
-
-    #     grid_services_df = pd.DataFrame()
-    #     if (len(grid_services_tech_records) == 0) :
-    #         grid_services_df = pd.DataFrame(columns=['Абонат №', 'А д р е с', 'Име на клиент', 'ЕГН/ЕИК',
-    #                                                 'Идентификационен код', 'Електромер №', 'Отчетен период от',
-    #                                                 'Отчетен период до', 'Брой дни', 'Номер скала', 'Код скала',
-    #                                                 'Часова зона', 'Показания  ново', 'Показания старо', 'Разлика (квтч)',
-    #                                                 'Константа', 'Корекция (квтч)', 'Приспаднати (квтч)',
-    #                                                 'Общо количество (квтч)', 'Тарифа/Услуга', 'Количество (кВтч/кВАрч)',
-    #                                                 'Единична цена (лв./кВт/ден)/ (лв./кВтч)', 'Стойност (лв)',
-    #                                                 'Корекция към фактура', 'Основание за издаване'])
-    #     else:    
-    #         grid_services_tech_records_df = pd.DataFrame.from_records(grid_services_tech_records, columns = grid_services_tech_records[0].keys())
-    #         grid_services_distrib_records_df = pd.DataFrame.from_records(grid_services_distrib_records, columns = grid_services_distrib_records[0].keys())
-    #         grid_services_df = pd.concat([grid_services_tech_records_df,grid_services_distrib_records_df])
-    #         grid_services_df = grid_services_df.sort_values(by='Идентификационен код', ascending=False, ignore_index=True)
-            
-
-
-
-    #     grid_service_sub_query = get_grid_service_sub_query(inv_group_itn_sub_query, invoice_start_date, invoice_end_date)
-    #     single_tariff_consumption_records_sub = get_single_tariff_consumption_records_sub(inv_group_itn_sub_query, 
-    #                                                                                         period_start_date, 
-    #                                                                                         period_end_date)
-
-    #     summary_records_with_grid_services = get_summary_records_with_grid_services(inv_group_itn_sub_query,
-    #                                                                                 single_tariff_consumption_records_sub, 
-    #                                                                                 grid_service_sub_query, 
-    #                                                                                 period_start_date, 
-    #                                                                                 period_end_date)
-
-
-
-    #     summary_records_without_grid_services = get_summary_records_without_grid_services(inv_group_itn_sub_query,
-    #                                                                                         single_tariff_consumption_records_sub, 
-    #                                                                                         grid_service_sub_query, 
-    #                                                                                         period_start_date, 
-    #                                                                                         period_end_date)
-        
-    #     df = pd.DataFrame()
-    #     if len(summary_records_with_grid_services) != 0:
-    #         try:
-    #             temp_df = pd.DataFrame.from_records(summary_records_with_grid_services, columns = summary_records_with_grid_services[0].keys())
-    #             print(f'from with shape = {df.shape[0]}')
-
-    #         except Exception as e:
-    #             print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
-
-    #         else:
-    #             if df.empty:
-    #                 df = temp_df
-    #             else:
-    #                 df = df.append(temp_df, ignore_index=True) 
-    #     try: 
-    #         if len(summary_records_without_grid_services) > 0:           
-    #             temp_df = pd.DataFrame.from_records(summary_records_without_grid_services, columns = summary_records_without_grid_services[0].keys())
-
-    #             temp_df.insert(loc=1, column = 'Мрежови услуги (лв.)', value = 0)                 
-    #             print(f'from WITHOUT shape = {temp_df.shape[0]}')
-    #             if df.empty:
-    #                 df = temp_df
-    #             else:
-    #                 df = df.append(temp_df, ignore_index=True)  
-
-            
-    #     except Exception as e:
-    #         print(f'Unable to proceed data for invoicing group {form.invoicing_group.data.name} for period {period_start_date} - {period_end_date}. Message is: {e}')
-
-    #     else:
-    #         df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'last')  
-
-    #     print(f'{df.head()}')
-    #     # df = df.apply(pd.to_numeric, errors='ignore')
-        
-    #     df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])
-    #     # df.to_excel(f'temp/nzok.xlsx')
-    #     generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, period_start_date, period_end_date, time_zone)
-
-        
+@app.route('/create_excel_for_integra', methods=['GET', 'POST'])
+@login_required
+def create_excel():
     
+    form = IntegraForm()
+    if form.validate_on_submit():
+        get_invoice_excel_files()
 
+    return render_template('create_excel_for_integra.html', title='Integra file', form=form)
+     
 @app.route('/upload_initial_data', methods=['GET', 'POST'])
 @login_required
 def upload_initial_data():
@@ -1674,8 +744,7 @@ def upload_itns():
             expected_set = set(template_cols)
             mismatched = list(expected_set - input_set)
             print(f'Columns from input file mismatch {mismatched}')                 
-    else:
-        print(f'Validation failed')        
+           
     return render_template('upload_itns.html', title='Upload ITNs', form=form)
 
 

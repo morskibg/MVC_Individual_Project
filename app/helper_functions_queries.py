@@ -507,9 +507,13 @@ def get_time_zone(inv_group_name, start_date, end_date):
         .distinct()
         .all()
     )
-    # print(f'{contract_records}')
+    print(f'{contract_records}')
     if len(contract_records) > 1:
-        print(f'Warning ! Multiple contracts found !')
+        time_zones = [x[3] for x in contract_records]
+        if not time_zones.count(time_zones[0]) == len(time_zones):
+            print(f'Warning from get time zone ! Multiple contracts with different time zones found ! -- {contract_records}')
+        else:
+            return contract_records[0][3]
     elif len(contract_records) == 0:
         print(f'Warning ! There is not any contract found !')
     else:

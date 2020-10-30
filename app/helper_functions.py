@@ -1,6 +1,8 @@
 import sys, pytz, datetime as dt
 import pandas as pd
 import os
+import glob as gl
+import os.path
 import xlrd
 import time,re
 from decimal import Decimal,ROUND_HALF_UP
@@ -8,7 +10,7 @@ from decimal import Decimal,ROUND_HALF_UP
 from sqlalchemy.exc import ProgrammingError
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
-
+from app.helper_function_excel_writer import INV_REFS_PATH
 
 MONEY_ROUND = 9
 
@@ -638,6 +640,17 @@ def validate_input_df(df):
     df = df.rename(columns=lambda x: x.strip())
     
     return df
+
+def get_invoice_excel_files():
+
+    file_list = []
+    for root, dirs, files in os.walk(INV_REFS_PATH):            
+        for filename in files:
+            if filename.endswith('.xlsx') & (filename.find('~') == -1):
+                print('root-->',root, 'dirs --->',dirs, 'FILES>>>>>>>',files)
+                curr_df = pd.read_excel(os.path.join(root, filename))
+                print(f'df \n{curr_df}')
+                break
 
 
 

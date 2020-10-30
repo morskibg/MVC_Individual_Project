@@ -235,15 +235,16 @@ class EditSubForm(FlaskForm):
 
 
 class TestForm(FlaskForm):
-    # file_1 = FileField('Browse for Test File')
+    
     start_date = StringField(id='start_datepicker', validators = [Optional()])
     end_date = StringField(id='end_datepicker', validators = [Optional()])
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
-    invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
     bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
+    invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
+    
     by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
-    contracts = QuerySelectField(query_factory = lambda: Contract.query, allow_blank = False,get_label=Contract.__str__, validators=[Optional()])
+    contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     by_contract = BooleanField('Create invoice reference by Contract', default = False)
 
     
@@ -272,13 +273,25 @@ class UploadInitialForm(FlaskForm):
     file_hum_inv_groups = FileField('Browse for Humne Invoice Groups File')
     file_hum_itn = FileField('Browse for Humne Itn File')
 
-
-
-
     submit = SubmitField('Upload')
 
 
-       
+class IntegraForm(FlaskForm):
+    
+    # start_date = StringField(id='start_datepicker', validators = [Optional()])
+    # end_date = StringField(id='end_datepicker', validators = [Optional()])
+    # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
+    # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
+    # bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
+    # files = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.order_by(InvoiceGroup.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
+    
+    # by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
+    # contracts = QuerySelectField(query_factory = lambda: Contract.query.order_by(Contract.internal_id), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
+    by_contract = BooleanField('Create invoice reference by Contract', default = False)
+
+    
+    
+    submit = SubmitField('Create')       
             
     
 

@@ -36,7 +36,7 @@ from app.helper_functions_queries import (
                                         
 )
 
-from app.helper_function_excel_writer import (generate_excel,)
+from app.helper_function_excel_writer import (generate_ref_excel, generate_integra_file)
 
 
 
@@ -48,7 +48,7 @@ def create_utc_dates(inv_group_name, local_start_date, local_end_date):
     time_zone = get_time_zone(inv_group_name, start_date, end_date)
     if time_zone is None:
         return None,None,None,None
-    # print(f'{inv_group_name} ---- {time_zone}')
+    print(f'{inv_group_name} ---- {time_zone}')
 
     invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))        
     invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
@@ -88,32 +88,6 @@ def get_grid_services(inv_group_name, start_date, end_date, invoice_start_date, 
 
     return grid_services_sub, grid_services_df
 
-# def get_weighted_price(inv_group_name, start_date, end_date):
-
-#     spot_itns_sub = get_spot_itns(inv_group_name, start_date, end_date)
-#     res = get_spot_fin_results(spot_itns_sub, start_date, end_date)
-#     res_df = pd.DataFrame.from_records(res, columns = res[0].keys())
-#     limits = get_tariff_limits(inv_group_name, start_date, end_date)
-#     if len(limits[0]) > 2:
-#         print(f'Wrong lower, upper limits count for this invoicing group: {inv_group_name} for period :{start_date} - {end_date}')
-#         return Decimal('0')
-#     else:
-#         lower_limit = Decimal(str(limits[0][0]))
-#         upper_limit = Decimal(str(limits[0][1]))
-#         # print(f'{lower_limit} --- {upper_limit} ')
-#         weighted_price = Decimal(res_df['fin_res'].sum()) / Decimal(res_df['total_consumption'].sum())
-       
-
-#         if weighted_price.compare(lower_limit) == -1:            
-#             weighted_price = lower_limit
-
-#         elif ((weighted_price.compare(upper_limit) == 1) & (upper_limit.compare(Decimal('0')) != 0)):            
-#             weighted_price = upper_limit
-
-#         res_df['Сума за енергия'] = res_df['total_consumption'].apply(lambda x: Decimal(x) * weighted_price)
-#         # weighted_price = weighted_price.quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)        
-#         # return weighted_price.quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)
-#         return weighted_price
 
 def get_weighted_price(inv_group_names, start_date, end_date):   
 
@@ -169,45 +143,8 @@ def get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_
         # print(f'from get summmary --- summary_non_stp \n {summary_non_stp}')
         # print(f'ssssssssssssssssssssssssssssssssssssssssssssss \n{summary_non_stp}')
         #############################################################################################################
+        return summary_stp, summary_non_stp, grid_services_df
         
-        df = pd.DataFrame()
-        if len(summary_stp) != 0:
-            try:
-                temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
-                 
-            except Exception as e:
-                print(f'Unable to create grid service dataframe for invoicing group {form.invoicing_group.data[0].name} for period {start_date} - {end_date}. Message is: {e}')
-
-            else:
-                if df.empty:
-                    df = temp_df
-                else:
-                    df = df.append(temp_df, ignore_index=True) 
-        try: 
-            if len(summary_non_stp) > 0:           
-                temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())  
-                    
-                # print(f'from Non STP shape = {temp_df.shape[0]}')
-                if df.empty:
-                    df = temp_df
-                else:
-                    df = df.append(temp_df, ignore_index=True) 
-
-        except Exception as e:
-            print(f'Unable to proceed data for invoicing group {form.invoicing_group.data[0].name} for period {start_date} - {end_date}. Message is: {e}')
-
-        else:
-            df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
-        
-        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
-        if df.empty:
-            print(f'There is not any non spot itn in this invoicing group : {inv_group_name} ')
-        else:
-        # # df.to_excel('temp/burgas.xlsx')  
-            print(f'{df}')    
-            generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date)
-       
-
 def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_date, invoice_end_date, weighted_price):  
 
     if weighted_price is None:
@@ -223,58 +160,62 @@ def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_dat
     stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_spot_itns, invoice_start_date, invoice_end_date)                
 
     summary_records_stp_spot = get_summary_records_spot(stp_consumption_for_period_sub, grid_services_sub, stp_spot_itns, start_date, end_date)
-    
+    # print(f'summary_records_stp_spot --- > {summary_records_stp_spot}')
     ###################### create non stp records ##############################################################
     non_stp_itns = get_non_stp_itn_by_inv_group_for_period_spot_sub(inv_group_names[0], start_date, end_date)   
             
     non_stp_spot_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
     
     summary_non_stp_spot = get_summary_records_spot(non_stp_spot_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)
-    
+    # print(f'summary_non_stp_spot --- > {summary_non_stp_spot}')
     #############################################################################################################
+    return summary_records_stp_spot, summary_non_stp_spot, grid_services_df, weighted_price
     
+def appned_df(df, temp_df):
+    if df.empty:
+        df = temp_df
+    else:
+        df = df.append(temp_df, ignore_index=True)
+    return df
+
+def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price = None):
+
     df = pd.DataFrame()
-    if len(summary_records_stp_spot) != 0:
+    inv_group_str = None
+    if len(summary_stp) != 0:
         try:
-            temp_df = pd.DataFrame.from_records(summary_records_stp_spot, columns = summary_records_stp_spot[0].keys())                
+            temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
                 
         except Exception as e:
-            print(f'Unable to create grid service dataframe for invoicing group {inv_group_names[0]} for period {start_date} - {end_date}. Message is: {e}')
+            print(f'Unable to proceed stp data for invoicing group {summary_stp[0][7]} - {summary_stp[0][8]}. Message is: {e}')
 
         else:
-            if df.empty:
-                df = temp_df
-            else:
-                df = df.append(temp_df, ignore_index=True) 
-    try: 
-        if len(summary_non_stp_spot) > 0:           
-            temp_df = pd.DataFrame.from_records(summary_non_stp_spot, columns = summary_non_stp_spot[0].keys())  
+            inv_group_str = f'{summary_stp[0][7]} - {summary_stp[0][8]}'
+            df = appned_df(df, temp_df)      
                 
-            # print(f'from Non STP shape = {temp_df.shape[0]}')
-            if df.empty:
-                df = temp_df
-            else:
-                df = df.append(temp_df, ignore_index=True) 
+    if len(summary_non_stp) > 0:
+        try:                     
+            temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())             
 
-    except Exception as e:
-        print(f'Unable to proceed data for invoicing group {inv_group_names[0]} for period {start_date} - {end_date}. Message is: {e}')
+        except Exception as e:
+            print(f'Unable to proceed data for invoicing group {summary_non_stp[0][7]} - {summary_non_stp[0][8]}. Message is: {e}')
 
-    else:
-        df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')  
-    
-      
+        else:
+            if inv_group_str is None:
+                inv_group_str = f'{summary_non_stp[0][7]} - {summary_non_stp[0][8]}'
+            df = appned_df(df, temp_df)        
+
     if df.empty:
-        print(f'There is not any non spot itn in this invoicing group : {inv_group_names[0]} .Probably missing data from erp for {[x[0] for x in db.session.query(stp_spot_itns).all()]}')
+        print(f'There is not any non spot itn in this invoicing group  ')
     else:
-    # # df.to_excel('temp/burgas.xlsx')
-        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])
-        df['Сума за енергия'] = df['Потребление (kWh)'] * weighted_price
-        # df['Сума за енергия'] = df['Сума за енергия'].apply(lambda x: x.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)) 
-          
-        generate_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date)
+        df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')     
+        df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
+        if weighted_price is not None:
+            df['Сума за енергия'] = df['Потребление (kWh)'] * weighted_price
+        # print(f'From  CREATE EXCEL FILES \n{df.sum()}')
+        generate_ref_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date)
+        generate_integra_file(df, start_date, end_date)
        
-
-
 
 def create_report_from_grid(invoice_start_date, invoice_end_date):
 
