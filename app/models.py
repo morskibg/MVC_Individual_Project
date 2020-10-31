@@ -105,7 +105,7 @@ class Contract(BaseModel):
 
     
     def __str__(self):
-        from app.helper_functions import convert_date_from_utc
+        from app.helpers.helper_functions import convert_date_from_utc
         date_eet = convert_date_from_utc('EET',self.signing_date)
         return f'{self.internal_id} - {self.contractor.name} - {date_eet}'
 

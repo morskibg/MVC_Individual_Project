@@ -7,7 +7,7 @@ import time,re
 from decimal import Decimal
 from flask import  flash
 from app.models import *    
-from app.helper_functions import update_or_insert, stringifyer, convert_date_to_utc, get_subcontracts_by_itn_and_utc_dates, generate_provisional_subcontract
+from app.helpers.helper_functions import update_or_insert, stringifyer, convert_date_to_utc, get_subcontracts_by_itn_and_utc_dates, generate_provisional_subcontract
 import collections
 from zipfile import ZipFile
 from io import BytesIO

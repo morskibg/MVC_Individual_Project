@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import (
     StringField, PasswordField, BooleanField, SubmitField, DateField,
-    SelectField, TextField, IntegerField, DecimalField, FileField)
+    SelectField, TextField, IntegerField, DecimalField, FileField, SelectMultipleField)
 # from wtforms.fields.html5 import DateField
 # from wtforms.fields import DateField
 from wtforms.ext.sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
@@ -11,6 +11,9 @@ import re
 import sys
 import datetime as dt
 import pandas as pd
+
+from app.helpers.helper_functions import get_invoice_excel_files
+
 
 class UploadItnsForm(FlaskForm):
 
@@ -283,10 +286,14 @@ class IntegraForm(FlaskForm):
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
     # bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
-    # files = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.order_by(InvoiceGroup.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
+
+    # integra_files = SelectMultipleField('Proba', validators=[Optional()], render_kw={'size':15})
+    
     
     # by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
-    # contracts = QuerySelectField(query_factory = lambda: Contract.query.order_by(Contract.internal_id), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
+    delete_integra = SubmitField('Delete Integra single files')
+    integra_files = SelectMultipleField('Individual files', validators=[Optional()], render_kw={'size':25})
+    
     by_contract = BooleanField('Create invoice reference by Contract', default = False)
 
     

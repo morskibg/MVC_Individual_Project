@@ -7,7 +7,7 @@ from decimal import Decimal
 from flask import  flash
 
 from app.models import *    
-from app.helper_functions import update_or_insert, stringifyer, convert_date_to_utc
+from app.helpers.helper_functions import update_or_insert, stringifyer, convert_date_to_utc
 
 MONEY_ROUND = 6
 ENERGY_ROUND = 3
@@ -47,7 +47,8 @@ def get_stp_itn_by_inv_group_for_period_spot_sub(inv_group_name, start_date, end
                 SubContract.akciz.label('akciz') , 
                 Contractor.name.label('contractor_name'), 
                 InvoiceGroup.description.label('invoice_group_description'), 
-                InvoiceGroup.name.label('invoice_group_name')       
+                InvoiceGroup.name.label('invoice_group_name'),
+                SubContract.make_invoice.label('make_invoice')     
             )
             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
             .join(MeasuringType)  
@@ -94,7 +95,8 @@ def get_stp_itn_by_inv_group_for_period_sub(inv_group_name, start_date, end_date
                 SubContract.akciz.label('akciz') , 
                 Contractor.name.label('contractor_name'), 
                 InvoiceGroup.description.label('invoice_group_description'), 
-                InvoiceGroup.name.label('invoice_group_name')       
+                InvoiceGroup.name.label('invoice_group_name'),
+                SubContract.make_invoice.label('make_invoice')       
             )
             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
             .join(MeasuringType)  
@@ -139,7 +141,8 @@ def get_summary_records(consumption_for_period_sub, grid_services_sub, itns, sta
                 itns.c.invoice_group_description, 
                 itns.c.invoice_group_name,
                 itns.c.zko, 
-                itns.c.akciz   
+                itns.c.akciz,
+                itns.c.make_invoice   
         )
          
         .join(itns, itns.c.sub_itn == ItnMeta.itn)
@@ -150,7 +153,7 @@ def get_summary_records(consumption_for_period_sub, grid_services_sub, itns, sta
         .join(Tariff, Tariff.id == ItnSchedule.tariff_id)         
         .filter(ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date)
         .group_by(ItnMeta.itn,grid_services_sub.c.grid_services,consumption_for_period_sub.c.total_consumption,
-                 Tariff.price_day, AddressMurs.name, itns.c.zko, itns.c.akciz,itns.c.contractor_name,itns.c.invoice_group_description)
+                 Tariff.price_day, AddressMurs.name, itns.c.zko, itns.c.akciz,itns.c.contractor_name,itns.c.invoice_group_description, itns.c.make_invoice)
         .all()
             
     )
@@ -224,6 +227,7 @@ def get_summary_records_spot(consumption_for_period_sub, grid_services_sub, itns
                 itns.c.invoice_group_name,
                 itns.c.zko, 
                 itns.c.akciz,
+                itns.c.make_invoice
                   
         )
          
@@ -235,7 +239,7 @@ def get_summary_records_spot(consumption_for_period_sub, grid_services_sub, itns
         .join(Tariff, Tariff.id == ItnSchedule.tariff_id)         
         .filter(ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date)
         .group_by(ItnMeta.itn,grid_services_sub.c.grid_services,consumption_for_period_sub.c.total_consumption,
-                 AddressMurs.name, itns.c.zko, itns.c.akciz,itns.c.contractor_name,itns.c.invoice_group_description)
+                 AddressMurs.name, itns.c.zko, itns.c.akciz,itns.c.contractor_name,itns.c.invoice_group_description, itns.c.make_invoice)
         .all()
             
     )
@@ -251,7 +255,8 @@ def get_non_stp_itn_by_inv_group_for_period_spot_sub(inv_group_name, start_date,
                 SubContract.akciz.label('akciz') , 
                 Contractor.name.label('contractor_name'), 
                 InvoiceGroup.description.label('invoice_group_description'),
-                InvoiceGroup.name.label('invoice_group_name')              
+                InvoiceGroup.name.label('invoice_group_name'),
+                SubContract.make_invoice.label('make_invoice')            
             )
             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
             .join(MeasuringType)  
@@ -275,7 +280,8 @@ def get_non_stp_itn_by_inv_group_for_period_sub(inv_group_name, start_date, end_
                 SubContract.akciz.label('akciz') , 
                 Contractor.name.label('contractor_name'), 
                 InvoiceGroup.description.label('invoice_group_description'),
-                InvoiceGroup.name.label('invoice_group_name')              
+                InvoiceGroup.name.label('invoice_group_name'),
+                SubContract.make_invoice.label('make_invoice')              
             )
             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
             .join(MeasuringType)  
@@ -506,8 +512,7 @@ def get_time_zone(inv_group_name, start_date, end_date):
         .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
         .distinct()
         .all()
-    )
-    print(f'{contract_records}')
+    )    
     if len(contract_records) > 1:
         time_zones = [x[3] for x in contract_records]
         if not time_zones.count(time_zones[0]) == len(time_zones):

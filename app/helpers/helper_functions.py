@@ -10,7 +10,7 @@ from decimal import Decimal,ROUND_HALF_UP
 from sqlalchemy.exc import ProgrammingError
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
-from app.helper_function_excel_writer import INV_REFS_PATH
+from app.helpers.helper_function_excel_writer import (INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
 
 MONEY_ROUND = 9
 
@@ -644,15 +644,23 @@ def validate_input_df(df):
 def get_invoice_excel_files():
 
     file_list = []
-    for root, dirs, files in os.walk(INV_REFS_PATH):            
+    for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
         for filename in files:
             if filename.endswith('.xlsx') & (filename.find('~') == -1):
-                print('root-->',root, 'dirs --->',dirs, 'FILES>>>>>>>',files)
-                curr_df = pd.read_excel(os.path.join(root, filename))
-                print(f'df \n{curr_df}')
-                break
+                file_list.append(filename)
+                
+    return file_list           
 
+# def get_invoice_excel_files():
 
+#     file_list = []
+#     for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
+#         for filename in files:
+#             if filename.endswith('.xlsx') & (filename.find('~') == -1):
+#                 print('root-->',root, 'dirs --->',dirs, 'FILES>>>>>>>',files)
+#                 curr_df = pd.read_excel(os.path.join(root, filename))
+#                 print(f'df \n{curr_df}')
+#                 break
 
 
 

@@ -5,6 +5,7 @@ import xlrd
 import time,re
 import sys, pytz, datetime as dt
 import pandas as pd
+from zipfile import ZipFile
 from flask import render_template, flash, redirect, url_for, request
 from sqlalchemy import extract, or_
 from app import app
@@ -16,12 +17,12 @@ from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
 from werkzeug.urls import url_parse
-# from app import dbgrid_services_distrib_records,
+
 
 from werkzeug.utils import secure_filename
-from app.helper_function_excel_writer import INV_REFS_PATH
+from app.helpers.helper_function_excel_writer import INV_REFS_PATH
 
-from app.helper_functions import (get_contract_by_internal_id,
+from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  convert_date_to_utc,
                                  convert_date_from_utc,
                                  validate_ciryllic,
@@ -50,10 +51,9 @@ from app.helper_functions import (get_contract_by_internal_id,
                                  date_format_corector,
                                  get_invoice_excel_files,)
 
-from app.helper_function_excel_writer import (generate_ref_excel,)
+from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
 
-
-from app.helper_functions_queries import (                                         
+from app.helpers.helper_functions_queries import (                                         
                                         get_contractors_names_and_411,
                                         is_spot_inv_group,
                                         get_all_inv_groups,
@@ -61,17 +61,15 @@ from app.helper_functions_queries import (
                                         get_list_inv_groups_by_contract
 )
 
-from zipfile import ZipFile
-from app.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
+from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
                                       insert_settlment_cez, insert_settlment_e_pro,
                                       insert_settlment_evn,                            
                                       
 )
-from app.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
+from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
                                          get_summary_spot_df, get_weighted_price, create_utc_dates,
                                          get_weighted_price, create_excel_files)
 
-# from app.helper_functions_invoicing import (create_invoicing_reference, )
 
 MEASURE_MAP_DICT = {
                 'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
@@ -190,14 +188,15 @@ def test():
         for inv_group_name in inv_groups:
             # print(f'{inv_group_name}')
             start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
-            print(f'{start_date} -- {end_date} -- {invoice_start_date} -- {invoice_end_date}')
+           
             if start_date is None:
-                print(f'ssss')
+                print(f'There is not data for {inv_group_name}, for period {form.start_date.data} - {form.end_date.data}')
                 continue
+
             is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
             
             if is_spot:
-                print(f'in spot {weighted_price}')
+                # print(f'in spot {weighted_price}')
                 summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
                 create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
                 
@@ -216,8 +215,17 @@ def test():
 def create_excel():
     
     form = IntegraForm()
-    if form.validate_on_submit():
-        get_invoice_excel_files()
+    if form.validate_on_submit(): 
+        form.integra_files.choices =  sorted([(x,x) for x in get_invoice_excel_files()])
+        if form.delete_integra.data:
+            print(f'delete integra')  
+        elif form.contracts.data:
+            print(f'contracts')
+
+             
+        
+
+        
 
     return render_template('create_excel_for_integra.html', title='Integra file', form=form)
      

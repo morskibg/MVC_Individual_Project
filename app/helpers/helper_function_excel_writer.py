@@ -24,7 +24,8 @@ MONEY_ROUND = 6
 ENERGY_ROUND = 3
 ENERGY_ROUND_MW = 6
 INV_REFS_PATH = 'app/static/inv_ref_files'
-INTEGRA_PATH = 'app/static/integra_files' 
+INTEGRA_INDIVIDUAL_PATH = 'app/static/integra_individual_files' 
+INTEGRA_FOR_UPLOAD_PATH = 'app/static/integra_for_upload' 
 
 GOODES_CODE = {'Сума за енергия':'304-1', 'Мрежови услуги (лв.)':'498-56','Задължение към обществото':'459-2','Акциз':'456-1'}
 PRICES = {'304-1':'price', '498-56':'Мрежови услуги (лв.)','459-2':'zko','456-1':'akciz'}
@@ -359,7 +360,7 @@ def generate_integra_file(df, start_date, end_date):
     for_invoice_df['easy_pay_num'] = epay_code
     for_invoice_df['easy_pay_name'] = epay_name
     for_invoice_df = pd.melt(for_invoice_df, id_vars=['Потребление (kWh)', 'inv_group','Получател','сметка 411','Дата на издаване','Падеж','Основание','easy_pay_num','easy_pay_name'],var_name = 'Код на стоката',value_name = 'Стойност без ДДС')
-    print(f'aaaaaaaaaaaaaaaaaa \n{for_invoice_df}')
+    
     for_invoice_df['Стойност без ДДС'] = for_invoice_df['Стойност без ДДС'].apply(lambda x: round(Decimal(x) ,2))
 
     
@@ -387,5 +388,5 @@ def generate_integra_file(df, start_date, end_date):
                                     'ДДС','Крайна сума', 'inv_group', 'email', 'file_name','easy_pay_num', 'easy_pay_name']]
     
     for_invoice_df.insert(loc=0, column = '№ по ред', value = 1 )
-    for_invoice_df.to_excel(INTEGRA_PATH + '/' + file_name)
+    for_invoice_df.to_excel(INTEGRA_INDIVIDUAL_PATH + '/' + file_name)
     

@@ -3,15 +3,13 @@ import pandas as pd
 import os
 import xlrd
 import time,re
-# from decimal import Decimal, ROUND_HALF_UP, compare
 from decimal import *
 from flask import  flash
 from app.models import *  
 
-from app.helper_functions import (convert_date_to_utc,)
-                                 
+from app.helpers.helper_functions import (convert_date_to_utc,)                                 
 
-from app.helper_functions_queries import (                                         
+from app.helpers.helper_functions_queries import (                                         
                                         get_grid_services_tech_records,                          
                                         get_grid_services_distrib_records,                                        
                                         get_stp_itn_by_inv_group_for_period_sub,
@@ -31,12 +29,9 @@ from app.helper_functions_queries import (
                                         get_spot_fin_results,
                                         get_tariff_limits,
                                         get_time_zone,
-                                        get_list_inv_groups_by_contract
-                                        
-                                        
-)
+                                        get_list_inv_groups_by_contract   )
 
-from app.helper_function_excel_writer import (generate_ref_excel, generate_integra_file)
+from app.helpers.helper_function_excel_writer import (generate_ref_excel, generate_integra_file)
 
 
 
@@ -48,7 +43,7 @@ def create_utc_dates(inv_group_name, local_start_date, local_end_date):
     time_zone = get_time_zone(inv_group_name, start_date, end_date)
     if time_zone is None:
         return None,None,None,None
-    print(f'{inv_group_name} ---- {time_zone}')
+    # print(f'{inv_group_name} ---- {time_zone}')
 
     invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))        
     invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
@@ -133,16 +128,14 @@ def get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_
         stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_non_spot_itns, invoice_start_date, invoice_end_date)                
 
         summary_stp = get_summary_records(stp_consumption_for_period_sub, grid_services_sub, stp_non_spot_itns, start_date, end_date)
-        # print(f'from get summmary --- summary_stp \n {summary_stp}')
+       
         # ###################### create non stp records ##############################################################
         non_stp_itns = get_non_stp_itn_by_inv_group_for_period_sub(inv_group_name, start_date, end_date)   
                
         non_stp_spot_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
         
         summary_non_stp = get_summary_records(non_stp_spot_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)
-        # print(f'from get summmary --- summary_non_stp \n {summary_non_stp}')
-        # print(f'ssssssssssssssssssssssssssssssssssssssssssssss \n{summary_non_stp}')
-        #############################################################################################################
+        
         return summary_stp, summary_non_stp, grid_services_df
         
 def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_date, invoice_end_date, weighted_price):  
@@ -150,8 +143,7 @@ def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_dat
     if weighted_price is None:
         weighted_price = get_weighted_price(inv_group_names, start_date, end_date)  
 
-    grid_services_sub, grid_services_df = get_grid_services(inv_group_names[0], start_date, end_date, invoice_start_date, invoice_end_date)   
-   
+    grid_services_sub, grid_services_df = get_grid_services(inv_group_names[0], start_date, end_date, invoice_start_date, invoice_end_date)    
     
     ###################### create stp records ##############################################################
    
@@ -160,15 +152,14 @@ def get_summary_spot_df(inv_group_names, start_date, end_date, invoice_start_dat
     stp_consumption_for_period_sub = get_stp_consumption_for_period_sub(stp_spot_itns, invoice_start_date, invoice_end_date)                
 
     summary_records_stp_spot = get_summary_records_spot(stp_consumption_for_period_sub, grid_services_sub, stp_spot_itns, start_date, end_date)
-    # print(f'summary_records_stp_spot --- > {summary_records_stp_spot}')
+    
     ###################### create non stp records ##############################################################
     non_stp_itns = get_non_stp_itn_by_inv_group_for_period_spot_sub(inv_group_names[0], start_date, end_date)   
             
     non_stp_spot_consumption_for_period_sub = get_non_stp_consumption_for_period_sub(non_stp_itns, start_date, end_date)
     
-    summary_non_stp_spot = get_summary_records_spot(non_stp_spot_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)
-    # print(f'summary_non_stp_spot --- > {summary_non_stp_spot}')
-    #############################################################################################################
+    summary_non_stp_spot = get_summary_records_spot(non_stp_spot_consumption_for_period_sub, grid_services_sub, non_stp_itns, start_date, end_date)    
+    
     return summary_records_stp_spot, summary_non_stp_spot, grid_services_df, weighted_price
     
 def appned_df(df, temp_df):
@@ -179,7 +170,7 @@ def appned_df(df, temp_df):
     return df
 
 def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price = None):
-
+    
     df = pd.DataFrame()
     inv_group_str = None
     if len(summary_stp) != 0:
@@ -212,9 +203,15 @@ def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_dat
         df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
         if weighted_price is not None:
             df['Сума за енергия'] = df['Потребление (kWh)'] * weighted_price
-        # print(f'From  CREATE EXCEL FILES \n{df.sum()}')
+        
         generate_ref_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date)
-        generate_integra_file(df, start_date, end_date)
+
+        integra_df = df[df['make_invoice']]
+        
+        if integra_df.empty:
+            print(f'{inv_group_str} doesn\'t create integra file !')
+        else:
+            generate_integra_file(integra_df, start_date, end_date)
        
 
 def create_report_from_grid(invoice_start_date, invoice_end_date):
