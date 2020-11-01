@@ -12,7 +12,7 @@ import sys
 import datetime as dt
 import pandas as pd
 
-from app.helpers.helper_functions import get_invoice_excel_files
+
 
 
 class UploadItnsForm(FlaskForm):
@@ -239,8 +239,9 @@ class EditSubForm(FlaskForm):
 
 class TestForm(FlaskForm):
     
-    start_date = StringField(id='start_datepicker', validators = [Optional()])
-    end_date = StringField(id='end_datepicker', validators = [Optional()])
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
     bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
@@ -250,9 +251,19 @@ class TestForm(FlaskForm):
     contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     by_contract = BooleanField('Create invoice reference by Contract', default = False)
 
+    def validate_end_date(self, end_date):
+
+        dt_start_obj = dt.datetime.strptime(self.start_date.data, '%Y-%m-%d')
+        dt_end_obj = dt.datetime.strptime(end_date.data, '%Y-%m-%d')
+        if dt_start_obj > dt_end_obj:
+                raise ValidationError('Start Date must be before End Date')
+
     
     
-    submit = SubmitField('Test')
+    submit = SubmitField('Create')
+    ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
+    delete_all = BooleanField('Delete all source files', default = False)
+    submit_delete = SubmitField('Delete files') 
 
 class ErpForm(FlaskForm):
     file_cez = FileField('Browse for CEZ Zip File')
@@ -281,24 +292,17 @@ class UploadInitialForm(FlaskForm):
 
 class IntegraForm(FlaskForm):
     
-    # start_date = StringField(id='start_datepicker', validators = [Optional()])
-    # end_date = StringField(id='end_datepicker', validators = [Optional()])
-    # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
-    # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
-    # bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
-
-    # integra_files = SelectMultipleField('Proba', validators=[Optional()], render_kw={'size':15})
-    
-    
-    # by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
+    delete_all = BooleanField('Delete all source files', default = False) 
     delete_integra = SubmitField('Delete Integra single files')
-    integra_files = SelectMultipleField('Individual files', validators=[Optional()], render_kw={'size':25})
+    integra_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':25})      
+    concatenate_all = BooleanField('Concatenate all source files', default = False) 
+    file_name = StringField( 'Integra file name',validators=[Optional()], default = f'{str(dt.datetime.now())}.xlsx')
+    submit = SubmitField('Create') 
     
-    by_contract = BooleanField('Create invoice reference by Contract', default = False)
-
-    
-    
-    submit = SubmitField('Create')       
+       
+    integra_upload_files = SelectMultipleField('Upload files',  validators=[Optional()], render_kw={'size':25})
+    delete_all_upload = BooleanField('Delete all upload files', default = False) 
+    delete_upload_integra = SubmitField('Delete Integra upload files') 
             
     
 

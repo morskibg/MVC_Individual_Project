@@ -49,7 +49,8 @@ from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  get_tariff_offset,
                                  create_tariff,
                                  date_format_corector,
-                                 get_invoice_excel_files,)
+                                 get_excel_files,
+                                 delete_excel_files)
 
 from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
 
@@ -68,7 +69,7 @@ from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,ins
 )
 from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
                                          get_summary_spot_df, get_weighted_price, create_utc_dates,
-                                         get_weighted_price, create_excel_files)
+                                         get_weighted_price, create_excel_files, appned_df)
 
 
 MEASURE_MAP_DICT = {
@@ -128,6 +129,7 @@ def erp():
 @login_required
 def test():
     form = TestForm()
+    form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
     if form.validate_on_submit():
 
     #     # ################################# Initial Ibex  ###################################### 
@@ -169,41 +171,66 @@ def test():
 
 
         start = time.time()
-        weighted_price = None
 
-        if form.by_contract.data:            
-            time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
-            start_date = convert_date_to_utc(time_zone, form.start_date.data)
-            end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-            inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
-            weighted_price = get_weighted_price(inv_groups, start_date, end_date)
+        if form.submit_delete.data:
+            delete_excel_files(INV_REFS_PATH, form.ref_files.data, form.delete_all.data)
+            return redirect(url_for('test'))
+            # custom_del_files = []
+            # if not form.delete_all.data:
+            #     custom_del_files = form.ref_files.data
+            # print(f'{custom_del_files}')
+            # for root, dirs, files in os.walk(INV_REFS_PATH):            
+            #     for filename in files:
+                    
+            #         if filename.endswith('.xlsx') & (filename.find('~') == -1) :
+            #             if form.delete_all.data:
+            #                 os.remove(os.path.join(root, filename))                            
+                            
+            #             elif filename in custom_del_files:                          
+            #                 os.remove(os.path.join(root, filename))
+                             
+            #             else:
+            #                 continue
+            #             print(f'File: {filename} removed !') 
+            # return redirect(url_for('test'))          
 
-        else:            
-            inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]   
 
-        result_df = None
+        elif form.submit.data:
+            weighted_price = None
 
-        invoice_ref_path = inetgra_src_path = None
+            if form.by_contract.data:            
+                time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
+                start_date = convert_date_to_utc(time_zone, form.start_date.data)
+                end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+                inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
+                weighted_price = get_weighted_price(inv_groups, start_date, end_date)
 
-        for inv_group_name in inv_groups:
-            # print(f'{inv_group_name}')
-            start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
-           
-            if start_date is None:
-                print(f'There is not data for {inv_group_name}, for period {form.start_date.data} - {form.end_date.data}')
-                continue
+            else:            
+                inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]   
 
-            is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
+            result_df = None
+
+            invoice_ref_path = inetgra_src_path = None
+
+            for inv_group_name in inv_groups:
+                # print(f'{inv_group_name}')
+                start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
             
-            if is_spot:
-                # print(f'in spot {weighted_price}')
-                summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
-                create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
+                if start_date is None:
+                    print(f'There is not data for {inv_group_name}, for period {form.start_date.data} - {form.end_date.data}')
+                    continue
+
+                is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
                 
-            else:
-                summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
-                create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
-                
+                if is_spot:
+                    # print(f'in spot {weighted_price}')
+                    summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
+                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
+                    
+                else:
+                    summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
+                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
+            return redirect(url_for('test'))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
@@ -212,20 +239,59 @@ def test():
 
 @app.route('/create_excel_for_integra', methods=['GET', 'POST'])
 @login_required
-def create_excel():
+def create_integra_excel():
     
     form = IntegraForm()
+    form.integra_files.choices = sorted([(x,x) for x in get_excel_files(INTEGRA_INDIVIDUAL_PATH)])
+    form.integra_upload_files.choices = sorted([(x,x) for x in get_excel_files(INTEGRA_FOR_UPLOAD_PATH)])
     if form.validate_on_submit(): 
-        form.integra_files.choices =  sorted([(x,x) for x in get_invoice_excel_files()])
+
         if form.delete_integra.data:
-            print(f'delete integra')  
-        elif form.contracts.data:
-            print(f'contracts')
+            delete_excel_files(INTEGRA_INDIVIDUAL_PATH, form.integra_files.data , form.delete_all.data)
 
-             
-        
+            return redirect(url_for('create_integra_excel'))             
+            
+        elif form.submit.data:
 
-        
+            concated_df = pd.DataFrame()
+            files_to_concat = []
+            if not form.concatenate_all.data:
+                files_to_concat = sorted(form.integra_files.data)
+            else:
+                for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
+                    for filename in files:
+                        if filename.endswith('.xlsx') & (filename.find('~') == -1):
+                            files_to_concat.append(filename)
+                files_to_concat = sorted(files_to_concat)
+
+            for filename in files_to_concat:
+                curr_df = pd.read_excel(os.path.join(INTEGRA_INDIVIDUAL_PATH, filename))
+                if concated_df.empty:
+                    concated_df = curr_df
+                else:
+                    las_num = concated_df.iloc[-1]['№ по ред']
+                    curr_df['№ по ред']  = las_num + 1
+                    concated_df = concated_df.append(curr_df,ignore_index=True)
+
+            
+            # for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
+            #     for filename in files:
+            #         if filename.endswith('.xlsx') & (filename.find('~') == -1):            
+            #             curr_df = pd.read_excel(os.path.join(INTEGRA_INDIVIDUAL_PATH, filename))
+            #             if concated_df.empty:
+            #                 concated_df = curr_df
+            #             else:
+            #                 las_num = concated_df.iloc[-1]['№ по ред']
+            #                 curr_df['№ по ред']  = las_num + 1
+            #                 concated_df = concated_df.append(curr_df,ignore_index=True)         
+
+            concated_df.to_excel(os.path.join(INTEGRA_FOR_UPLOAD_PATH,form.file_name.data), index = False)
+            return redirect(url_for('create_integra_excel'))
+            
+        elif form.delete_upload_integra.data:
+            
+            delete_excel_files(INTEGRA_FOR_UPLOAD_PATH, form.integra_upload_files.data, form.delete_all_upload.data)
+            return redirect(url_for('create_integra_excel'))  
 
     return render_template('create_excel_for_integra.html', title='Integra file', form=form)
      

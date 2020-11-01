@@ -533,7 +533,7 @@ def get_list_inv_groups_by_contract(internal_id, start_date, end_date):
             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
             .filter(Contract.internal_id == internal_id)
             .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))) 
-            .filter(SubContract.has_spot_price) #!!!!!!!!!!!!!!!!!!!!!!                     
+            # .filter(SubContract.has_spot_price) #!!!!!!!!!!!!!!!!!!!!!!                     
             .distinct(InvoiceGroup.name)  
             .all()
         )

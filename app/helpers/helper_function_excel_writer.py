@@ -388,5 +388,7 @@ def generate_integra_file(df, start_date, end_date):
                                     'ДДС','Крайна сума', 'inv_group', 'email', 'file_name','easy_pay_num', 'easy_pay_name']]
     
     for_invoice_df.insert(loc=0, column = '№ по ред', value = 1 )
-    for_invoice_df.to_excel(INTEGRA_INDIVIDUAL_PATH + '/' + file_name)
+    # for_invoice_df.to_excel(INTEGRA_INDIVIDUAL_PATH + '/' + file_name,index = False)
+    for_invoice_df.to_excel(os.path.join(INTEGRA_INDIVIDUAL_PATH, file_name),index = False)
+    
     

@@ -641,15 +641,37 @@ def validate_input_df(df):
     
     return df
 
-def get_invoice_excel_files():
+def get_excel_files(path):
 
     file_list = []
-    for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
+    for root, dirs, files in os.walk(path):            
         for filename in files:
             if filename.endswith('.xlsx') & (filename.find('~') == -1):
+                # print('root-->',root, 'dirs --->',dirs, 'FILES>>>>>>>',files)
                 file_list.append(filename)
                 
-    return file_list           
+    return file_list  
+
+def delete_excel_files(path, files, is_delete_all):
+    print(f'{files}')    
+    custom_del_files = []
+    if not is_delete_all:
+        custom_del_files = files               
+
+    for root, dirs, files in os.walk(path):            
+        for filename in files:
+            if filename.endswith('.xlsx') & (filename.find('~') == -1) :
+                
+                if is_delete_all:
+                    os.remove(os.path.join(root, filename))                            
+                    
+                elif filename in custom_del_files:   
+                                       
+                    os.remove(os.path.join(root, filename))
+                        
+                else:
+                    continue
+                print(f'File: {filename} removed !')          
 
 # def get_invoice_excel_files():
 

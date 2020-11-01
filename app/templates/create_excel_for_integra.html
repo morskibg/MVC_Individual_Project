@@ -5,8 +5,8 @@
 {% block app_content %} 
     <div class='col-md-2'></div>             
     <div class='col-md-8'>                      
-        <h1>Creation of Integra input excel file</h1>        
-        {{ wtf.quick_form(form)}}         
+        <h1>Creation/Deletion of Integra summary excel file</h1>        
+        {{ wtf.quick_form(form, button_map={'submit': 'primary','delete_integra':'danger','delete_upload_integra':'danger'})}}         
     </div> 
     <div class='col-md-2'> </div>    
 {% endblock %}
