@@ -365,7 +365,7 @@ def insert_settlment_cez(zip_obj,separator):
                             incoming_non_stp_records = get_incoming_non_stp_records(df,min_date, max_date)
                             # get_missing_points(incoming_non_stp_records, db_non_stp_records)
                             # get_extra_points(incoming_non_stp_records, db_non_stp_records)
-
+                            
                             update_non_stp_consumption_settelment_vol(df, min_date, max_date) 
 
     get_missing_extra_points_by_erp(ERP, incoming_points)
@@ -408,6 +408,7 @@ def insert_settlment_e_pro(zip_obj, separator):
                     incoming_non_stp_records = get_incoming_non_stp_records(df_for_db,min_date, max_date)
                     incomming_points.append(incoming_non_stp_records)
                     # print(f'e pro \n{df_for_db}')
+                   
                     update_non_stp_consumption_settelment_vol(df_for_db, min_date, max_date)
                     
                 else:
@@ -432,7 +433,7 @@ def insert_settlment_e_pro(zip_obj, separator):
 
         elif file_name == '021CIN03.xlsx':
             
-            incoming_stp_itns_list = proceed_e_pro_stp_excel_file(zip_obj, file_name)
+            incoming_stp_itns_list = proceed_e_pro_stp_excel_file(zip_obj, file_name) #!!!!!!!!!!!!!!!!!!!!!!!!
             # print(f'incoming_stp_itns_list\n{incoming_stp_itns_list}')
             
             # print(f'incomming_points\n{incomming_points}')
@@ -542,6 +543,7 @@ def insert_settlment_evn(zip_obj,separator):
                                 else:
                                     [y for x in [incomming_points, partial_df.itn] for y in x]
                                     # incomming_points += partial_df.itn
+                                
                                 update_non_stp_consumption_settelment_vol(partial_df, subcontarct.start_date, subcontarct.end_date)
                    
                     else:
@@ -561,6 +563,71 @@ def insert_settlment_evn(zip_obj,separator):
     # get_extra_points(distribution_stp_records, db_stp_records)
     # get_missing_points(incoming_non_stp_records, db_non_stp_records)  
     # get_extra_points(incoming_non_stp_records, db_non_stp_records)
+
+
+
+def insert_settelment_nkji(zip_obj):
+
+    dfs = {text_file.filename: pd.read_excel(zip_obj.read(text_file.filename))
+    for text_file in zip_obj.infolist() if text_file.filename.endswith('.xlsx')}
+
+    for key in dfs.keys():
+        
+        df = dfs[key]
+        
+        start_date = get_masked_value(df, 'От дата')
+        end_date = get_masked_value(df, 'До дата')
+        start_date = dt.datetime.strptime(start_date.split(';')[1].strip('\'').replace('.','/'),'%d/%m/%Y')
+        end_date = dt.datetime.strptime(end_date.split(';')[1].strip('\'').replace('.','/'),'%d/%m/%Y')
+        end_date = end_date - dt.timedelta(hours = 1)
+        time_series = pd.date_range(start = start_date, end = end_date, tz = 'EET', freq='h')
+
+        consumption_df = pd.DataFrame(time_series, columns = ['utc'])
+        consumption_df.set_index(pd.DatetimeIndex(consumption_df['utc']), inplace = True)
+        consumption_df.index = consumption_df.index.tz_convert('UTC').tz_convert(None)
+        consumption_df.drop(columns = ['utc'], inplace = True)
+        col_name = df.columns[0]
+        idx = df[df[col_name] == 'Timestamp'].index[0]
+        start_idx = df[idx+1:][col_name].first_valid_index()
+        end_idx = df[df[col_name] == 'end report'].index[0]
+        consumption_df.reset_index(inplace = True)
+        min_date = min(consumption_df['utc']).to_pydatetime()                    
+        max_date = max(consumption_df['utc']).to_pydatetime()
+        
+        is_bdz = len(get_masked_value(df, 'БДЖ')) > 0
+        if is_bdz:
+            db_df = consumption_df.copy()
+            db_df['itn'] = 'A002001'
+            db_df['consumption_vol'] = df.iloc[start_idx:end_idx,1].values
+            
+            update_non_stp_consumption_settelment_vol(db_df, min_date, max_date)
+
+        else:
+            idx_pseudo_itn = df[df[df.columns[1]] == 'ТБД Товарни превози'].index[0]
+            idx_last_col_pseudo_itn = df.columns.get_loc(df.columns[-1]) + 1
+            new_df = df.iloc[idx_pseudo_itn:end_idx]
+            new_df.columns = df.iloc[idx_pseudo_itn]
+            new_df.reset_index(drop=True, inplace=True) 
+            t_index = new_df[new_df[new_df.columns[0]]=='Timestamp'].index[0]
+            new_df = new_df.iloc[t_index + 2:,2:]
+            new_df.columns = [x.split(' ')[1] for x in new_df.columns]
+            new_df.reset_index(drop=True, inplace=True) 
+            
+            for col in new_df.columns:
+                
+                db_df = consumption_df.copy()
+                # print(f'consumption copy \n{db_df}')
+                db_df['itn'] = col
+                db_df['consumption_vol']  = new_df[col].values
+                
+                update_non_stp_consumption_settelment_vol(db_df, min_date, max_date)
+
+                
+        
+        
+        
+
+        
 
 def get_missing_points(incoming_records, db_records):
 
@@ -781,6 +848,9 @@ def get_hours_between_dates(start_date, end_date):
 
 def update_non_stp_consumption_settelment_vol(input_df, min_date, max_date):
 
+   
+    print(f'from update_non_stp_consumption_settelment_vol --- input df ----- {min_date} ----- {max_date} \n{input_df} ') #!!!!!!!!!!!!!!!!!!!!!!!!!
+
     colision_points = resolve_poins_colision(input_df, min_date, max_date)
 
     if len(colision_points) > 0:
@@ -816,7 +886,7 @@ def update_non_stp_consumption_settelment_vol(input_df, min_date, max_date):
         non_stp_df = input_df.merge(non_stp_records_df, on = 'itn', how = 'right') 
         non_stp_df['settelment_vol'] = non_stp_df['consumption_vol']
         non_stp_df.drop(columns = 'measuring_id', inplace = True)
-
+        print(f'from update_non_stp_consumption_settelment_vol --- update df \n{non_stp_df}') #!!!!!!!!!!!!!!!!!!!!
         update_reported_volume(non_stp_df, ItnSchedule.__table__.name)
 
 def update_stp_settelment_vol(input_df, stp_records_df, stp_records):
@@ -1185,8 +1255,16 @@ def get_missing_extra_points_by_erp(erp, incoming_itns):
     extra = list(incoming_itns - db_itn_set)
     print(f'This itn points are NOT in the database but came data for them from ERP: {erp} files ---> {extra}')
 
+def get_masked_value(df, mask_str):
 
-
+    mask = df.applymap(lambda x:  mask_str.lower() in str(x).lower())
+    try:
+        res = df[mask].T.stack().values[0]
+    except:
+        print(f'From get_masked_value no such a string on df: {mask_str}')
+        res = ''
+    return res
+    
 
     
 

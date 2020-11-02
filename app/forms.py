@@ -269,6 +269,7 @@ class ErpForm(FlaskForm):
     file_cez = FileField('Browse for CEZ Zip File')
     file_epro = FileField('Browse for E_PRO Zip File')
     file_evn = FileField('Browse for EVN Zip File')
+    file_nkji = FileField('Browse for NKJI Zip File')
 
     submit = SubmitField('Upload')
 
@@ -296,13 +297,15 @@ class IntegraForm(FlaskForm):
     delete_integra = SubmitField('Delete Integra single files')
     integra_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':25})      
     concatenate_all = BooleanField('Concatenate all source files', default = False) 
-    file_name = StringField( 'Integra file name',validators=[Optional()], default = f'{str(dt.datetime.now())}.xlsx')
+    file_name = StringField( 'Integra file name',validators=[Optional()], default = format(dt.datetime.now(),'%d-%m-%Y %H:%M')+'.xlsx')
     submit = SubmitField('Create') 
     
        
     integra_upload_files = SelectMultipleField('Upload files',  validators=[Optional()], render_kw={'size':25})
     delete_all_upload = BooleanField('Delete all upload files', default = False) 
     delete_upload_integra = SubmitField('Delete Integra upload files') 
+
+    proba = SubmitField('Proba') 
             
     
 

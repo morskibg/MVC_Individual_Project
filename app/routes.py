@@ -6,7 +6,7 @@ import time,re
 import sys, pytz, datetime as dt
 import pandas as pd
 from zipfile import ZipFile
-from flask import render_template, flash, redirect, url_for, request
+from flask import render_template, flash, redirect, url_for, request, send_file,send_from_directory
 from sqlalchemy import extract, or_
 from app import app
 from app.forms import (
@@ -64,7 +64,7 @@ from app.helpers.helper_functions_queries import (
 
 from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
                                       insert_settlment_cez, insert_settlment_e_pro,
-                                      insert_settlment_evn,                            
+                                      insert_settlment_evn, insert_settelment_nkji                           
                                       
 )
 from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
@@ -120,7 +120,11 @@ def erp():
             insert_settlment_evn(erp_zip, separator)
             # insert_mrus(erp_zip,separator)           
             flash('Data from EVN uploaded successfully','success')
-            
+
+        if request.files.get('file_nkji').filename != '':
+            nkji_zip = ZipFile(request.files.get('file_nkji'))             
+            insert_settelment_nkji(nkji_zip)  
+            flash('Data from NKJI uploaded successfully','success')
 
 
     return render_template('erp.html', title='ERP Upload', form=form)
@@ -271,27 +275,21 @@ def create_integra_excel():
                 else:
                     las_num = concated_df.iloc[-1]['№ по ред']
                     curr_df['№ по ред']  = las_num + 1
-                    concated_df = concated_df.append(curr_df,ignore_index=True)
-
-            
-            # for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
-            #     for filename in files:
-            #         if filename.endswith('.xlsx') & (filename.find('~') == -1):            
-            #             curr_df = pd.read_excel(os.path.join(INTEGRA_INDIVIDUAL_PATH, filename))
-            #             if concated_df.empty:
-            #                 concated_df = curr_df
-            #             else:
-            #                 las_num = concated_df.iloc[-1]['№ по ред']
-            #                 curr_df['№ по ред']  = las_num + 1
-            #                 concated_df = concated_df.append(curr_df,ignore_index=True)         
+                    concated_df = concated_df.append(curr_df,ignore_index=True)      
 
             concated_df.to_excel(os.path.join(INTEGRA_FOR_UPLOAD_PATH,form.file_name.data), index = False)
             return redirect(url_for('create_integra_excel'))
-            
+
         elif form.delete_upload_integra.data:
             
             delete_excel_files(INTEGRA_FOR_UPLOAD_PATH, form.integra_upload_files.data, form.delete_all_upload.data)
-            return redirect(url_for('create_integra_excel'))  
+            return redirect(url_for('create_integra_excel')) 
+
+        elif form.proba.data:
+            print(f'proba {form.integra_upload_files.data}')
+            print(f'{os.path.join(INTEGRA_FOR_UPLOAD_PATH,form.file_name.data)}')
+            return send_from_directory(INTEGRA_FOR_UPLOAD_PATH, as_attachment=True, filename="qqq.xlsx")
+            # return send_file(INTEGRA_FOR_UPLOAD_PATH, as_attachment=True)
 
     return render_template('create_excel_for_integra.html', title='Integra file', form=form)
      
@@ -302,7 +300,7 @@ def upload_initial_data():
     form = UploadInitialForm()
     if form.validate_on_submit():
         if request.files.get('file_contractors').filename != '':
-            
+            print(f'in contractors')
             raw_contractor_df =  pd.read_csv(request.files.get('file_contractors'), encoding = "windows-1251",header=None)
             raw_contractor_df.drop(columns = [0,1,2,3,4,5,6,7,8,9,10], inplace = True)
             
@@ -330,7 +328,7 @@ def upload_initial_data():
             update_or_insert(erp_df, Erp.__table__.name)
 
         if request.files.get('file_stp').filename != '':
-
+            print(f'in upload stp coeffs')
             START_DATE = '01/01/2020 00:00:00'
             END_DATE = '31/12/2020 23:00:00'
             FORMAT = '%d/%m/%Y %H:%M:%S'
@@ -343,7 +341,7 @@ def upload_initial_data():
             df['utc'] = Utc
             df_m = pd.melt(df, id_vars =['utc'], value_vars =['CEZ_B1', 'CEZ_B2', 'CEZ_B3', 'CEZ_B4', 'CEZ_B5', 'CEZ_H1', 'CEZ_H2',
                 'CEZ_S1', 'EPRO_B01', 'EPRO_B02', 'EPRO_B03', 'EPRO_B04', 'EPRO_H0',
-                'EPRO_H1', 'EPRO_S0', 'EVN_G0', 'EVN_G1', 'EVN_G2', 'EVN_G3', 'EVN_G4',
+                'EPRO_H1', 'EPRO_S0','EPRO_S01', 'EVN_G0', 'EVN_G1', 'EVN_G2', 'EVN_G3', 'EVN_G4',
                 'EVN_H0', 'EVN_H1', 'EVN_H2', 'EVN_BD000'],var_name='code') 
             
             df_measure_code = pd.read_sql(MeasuringType.query.statement, db.session.bind)
@@ -829,7 +827,7 @@ def upload_contracts():
     
     form = UploadContractsForm()
     if form.validate_on_submit():
-
+        print(f'in upload_contracts')
         df = pd.read_excel(request.files.get('file_'))
         # print(f'{df.columns}')
         df = validate_input_df(df)

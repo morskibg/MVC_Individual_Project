@@ -319,6 +319,7 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
     ws.page_setup.fitToHeight = False
     ws.print_title_rows = '28:29'
     wb.save(f'{INV_REFS_PATH}/{file_name}')
+    return file_name
    
     
 
@@ -334,14 +335,18 @@ def generate_num_and_name(first_digit, num_411, inv_group, name):
             
     return (num_str, name_str)    
 
-def generate_integra_file(df, start_date, end_date):
+def generate_integra_file(df, start_date, end_date, ref_file_name):
     
     df = df.fillna(Decimal('0'))
    
     inv_group_name = df.iloc[0]['invoice_group_name']   
     curr_contract = db.session.query(Contract).join(SubContract).join(InvoiceGroup).filter(SubContract.start_date <= start_date, SubContract.end_date > start_date).first()
     
-    df['price'] = (df['Сума за енергия'].sum()) / (df['Потребление (kWh)'].sum())
+    try:
+        df['price'] = (df['Сума за енергия'].sum()) / (df['Потребление (kWh)'].sum())
+    except:
+        df['price'] = Decimal('0')
+
 
     for_invoice_df = df[['Потребление (kWh)','Сума за енергия','Мрежови услуги (лв.)','Задължение към обществото','Акциз']].sum()
     
@@ -381,7 +386,7 @@ def generate_integra_file(df, start_date, end_date):
 
     date_str = last_month_date.strftime('%Y-%m')
     file_name =f'{date_str}_{df.iloc[0].invoice_group_description}_{df.iloc[0].invoice_group_name}_integra.xlsx' 
-    for_invoice_df['file_name'] = file_name    
+    for_invoice_df['file_name'] = ref_file_name    
 
     for_invoice_df = for_invoice_df[['Получател','сметка 411','ЕИК','номер на фактура','Дата на издаване','Падеж', 'Основание','Код на стоката', 'Количество', 'Дименсия на количество', 
                                     'Цена без ДДС', 'Код на валутата', 'Валутен курс','Стойност без ДДС','ТИП на сделката по ДДС','ДДС %',
