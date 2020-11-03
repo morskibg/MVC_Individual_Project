@@ -26,6 +26,7 @@ ENERGY_ROUND_MW = 6
 INV_REFS_PATH = 'app/static/inv_ref_files'
 INTEGRA_INDIVIDUAL_PATH = 'app/static/integra_individual_files' 
 INTEGRA_FOR_UPLOAD_PATH = 'app/static/integra_for_upload' 
+PDF_INVOICES_PATH = 'app/static/created_pdf_invoices'
 
 GOODES_CODE = {'Сума за енергия':'304-1', 'Мрежови услуги (лв.)':'498-56','Задължение към обществото':'459-2','Акциз':'456-1'}
 PRICES = {'304-1':'price', '498-56':'Мрежови услуги (лв.)','459-2':'zko','456-1':'akciz'}
@@ -234,7 +235,7 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
         ws['F12'].number_format = '### ### ##0.00 лв.'
         # ws['F12'].number_format = '### ### ##0.00000 лв.'
 
-        ws['G12'].value = ws['F12'].value * ws['E12'].value
+        ws['G12'].value = round((ws['F12'].value * ws['E12'].value), MONEY_FINAL_ROUND)
         ws['G12'].number_format = '### ### ##0.00 лв.'
 
         ws['E13'].value = total_consumption 
@@ -247,15 +248,15 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
         ws['E16'].number_format = '# ###.00000' if total_consumption != 0 else '0'
 
         grid_services = df['Мрежови услуги (лв.)'].sum()
-        ws['G13'].value = round(grid_services, MONEY_ROUND)
+        ws['G13'].value = round(grid_services, MONEY_FINAL_ROUND)
         ws['G13'].number_format = '### ### ##0.00 лв.'
 
         zko = df['Задължение към обществото'].sum()
-        ws['G14'].value = round(zko, MONEY_ROUND)
+        ws['G14'].value = round(zko, MONEY_FINAL_ROUND)
         ws['G14'].number_format = '### ### ##0.00 лв.'
 
         akciz = df['Акциз'].sum()
-        ws['G15'].value = round(akciz, MONEY_ROUND)
+        ws['G15'].value = round(akciz, MONEY_FINAL_ROUND)
         ws['G15'].number_format = '### ### ##0.00 лв.'
 
         ws['G16'].value = 0
@@ -339,8 +340,11 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     
     df = df.fillna(Decimal('0'))
    
-    inv_group_name = df.iloc[0]['invoice_group_name']   
-    curr_contract = db.session.query(Contract).join(SubContract).join(InvoiceGroup).filter(SubContract.start_date <= start_date, SubContract.end_date > start_date).first()
+    inv_group_name = df.iloc[0]['invoice_group_name'] 
+    # print(f'inv group name {inv_group_name}')  
+    curr_contract = db.session.query(Contract).join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == inv_group_name ).filter(SubContract.start_date <= start_date, SubContract.end_date > start_date).first()
+  
+    # print(f'current contract from integra creation : {curr_contract} --- {curr_contract.maturity_interval}')
     
     try:
         df['price'] = (df['Сума за енергия'].sum()) / (df['Потребление (kWh)'].sum())
@@ -349,7 +353,7 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
 
 
     for_invoice_df = df[['Потребление (kWh)','Сума за енергия','Мрежови услуги (лв.)','Задължение към обществото','Акциз']].sum()
-    
+    # print(f'{for_invoice_df}')
     for_invoice_df = for_invoice_df.to_frame().T   
     for_invoice_df['inv_group']=df.iloc[0]['invoice_group_name'] 
     for_invoice_df['Получател']=df.iloc[0]['contractor_name']    
@@ -357,7 +361,9 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
 
     last_month_date = end_date.replace(day = calendar.monthrange(end_date.year, end_date.month)[1])
     for_invoice_df['Дата на издаване'] = last_month_date.strftime('%d/%m/%Y')
-    for_invoice_df['Падеж'] = (dt.date.today() + pd.offsets.BDay(curr_contract.maturity_interval)).strftime('%d/%m/%Y')
+    maturity_date = (dt.date.today() + pd.offsets.BDay(curr_contract.maturity_interval)).strftime('%d/%m/%Y') if curr_contract.maturity_interval <= 15 else (dt.date.today() + dt.timedelta(days = curr_contract.maturity_interval)).strftime('%d/%m/%Y')
+    # print(f'{maturity_date}')
+    for_invoice_df['Падеж'] = maturity_date
     reason_date_str = last_month_date.strftime('%m.%Y') 
     for_invoice_df['Основание'] = f' за м.{reason_date_str}г.'
     
@@ -371,7 +377,7 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     
     for_invoice_df['Код на стоката'] = for_invoice_df['Код на стоката'].apply(lambda x: GOODES_CODE[x])
     for_invoice_df['Основание'] = for_invoice_df.apply(lambda x: x['Основание'] if x['Код на стоката'] == '304-1' else '', axis = 1)
-    for_invoice_df['Количество'] = for_invoice_df.apply(lambda x: x['Потребление (kWh)']if x['Код на стоката'] != '498-56' else 1, axis = 1)
+    for_invoice_df['Количество'] = for_invoice_df.apply(lambda x: Decimal(str(x['Потребление (kWh)'])) / Decimal('1000') if x['Код на стоката'] != '498-56' else 1, axis = 1)
     for_invoice_df['Цена без ДДС'] = for_invoice_df['Код на стоката'].apply(lambda x: df.iloc[0][PRICES[x]] * 1000)
     for_invoice_df['номер на фактура'] = ''
     for_invoice_df['Дименсия на количество'] = ''

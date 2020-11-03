@@ -671,19 +671,29 @@ def delete_excel_files(path, files, is_delete_all):
                         
                 else:
                     continue
-                print(f'File: {filename} removed !')          
+                print(f'File: {filename} removed !')   
 
-# def get_invoice_excel_files():
+def parse_integra_csv(df):
+    
 
-#     file_list = []
-#     for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
-#         for filename in files:
-#             if filename.endswith('.xlsx') & (filename.find('~') == -1):
-#                 print('root-->',root, 'dirs --->',dirs, 'FILES>>>>>>>',files)
-#                 curr_df = pd.read_excel(os.path.join(root, filename))
-#                 print(f'df \n{curr_df}')
-#                 break
+    list_df = df[['DocNumber','RepFileName']]
+    
+    list_df = list_df.drop_duplicates(subset = ["DocNumber"], keep = 'first')
+    
+    list_df.set_index('DocNumber', drop = True, inplace = True)
+    list_df = list_df.dropna()
+    
+    res = list_df.to_records().tolist()
 
+    return res
+
+def create_df_from_integra_csv(csv_file):
+
+    raw_df = pd.read_csv(csv_file, sep = '|')
+    appl_numbers = list(set(raw_df[raw_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ']['DocNumber']))
+    df = raw_df[raw_df['DocNumber'].isin(appl_numbers)]    
+
+    return df
 
 
 

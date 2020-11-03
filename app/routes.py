@@ -12,7 +12,7 @@ from app import app
 from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
     UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm,
-    UploadInitialForm, IntegraForm)
+    UploadInitialForm, IntegraForm, InvoiceForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
@@ -50,9 +50,11 @@ from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  create_tariff,
                                  date_format_corector,
                                  get_excel_files,
-                                 delete_excel_files)
+                                 delete_excel_files,
+                                 parse_integra_csv,
+                                 create_df_from_integra_csv)
 
-from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
+from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH, PDF_INVOICES_PATH)
 
 from app.helpers.helper_functions_queries import (                                         
                                         get_contractors_names_and_411,
@@ -71,6 +73,7 @@ from app.helpers.helper_functions_reports import (create_report_from_grid, get_s
                                          get_summary_spot_df, get_weighted_price, create_utc_dates,
                                          get_weighted_price, create_excel_files, appned_df)
 
+from app.helpers.invoice_writer import create_invoices
 
 MEASURE_MAP_DICT = {
                 'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
@@ -79,12 +82,34 @@ MEASURE_MAP_DICT = {
             }
 MONEY_ROUND = 9
 
+@app.route('/create_invoice', methods=['GET', 'POST'])
+@login_required
+def create_invoice():
+    
+    form = InvoiceForm()
+    
+    if form.create_invoice.data:
+            
+            raw_df = pd.read_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))
+            redacted_df = raw_df[raw_df['DocNumber'].isin(form.invoicing_list.data)]
+            create_invoices(redacted_df, PDF_INVOICES_PATH)            
+            return redirect(url_for('create_invoice'))   
+
+    if form.validate_on_submit():         
+        if form.upload_csv.data:
+            invoice_df = create_df_from_integra_csv(request.files.get('file_integra_csv'))
+            invoice_df.to_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))
+                     
+            form.invoicing_list.choices = parse_integra_csv(invoice_df)      
+
+    return render_template('create_invoice.html', title='Invoice Creation', form=form)
+
 
 @app.route('/erp', methods=['GET', 'POST'])
 @login_required
 def erp():
     
-    form = ErpForm()
+    form = InvoiceForm()
     if form.validate_on_submit():
         separator = '";"'
         # metas = db.session.query(ItnMeta.itn,MeasuringType.code).join(SubContract,SubContract.itn == ItnMeta.itn).join(MeasuringType).all()
@@ -135,6 +160,16 @@ def test():
     form = TestForm()
     form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
     if form.validate_on_submit():
+        
+        # contractors = (db.session
+        #     .query(Contract.id, Contractor.name, Contractor.vat_number, Contractor.address, Contractor.acc_411)
+        #         .join(Contractor,Contractor.id == Contract.contractor_id)
+        #         .join(ContractType,ContractType.id == Contract.contract_type_id)
+        #         .filter(ContractType.name == "Mass_Market")
+        #         .distinct(Contractor.name)
+        #         .all())
+        # temp_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())  
+        # temp_df.to_excel('temp/contractors.xlsx')   
 
     #     # ################################# Initial Ibex  ###################################### 
         
@@ -179,25 +214,7 @@ def test():
         if form.submit_delete.data:
             delete_excel_files(INV_REFS_PATH, form.ref_files.data, form.delete_all.data)
             return redirect(url_for('test'))
-            # custom_del_files = []
-            # if not form.delete_all.data:
-            #     custom_del_files = form.ref_files.data
-            # print(f'{custom_del_files}')
-            # for root, dirs, files in os.walk(INV_REFS_PATH):            
-            #     for filename in files:
-                    
-            #         if filename.endswith('.xlsx') & (filename.find('~') == -1) :
-            #             if form.delete_all.data:
-            #                 os.remove(os.path.join(root, filename))                            
-                            
-            #             elif filename in custom_del_files:                          
-            #                 os.remove(os.path.join(root, filename))
-                             
-            #             else:
-            #                 continue
-            #             print(f'File: {filename} removed !') 
-            # return redirect(url_for('test'))          
-
+           
 
         elif form.submit.data:
             weighted_price = None
@@ -234,7 +251,7 @@ def test():
                 else:
                     summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
                     create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
-            return redirect(url_for('test'))     
+            # return redirect(url_for('test'))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
@@ -288,7 +305,9 @@ def create_integra_excel():
         elif form.proba.data:
             print(f'proba {form.integra_upload_files.data}')
             print(f'{os.path.join(INTEGRA_FOR_UPLOAD_PATH,form.file_name.data)}')
-            return send_from_directory(INTEGRA_FOR_UPLOAD_PATH, as_attachment=True, filename="qqq.xlsx")
+            DIR = os.path.dirname(os.path.abspath(form.integra_upload_files.data[0]))
+            print(f'{os.path.join(DIR,form.integra_upload_files.data[0])}')
+            # return send_from_directory(INTEGRA_FOR_UPLOAD_PATH, as_attachment=True, filename="qqq.xlsx")
             # return send_file(INTEGRA_FOR_UPLOAD_PATH, as_attachment=True)
 
     return render_template('create_excel_for_integra.html', title='Integra file', form=form)
@@ -829,9 +848,21 @@ def upload_contracts():
     if form.validate_on_submit():
         print(f'in upload_contracts')
         df = pd.read_excel(request.files.get('file_'))
-        # print(f'{df.columns}')
-        df = validate_input_df(df)
-        df = date_format_corector(df,['signing_date', 'start_date', 'end_date'])
+
+        # tks = list(df.internal_id)
+        # contracts = Contract.query.filter(Contract.internal_id.in_(tks)).all()
+        # contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}
+
+        # # df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
+        # df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
+        # for c in contracts:
+        #     curr_idx = c.contract_type_id
+        #     print(f'curr contract type {curr_idx}')
+        #     input_idx = df[df['internal_id'] == c.internal_id].contract_type.values[0]
+        #     print(f'must be contract type {input_idx}')
+        #     c.update({'contract_type_id':int(input_idx)})
+        #     # c.update({'contract_type_id':3})
+        
         
         
         if set(df.columns).issubset(['411-3', 'parent_contract_internal_id', 'internal_id', 'contractor',
@@ -875,9 +906,9 @@ def upload_contracts():
 
             invoicing_dict = {'до 12-то число, следващ месеца на доставката':42,'на 10 дни':10,'на 15 дни':15,'последно число':31,'конкретна дата':-1}
             df['invoicing_interval'] = df['invoicing_interval'].apply(lambda x: invoicing_dict[x.strip()] if(invoicing_dict.get(str(x).strip())) else 0 )
-            contract_type_dict = {'OTC':'End_User','ОП':'Procurement',}
+            contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}
 
-            df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
+            # df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
             df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
 
             work_day_dict = {'календарни дни':0, 'работни дни':1}

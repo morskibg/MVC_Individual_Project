@@ -306,6 +306,18 @@ class IntegraForm(FlaskForm):
     delete_upload_integra = SubmitField('Delete Integra upload files') 
 
     proba = SubmitField('Proba') 
+
+class InvoiceForm(FlaskForm):
+
+    file_integra_csv = FileField('Browse for Integra CSV File')
+    upload_csv = SubmitField('Upload CSV')
+
+    invoicing_list = SelectMultipleField('Select records for invoice creation',coerce=int, choices=[],  render_kw={'size':25})
+    # invoicing_list = StringField('Select records for invoice creation',  validators=[Optional()], render_kw={'size':25})
+    create_invoice = SubmitField('Create invoices')
+
+
+
             
     
 

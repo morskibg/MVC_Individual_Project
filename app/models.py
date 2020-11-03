@@ -549,6 +549,9 @@ class Tariff(BaseModel):
     def __repr__(self):
         return f'Tarrif: {self.name}, price_day: {self.price_day}, price_night: {self.price_night}'
 
+# class Invoice(BaseModel):
+
+#     id = db.Column(db.Integer, primary_key = True,  nullable = False)
 
 db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
 db.event.listen(SubContract, 'after_update', ItnSchedule.autoupdate_existing)

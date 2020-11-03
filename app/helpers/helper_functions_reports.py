@@ -205,7 +205,7 @@ def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_dat
             df['Сума за енергия'] = df['Потребление (kWh)'] * weighted_price
         
         ref_file_name = generate_ref_excel(df, grid_services_df, invoice_start_date, invoice_end_date, start_date, end_date)
-
+        
         integra_df = df[df['make_invoice']]
         
         if integra_df.empty:
