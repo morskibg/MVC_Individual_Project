@@ -695,6 +695,17 @@ def create_df_from_integra_csv(csv_file):
 
     return df
 
+def get_files(path, file_type):
+
+    file_list = []
+    file_type = f'.{file_type}'
+    for root, dirs, files in os.walk(path):            
+        for filename in files:
+            if filename.endswith(file_type) & (filename.find('~') == -1):
+                # print('root-->',root, 'dirs --->',dirs, 'FILES>>>>>>>',files)
+                file_list.append(filename)
+                
+    return file_list  
 
 
 

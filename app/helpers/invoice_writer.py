@@ -1,6 +1,7 @@
 from math import log, ceil, frexp
 import pandas as pd
 from decimal import Decimal
+import os, sys
 
 import barcode
 from barcode.writer import ImageWriter
@@ -22,6 +23,13 @@ from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode import eanbc
 from reportlab.lib import colors
 import textwrap
+
+import xlsxwriter
+from openpyxl.styles import Alignment
+from openpyxl import load_workbook
+
+from app.models import *
+from app.helpers.helper_functions import convert_date_to_utc, update_or_insert
 
 
 
@@ -207,70 +215,7 @@ class SumTextWriter:
         
         return f'{integer_str} лева и {decimal_str} стотинки.'
 
-class InvoiceCreator_:
 
-    def __init__(self, pdf_file, df, p_style, sum_writer):
-
-        self.doc = SimpleDocTemplate(
-            pdf_file, pagesize=letter,
-            rightMargin=72, leftMargin=36,
-            topMargin=36, bottomMargin=18)
-        self.elements = []
-        self.raw_df = df
-        self.p_style = p_style
-        self.sum_writer = sum_writer
-        self.canvas = canvas.Canvas(pdf_file, pagesize=A4)
-        self.styles = getSampleStyleSheet()
-        self.width, self.height = A4
-        self.create()
-
-    def create(self):
-
-        self.elements.append(self.create_seller_data())
-        # ptext = '<font size=26>Your payment summary</font>'
-        # p = Paragraph(ptext, self.styles["Normal"])
-        # self.elements.append(p)
-        # self.elements.append(Spacer(1, 20))
-        self.doc.build(self.elements)
-        # self.canvas.setFont('DejaVuSerif', 15)
-        
-
-    def __coord__(self, x, y, unit=1):
-        x, y = x * unit, self.height - y * unit
-        return x, y
-
-    def __paragraph_writer__(self, p_text, ext_x, ext_y, style = None):
-
-        style = self.styles["Normal"] if style is not None else self.p_style
-
-        p = Paragraph(p_text, style)
-        p.wrapOn(self.canvas, self.width, self.height)
-        p.drawOn(self.canvas, *self.__coord__(ext_x, ext_y, mm))
-
-    def create_seller_data(self, ext_x = 100 , ext_y = 40):
-
-        name = self.lead_data['SNAME'].values[0]
-        ein = self.lead_data['STAXNUM'].values[0]
-        vat = self.lead_data['SBULSTAT'].values[0]
-        address = self.lead_data['SAddress'].values[0]
-        store_name = self.lead_data['StoreName'].values[0] 
-
-        p_text =  f'ДОСТАВЧИК : <b>{name}</b><br />' 
-        p_text += f'ЕИН : <b>{ein}</b><br />'        
-        p_text += f'ДДС No    : <b>{vat}</b><br />'
-        p_text += f'АДРЕС     : <b>{address}</b><br />'
-        p_text += f'ОБЕКТ     : <b>{store_name}</b><br />'
-        p = Paragraph(p_text, self.p_style)
-
-        return p
-
-        # self.p_style.leading = 12
-        # self.p_style.fontSize = 8
-        # self.__paragraph_writer__(p_text, ext_x, ext_y)
-
-    
-
-  
 
 class InvoiceCreator:
 
@@ -293,6 +238,9 @@ class InvoiceCreator:
         self.lead_data = None
         self.__specify_lead_data__()
         self.y_offset = 10
+        self.total_sum = 0
+        self.vat = 0
+        self.net_sum = 0
 
     def __specify_lead_data__(self):
 
@@ -335,7 +283,7 @@ class InvoiceCreator:
             qty = 0
             price = amount = amount_calc = '0.00'
         else:
-            qty = f'{df.Quantity.values[0]:,.2f}'.replace(',', u'\u2009') 
+            qty = f'{df.Quantity.values[0]:,.3f}'.replace(',', u'\u2009') 
             price = f'{df.PriceLev.values[0]:,.2f}'.replace(',', u'\u2009')
             amount = f'{df.ItemSuma.values[0]:,.2f}'.replace(',', u'\u2009')            
             amount_calc = f'{df.ItemSuma.values[0]:.2f}'
@@ -527,9 +475,13 @@ class InvoiceCreator:
         sum_neto = Decimal(str(self.grid_tuple[3])) + Decimal(str(self.zko_tuple[3])) + \
                      Decimal(str(self.akciz_tuple[3])) + Decimal(str(self.power_tuple[3]))
 
+        self.net_sum = sum_neto
+
         sum_vat = Decimal(str(self.raw_df.iloc[0].VATValue)) * Decimal('0.01') * Decimal(str(sum_neto))
+        self.vat = sum_vat
 
         total_sum = Decimal(str(sum_neto)) + Decimal(str(sum_vat))
+        self.total_sum = total_sum
 
         no_vat_reason = self.lead_data['VATDescrBG'].values[0]
 
@@ -665,17 +617,73 @@ class InvoiceCreator:
 
         ext_y -=  self.y_offset
         logo = 'app/static/img/backgroung_invoice_GED.png'
-        self.canvas.drawInlineImage(logo,*self.coord(ext_x, ext_y, mm),540, 600)
-
-
-        
-
-
-        
-
-    def save(self):
+        self.canvas.drawInlineImage(logo,*self.coord(ext_x, ext_y, mm),540, 600) 
+               
     
+
+    def save(self):    
         self.canvas.save()
+
+    def upload_to_db(self):
+        contractor_id= Contractor.query.filter(Contractor.acc_411 == self.lead_data['fullcode'].values[0]).first().id
+        if contractor_id is None:
+            print(f'Error from invoce to db - missing contractor with acc 411 :{self.lead_data.fullcode.values[0]}')
+
+        invoice_group_id = InvoiceGroup.query.filter(InvoiceGroup.name == self.lead_data['RepFullCode'].values[0]).first().id
+
+        if invoice_group_id is None:
+            print(f'Error from invoce to db - missing invouce group with name :{self.lead_data.RepFullCode.values[0]}')
+
+        old_invoice = Invoice.query.filter(Invoice.id == int(self.lead_data['DocNumber'].values[0])).all()
+
+        creation_date = self.lead_data['StockDate'].values[0].replace('.','/')
+        creation_date = dt.datetime.strptime(creation_date, '%d/%m/%Y')
+
+        maturity_date = self.lead_data['PayDate'].values[0].replace('.','/')
+        maturity_date = dt.datetime.strptime(maturity_date, '%d/%m/%Y')
+
+        
+        if len(old_invoice) == 0:
+
+            invoice = Invoice(id = int(self.lead_data['DocNumber'].values[0]),
+                                contractor_id = contractor_id,
+                                total_qty = Decimal(self.power.Quantity.values[0]),
+                                total_sum = Decimal(self.total_sum),
+                                grid_sum = Decimal(self.grid.ItemSuma.values[0]),
+                                zko_sum = Decimal(self.zko.ItemSuma.values[0]),
+                                akciz_sum = Decimal(self.akciz.ItemSuma.values[0]),
+                                additional_tax_sum = 0,
+                                ref_file_name = self.lead_data['RepFileName'].values[0],
+                                easypay_num = int(self.lead_data['easy_pay_num'].values[0]),
+                                easypay_name = self.lead_data['easy_pay_name'].values[0],
+                                is_easypay = self.lead_data['EasyPay'].values[0],
+                                creation_date = creation_date,
+                                maturity_date = maturity_date,
+                                price = Decimal(self.power.PriceLev.values[0]),
+                                invoice_group_id = invoice_group_id
+                            )
+            invoice.save()
+        else:
+            invoice_dict = {'id': int(self.lead_data['DocNumber'].values[0]),
+                                'contractor_id' : contractor_id,
+                                'total_qty' : Decimal(self.power.Quantity.values[0]),
+                                'total_sum' : Decimal(self.total_sum),
+                                'grid_sum' : Decimal(self.grid.ItemSuma.values[0]),
+                                'zko_sum' : Decimal(self.zko.ItemSuma.values[0]),
+                                'akciz_sum' : Decimal(self.akciz.ItemSuma.values[0]),
+                                'additional_tax_sum' : 0,
+                                'ref_file_name' : self.lead_data['RepFileName'].values[0],
+                                'easypay_num' : int(self.lead_data['easy_pay_num'].values[0]),
+                                'easypay_name' : self.lead_data['easy_pay_name'].values[0],
+                                'is_easypay' : self.lead_data['EasyPay'].values[0],
+                                'creation_date' : creation_date,
+                                'maturity_date' : maturity_date,
+                                'price' : Decimal(self.power.PriceLev.values[0]),
+                                'invoice_group_id' : invoice_group_id
+                        }
+            old_invoice[0].update(invoice_dict)
+            
+
         
     
 def fonts_init():
@@ -688,26 +696,36 @@ def fonts_init():
     # addMapping('Vera', 0, 1, 'Vera-Italic') #italic
     addMapping('DejaVuSerif', 1, 0, 'DejaVuSerifBold') #bold
 
-def create_grouped_dict(df):
-    res_dict = dict(tuple(df.groupby('DocNumber')))
-    return res_dict
+def ref_num_injector(raw_df, ref_path):
 
-def create_invoices(raw_df, dest_path):
+    try:
+        wb = load_workbook(filename = os.path.join(ref_path , raw_df.iloc[0].RepFileName))
+    except Exception as e:         
+        print(f'{e}  \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
+    else:
+        ws = wb.active
+        text = 'СПРАВКА КЪМ ФАКТУРА №'    
+        inv_num = raw_df.iloc[0].DocNumber
+        final_text = f'{text} {inv_num}'
+        ws['A4'].value = final_text
+        ws.merge_cells('A4:J4')        
+        ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
+        wb.save(os.path.join(ref_path , raw_df.iloc[0].RepFileName))
+        
+def create_invoices(raw_df, dest_path, ref_path):
 
 
     fonts_init()
     par_styler = ParagraphStyler()    
     sum_writer = SumTextWriter()
     
-    grouped_dict = create_grouped_dict(raw_df)
-    for key in grouped_dict.keys():
-        # if (key not in[15524,15296,15207]):
-        #     continue
+    grouped_dict = dict(tuple(raw_df.groupby('DocNumber')))    
+    for key in grouped_dict.keys():        
         print(f'{key}')
-        pdf_file = f'{dest_path}/{key}.pdf'
+        pdf_file_name = f'{dest_path}/{key}.pdf'
         df = grouped_dict[key]
         par_styler.reset()
-        invoice = InvoiceCreator(pdf_file, df, par_styler, sum_writer)  
+        invoice = InvoiceCreator(pdf_file_name, df, par_styler, sum_writer)  
         invoice.create_footer()      
         invoice.create_barcode()
         invoice.create_logo()
@@ -720,15 +738,7 @@ def create_invoices(raw_df, dest_path):
         invoice.create_signature_fields()
         invoice.create_notes()
         invoice.save()
-        # break
+        invoice.upload_to_db()
+        ref_num_injector(df, ref_path)
+        invoice.upload_to_db()
 
-# if __name__ == '__main__':
-
-    
-#     # raw_df = pd.read_excel('static/input_data/invoice_raw_data.xlsx', sheet_name='Book2')
-   
-#     raw_df = pd.read_csv('static/input_data/documents_09_29_03_39_37.csv', sep = '|')
-#     appl_numbers = list(set(raw_df[raw_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ']['DocNumber']))
-#     df = raw_df[raw_df['DocNumber'].isin(appl_numbers)]
-#     print(f'{df}')
-#     main(df)

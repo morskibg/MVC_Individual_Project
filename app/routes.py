@@ -12,7 +12,7 @@ from app import app
 from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
     UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm,
-    UploadInitialForm, IntegraForm, InvoiceForm)
+    UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
@@ -52,7 +52,9 @@ from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  get_excel_files,
                                  delete_excel_files,
                                  parse_integra_csv,
-                                 create_df_from_integra_csv)
+                                 create_df_from_integra_csv,
+                                 get_files,
+                                 )
 
 from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH, PDF_INVOICES_PATH)
 
@@ -74,6 +76,7 @@ from app.helpers.helper_functions_reports import (create_report_from_grid, get_s
                                          get_weighted_price, create_excel_files, appned_df)
 
 from app.helpers.invoice_writer import create_invoices
+from app.helpers.helper_functions_email import (send_email)
 
 MEASURE_MAP_DICT = {
                 'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
@@ -81,6 +84,33 @@ MEASURE_MAP_DICT = {
                 'DIRECT':'DIRECT','UNDIRECT':'UNDIRECT'    
             }
 MONEY_ROUND = 9
+
+
+
+@app.route('/test', methods=['GET', 'POST'])
+@login_required
+def test():
+    form = TestForm()
+    # form.attachment_files.choices = sorted([(x[0],x[1]) for x in create_list_of_tuples(INV_REFS_PATH, PDF_INVOICES_PATH)])
+    if form.validate_on_submit():
+        if form.submit.data:
+            selected_invoices = form.attachment_files.data
+            for inv in selected_invoices:
+                contractor =  Contractor.query.filter(Contractor.id == inv.contractor_id).first()
+                mails = contractor.email.split(';')
+                mails = [x for x in mails]
+                ref_file_name = inv.ref_file_name 
+                inv_file_name = str(inv.id)+ '.pdf'
+                file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name)]
+                send_email(mails, file_data)
+        
+        
+        # tuples = create_list_of_tuples(INV_REFS_PATH, PDF_INVOICES_PATH)
+        # print(f'{tupples}')
+        # subject, sender, recipients, text_body, html_body
+        # send_email('proba', app.config['MAIL_DEFAULT_SENDER'],['petkovdimitar009@gmail.com', 'dimityrp@yahoo.com'],"testing","<b>testing</b>",os.path.join(INTEGRA_INDIVIDUAL_PATH, filename))
+
+    return render_template('test.html', title='TEST', form=form)
 
 @app.route('/create_invoice', methods=['GET', 'POST'])
 @login_required
@@ -92,7 +122,7 @@ def create_invoice():
             
             raw_df = pd.read_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))
             redacted_df = raw_df[raw_df['DocNumber'].isin(form.invoicing_list.data)]
-            create_invoices(redacted_df, PDF_INVOICES_PATH)            
+            create_invoices(redacted_df, PDF_INVOICES_PATH, INV_REFS_PATH)            
             return redirect(url_for('create_invoice'))   
 
     if form.validate_on_submit():         
@@ -154,10 +184,10 @@ def erp():
 
     return render_template('erp.html', title='ERP Upload', form=form)
 
-@app.route('/test', methods=['GET', 'POST'])
+@app.route('/monthly_report', methods=['GET', 'POST'])
 @login_required
-def test():
-    form = TestForm()
+def monthly_report():
+    form = MonthlyReportForm()
     form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
     if form.validate_on_submit():
         
@@ -213,7 +243,7 @@ def test():
 
         if form.submit_delete.data:
             delete_excel_files(INV_REFS_PATH, form.ref_files.data, form.delete_all.data)
-            return redirect(url_for('test'))
+            return redirect(url_for('monthly_report'))
            
 
         elif form.submit.data:
@@ -256,7 +286,7 @@ def test():
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
-    return render_template('test.html', title='Test', form=form)
+    return render_template('monthly_report.html', title='Monthly Report', form=form)
 
 @app.route('/create_excel_for_integra', methods=['GET', 'POST'])
 @login_required

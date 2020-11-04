@@ -549,9 +549,38 @@ class Tariff(BaseModel):
     def __repr__(self):
         return f'Tarrif: {self.name}, price_day: {self.price_day}, price_night: {self.price_night}'
 
-# class Invoice(BaseModel):
+class Invoice(BaseModel):
 
-#     id = db.Column(db.Integer, primary_key = True,  nullable = False)
+    id = db.Column(db.Integer, primary_key = True,  nullable = False)
+    contractor_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
+    total_qty = db.Column(db.Numeric(12,3),nullable = False, default = 0)
+    total_sum = db.Column(db.Numeric(12,4),nullable = False, default = 0)
+    grid_sum = db.Column(db.Numeric(12,4),nullable = False, default = 0)
+    zko_sum = db.Column(db.Numeric(12,4),nullable = False, default = 0)
+    akciz_sum = db.Column(db.Numeric(12,4),nullable = False, default = 0)
+    additional_tax_sum = db.Column(db.Numeric(12,4),nullable = False, default = 0)
+    ref_file_name = db.Column(db.String(256), unique=True, nullable = False)
+    easypay_num = db.Column(db.Integer,nullable=False, default = 0)
+    easypay_name = db.Column(db.String(256),  nullable = False, default = 'none')
+    is_easypay = db.Column(db.Boolean, nullable = False, default = 0)
+    creation_date = db.Column(db.Date, nullable=False)
+    maturity_date = db.Column(db.Date, nullable=False)
+    price = db.Column(db.Numeric(7,4), nullable=False, default = 0)
+    invoice_group_id = db.Column(db.Integer, db.ForeignKey('invoice_group.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
+    last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
+
+    def __repr__(self):
+        contractor = Contractor.query.filter(Contractor.id == self.contractor_id).all()
+        contractor_name = contractor[0].name
+        emails = contractor[0].email
+        return f'{self.id} - {contractor_name} - {self.total_sum} - {self.creation_date} - {emails}'
+
+    def __str__(self):
+        contractor = Contractor.query.filter(Contractor.id == self.contractor_id).all()
+        contractor_name = contractor[0].name
+        emails = contractor[0].email
+        return f'{self.id} - {contractor_name} - {self.total_sum} - {self.creation_date} - {emails}'
+
 
 db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
 db.event.listen(SubContract, 'after_update', ItnSchedule.autoupdate_existing)

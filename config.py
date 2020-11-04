@@ -5,7 +5,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, '.flaskenv'))
 
 class Config(object):
-	SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
+	SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess-ha@_'
 	SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI') 		
 	SQLALCHEMY_TRACK_MODIFICATIONS = False
 	MAIL_SERVER = os.environ.get('MAIL_SERVER')

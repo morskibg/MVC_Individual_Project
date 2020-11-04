@@ -204,10 +204,10 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
         for c in ws.iter_cols(1, 7, 21 , 21):
             c[0].fill = d_gray_fill
 
-        ws.merge_cells('A4:J4') 
+        # ws.merge_cells('A4:J4') 
 
         ws['A4'].font =  Font(size=12, color='000000', bold=True, italic=False) 
-        ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
+        # ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
         ws['A7'].value = f"""КЛИЕНТ: {contractor}"""
         ws['A7'].font =  Font(size=12, color='000000', bold=True, italic=False)
 
