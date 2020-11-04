@@ -65,7 +65,8 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
     contractor = df['invoice_group_description'].iloc[0]
     
     # print(f'contractor --> {contractor}')
-    period = f'{calendar.month_name[period_end_date.month]}/{period_end_date.year}'
+    # period = f'{calendar.month_name[period_end_date.month]}/{period_end_date.year}'
+    period = f'{period_end_date.month}/{period_end_date.year}'
     # print(f'period --> {calendar.month_name[period_start_date.month]}/{period_start_date.year}')
     file_name =f'{period_end_date.year}-{period_end_date.month}_{df.iloc[0].invoice_group_description}_{df.iloc[0].invoice_group_name}_invoice_reference.xlsx' 
     #  print(f'file_name --> {file_name}')    

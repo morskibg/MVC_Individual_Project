@@ -76,7 +76,7 @@ from app.helpers.helper_functions_reports import (create_report_from_grid, get_s
                                          get_weighted_price, create_excel_files, appned_df)
 
 from app.helpers.invoice_writer import create_invoices
-from app.helpers.helper_functions_email import (send_email)
+from app.email import (send_email)
 
 MEASURE_MAP_DICT = {
                 'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
@@ -101,14 +101,8 @@ def test():
                 mails = [x for x in mails]
                 ref_file_name = inv.ref_file_name 
                 inv_file_name = str(inv.id)+ '.pdf'
-                file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name)]
-                send_email(mails, file_data)
-        
-        
-        # tuples = create_list_of_tuples(INV_REFS_PATH, PDF_INVOICES_PATH)
-        # print(f'{tupples}')
-        # subject, sender, recipients, text_body, html_body
-        # send_email('proba', app.config['MAIL_DEFAULT_SENDER'],['petkovdimitar009@gmail.com', 'dimityrp@yahoo.com'],"testing","<b>testing</b>",os.path.join(INTEGRA_INDIVIDUAL_PATH, filename))
+                file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
+                send_email(mails, file_data)       
 
     return render_template('test.html', title='TEST', form=form)
 
