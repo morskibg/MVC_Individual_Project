@@ -583,7 +583,55 @@ def create_ibex_schedule(end_date):
     db.session.commit()
 
 # def update_ibex_data():
+def get_inv_gr_id_single_erp(erp, start_date = None, end_date = None):
 
+    now_date = dt.datetime.utcnow()
+    start_date = now_date - dt.timedelta(days = 28)
+    end_date = start_date + dt.timedelta(days = 10)
+
+    itn_count_per_inv_gr = (
+        db.session.query(
+            
+            InvoiceGroup.id.label('inv_gr_id_all'),
+            func.count(SubContract.itn).label('itns_count')
+        )
+        .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+        .join(ItnMeta, ItnMeta.itn == SubContract.itn)               
+        .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
+        .group_by(InvoiceGroup.id)
+        .subquery()
+    )
+
+    itn_count_per_inv_gr_erp = (
+        db.session.query(
+            
+            InvoiceGroup.id.label('itn_count_per_inv_gr_erp'),
+            func.count(SubContract.itn).label('itns_count')
+        )
+        .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+        .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
+        .join(Erp)  
+        .filter(Erp.name == erp)          
+        .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
+        .group_by(InvoiceGroup.id)
+        .subquery()
+    )
+
+    single_erp_inv_ids =(
+        db.session.query(
+            InvoiceGroup.name,
+            InvoiceGroup.description,
+            itn_count_per_inv_gr_erp.c.itn_count_per_inv_gr_erp,
+            
+            
+        )
+        .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id_all == itn_count_per_inv_gr_erp.c.itn_count_per_inv_gr_erp)
+        .join(InvoiceGroup, InvoiceGroup.id == itn_count_per_inv_gr_erp.c.itn_count_per_inv_gr_erp)
+        .filter(itn_count_per_inv_gr.c.itns_count == itn_count_per_inv_gr_erp.c.itns_count)
+        .distinct()
+        .all()
+    )
+    return single_erp_inv_ids
 
 
     

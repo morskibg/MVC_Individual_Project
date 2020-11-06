@@ -66,7 +66,8 @@ from app.helpers.helper_functions_queries import (
                                         get_all_inv_groups,
                                         get_time_zone,
                                         get_list_inv_groups_by_contract,
-                                        has_ibex_real_data
+                                        has_ibex_real_data,
+                                        get_inv_gr_id_single_erp
 )
 
 from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
@@ -96,17 +97,8 @@ def test():
     form = TestForm()
     if form.validate_on_submit():
         if form.submit.data:
-            # mp = (
-            #     db.session.query(
-            #         SubContract.itn, 
-            #     )
-            # )
-            mp_subs = SubContract.query.join(Contract).join(ContractType).filter(ContractType.name == 'Mass_Market').all()
-            # mass_market_id = db.session.query(ContractType.id).filter(ContractType.name == 'Mass_MArket').first()[0]
-            # print(f'{mass_market_id}')
-            for sub in mp_subs:
-                sub.update({'has_grid_services':1})
-                print(f'updated {sub.itn}')
+            cez_inv_id = get_inv_gr_id_single_erp('CEZ', form.start_date.data, form.end_date.data)
+            
             # itn_count_per_inv_gr = (
             #     db.session.query(
                     
@@ -123,7 +115,7 @@ def test():
             # itn_count_per_inv_gr_cez = (
             #     db.session.query(
                     
-            #         InvoiceGroup.id.label('inv_gr_id_c'),
+            #         InvoiceGroup.id.label('itn_count_per_inv_gr_cez'),
             #         func.count(SubContract.itn).label('itns_count')
             #     )
             #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
@@ -137,18 +129,24 @@ def test():
 
             # cez_full_itns =(
             #     db.session.query(
-            #         InvoiceGroup.id.label('inv_gr_id_only_cez')
+            #         InvoiceGroup.description,
+            #         itn_count_per_inv_gr_cez.c.itn_count_per_inv_gr_cez,
+                    
             #     )
-            #     .
+            #     .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id_all == itn_count_per_inv_gr_cez.c.itn_count_per_inv_gr_cez)
+            #     .join(InvoiceGroup, InvoiceGroup.id == itn_count_per_inv_gr_cez.c.itn_count_per_inv_gr_cez)
+            #     .filter(itn_count_per_inv_gr.c.itns_count == itn_count_per_inv_gr_cez.c.itns_count)
+            #     .distinct()
+            #     .all()
             # )
-            # # records = (db.session.query(ItnMeta.itn, itn_count_per_inv_gr.c.inv_gr_id)
-            # # .join(Erp)
-            # # .join(SubContract, SubContract.itn == ItnMeta.itn)
-            # # .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id == SubContract.invoice_group_id)
-            # # .filter(Erp.name == 'CEZ')
-            # # .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
-            # # .all())
-            # print(f'{itn_count_per_inv_gr_cez}')       
+            # records = (db.session.query(ItnMeta.itn, itn_count_per_inv_gr.c.inv_gr_id)
+            # .join(Erp)
+            # .join(SubContract, SubContract.itn == ItnMeta.itn)
+            # .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id == SubContract.invoice_group_id)
+            # .filter(Erp.name == 'CEZ')
+            # .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
+            # .all())
+            print(f'{cez_inv_id}')       
 
     return render_template('test.html', title='TEST', form=form)
 
@@ -1209,9 +1207,11 @@ def table():
 def monthly_report_by_erp(erp):
     form = MonthlyReportErpForm()
     form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
-    form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in db.session.query(InvoiceGroup.name, InvoiceGroup.description).join(Contractor).join(SubContract).join(Contract)
-                        .join(ItnMeta, ItnMeta.itn == SubContract.itn).join(Erp).join(ContractType, ContractType.id == Contract.contract_type_id).filter(Erp.name == erp)
-                        .filter(ContractType.name == "Mass_Market").order_by(Contractor.name).all()]
+    # form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in db.session.query(InvoiceGroup.name, InvoiceGroup.description).join(Contractor).join(SubContract).join(Contract)
+    #                     .join(ItnMeta, ItnMeta.itn == SubContract.itn).join(Erp).join(ContractType, ContractType.id == Contract.contract_type_id).filter(Erp.name == erp)
+    #                     .filter(ContractType.name == "Mass_Market").order_by(Contractor.name).all()]
+
+    form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in  get_inv_gr_id_single_erp(erp) ]                
     form.contracts.choices =  [ (x,x) for x in Contract.query.join(Contractor).order_by(Contractor.name).all() ]                
     if form.validate_on_submit():
         
@@ -1280,6 +1280,6 @@ def monthly_report_by_erp(erp):
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
-    return render_template('monthly_report.html', title=f'Monthly Report {erp}', form=form)
+    return render_template('monthly_report.html', title=f'Monthly Report {erp}', form=form, erp = erp)
 
     

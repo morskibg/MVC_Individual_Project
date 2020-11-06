@@ -225,7 +225,7 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
 
         total_consumption = df['Потребление (kWh)'].sum() / 1000
         ws['E12'].value = total_consumption 
-        ws['E12'].number_format = '### ### ###.00000' if total_consumption != 0 else '0'
+        ws['E12'].number_format = '### ### ##0.00000' if total_consumption != 0 else '0'
         # # ws['E12'].value = "{:.2f}".format(total_consumption)
 
         total_value = df['Сума за енергия'].sum()
