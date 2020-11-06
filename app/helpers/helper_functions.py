@@ -11,6 +11,9 @@ from sqlalchemy.exc import ProgrammingError
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
 from app.helpers.helper_function_excel_writer import (INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
+                        
+                                      
+
 
 MONEY_ROUND = 9
 
@@ -707,7 +710,53 @@ def get_files(path, file_type):
                 
     return file_list  
 
+def update_ibex_data(start_date, end_date):
+   
+    try:
+        ibex_df = IbexData.download_from_ibex_web_page(start_date, end_date)
+    except:
+        print(f'No IBEX data for chossen period : {start_date} - {end_date}')
+    else:
+        stringifyer(ibex_df)
+        bulk_update_list = ibex_df.to_dict(orient='records')
+        # print(f' IN IBEX {bulk_update_list}')
+        db.session.bulk_update_mappings(IbexData, bulk_update_list)
+        db.session.commit()
 
+
+
+def update_schedule_prices(start_date, end_date):
+    
+    
+    
+    # valid_ibex_last_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
+    spot_itns = (
+        db.session
+            .query(SubContract.itn.label('sub_itn'))                                 
+            .filter(SubContract.start_date <= end_date, SubContract.end_date > end_date) 
+            .filter(SubContract.has_spot_price) #!!!!!!!!!!!!!!!!!!!!!!                           
+            .distinct(SubContract.itn) 
+            .subquery())
+
+    records = (
+        db.session
+            .query(ItnSchedule.itn, ItnSchedule.utc, ItnSchedule.tariff_id, 
+                    Tariff.price_day.label('tariff_price'), IbexData.price.label('ibex_price'))
+            .join(spot_itns, spot_itns.c.sub_itn == ItnSchedule.itn)                    
+            .join(IbexData, IbexData.utc == ItnSchedule.utc) 
+            .join(Tariff,Tariff.id == ItnSchedule.tariff_id )               
+            .filter(ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date)
+            .all()
+        )
+    df = pd.DataFrame.from_records(records, columns = records[0].keys()) 
+    df['price'] = df.apply(lambda x: Decimal(str(x['tariff_price'])) + (Decimal(str(x['ibex_price'])) / Decimal('1000')), axis = 1)
+    df.drop(columns = ['ibex_price'], inplace = True)
+    stringifyer(df)
+    bulk_update_list = df.to_dict(orient='records')  
+    print(f'Enter updating schedule prices for {df.shape[0]} records.')  
+    db.session.bulk_update_mappings(ItnSchedule, bulk_update_list)
+    db.session.commit()
+    
 
     
 

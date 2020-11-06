@@ -7,7 +7,7 @@ from decimal import Decimal
 from flask import  flash
 
 from app.models import *    
-from app.helpers.helper_functions import update_or_insert, stringifyer, convert_date_to_utc
+from app.helpers.helper_functions import update_or_insert, stringifyer, convert_date_to_utc, convert_date_from_utc
 
 MONEY_ROUND = 6
 ENERGY_ROUND = 3
@@ -539,3 +539,51 @@ def get_list_inv_groups_by_contract(internal_id, start_date, end_date):
         )
     res = [x[1] for x in itns]
     return res
+
+def has_ibex_real_data(end_date):
+    
+    records = (db.session
+                .query(IbexData.utc, IbexData.price)
+                .filter(IbexData.utc == end_date)
+                .all()
+            )
+    if records == []:
+        print(f'No schedule data for ibex for {end_date} ! Creating !')
+        create_ibex_schedule(end_date)
+        has_data = False
+    else:
+        ibex_price = records[0][1]
+        has_data = ibex_price > 0 
+
+    return has_data
+
+def create_ibex_schedule(end_date):
+
+    last_db_ibex = db.session.query(IbexData).order_by(IbexData.utc.desc()).first()
+    
+    start_date = last_db_ibex.utc + dt.timedelta(hours = 1)
+    start_date = convert_date_from_utc('EET', start_date,False)
+   
+    end_date = convert_date_from_utc('EET', end_date)
+
+    time_series = pd.date_range(start = start_date, end = end_date , freq='h', tz = 'EET')
+    forecast_df = pd.DataFrame(time_series, columns = ['utc'])
+    forecast_df['forecast_price'] = 0
+    forecast_df['volume'] = 0
+    forecast_df['price'] = 0
+    forecast_df.set_index('utc', inplace = True)
+    
+    forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
+    forecast_df.reset_index(inplace = True)
+    forecast_df = forecast_df[['utc','price', 'forecast_price', 'volume']]
+    stringifyer(forecast_df)
+    bulk_update_list = forecast_df.to_dict(orient='records')
+
+    db.session.bulk_insert_mappings(IbexData, bulk_update_list)
+    db.session.commit()
+
+# def update_ibex_data():
+
+
+
+    

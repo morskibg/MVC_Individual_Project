@@ -31,18 +31,20 @@
                 </div>
                 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
                     <ul class="nav navbar-nav">
-                        <li><a class="nav-link"  href="{{ url_for('index') }}">Home</a></li>
-                        <li><a class="nav-link"  href="{{ url_for('upload_itns') }}">Upload ITNs</a></li>
+                        <li><a class="nav-link"  href="{{ url_for('monthly_report') }}">Monthly Reports</a></li>
+                        <li><a class="nav-link"  href="{{ url_for('create_integra_excel') }}">Integra files</a></li>
+                        <li><a class="nav-link"  href="{{ url_for('create_invoice') }}">Invoices</a></li>
+                        <li><a class="nav-link"  href="{{ url_for('mailing') }}">Mails</a></li>
                         
                     </ul>
                     <ul class="nav navbar-nav navbar-right">
                         {% if current_user.is_anonymous %}
                         <li><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
                         {% else %}
-                        <li><a class="nav-link" href="{{ url_for('add_contract') }}">Add Contract</a></li>
-                        <li><a class="nav-link" href="{{ url_for('add_invoicing_group') }}">Add Invoicing Group</a></li>
-                        <li><a class="nav-link" href="{{ url_for('add_itn') }}">Add ITN</a></li> 
-                        <li><a class="nav-link" href="{{ url_for('create_subcontract') }}">Create SubContract</a></li>                       
+                        <li><a class="nav-link" href="{{ url_for('upload_contracts') }}">Upload Contracts</a></li>
+                        <li><a class="nav-link" href="{{ url_for('upload_itns') }}">Upload ITNs</a></li>
+                        <li><a class="nav-link" href="{{ url_for('erp') }}">Upload ERP</a></li> 
+                        <!-- <li><a class="nav-link" href="{{ url_for('create_subcontract') }}">Create SubContract</a></li>                        -->
                         <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
                         {% endif %}
                     </ul>

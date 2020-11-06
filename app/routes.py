@@ -12,7 +12,7 @@ from app import app
 from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
     UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm,
-    UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm)
+    UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
@@ -54,6 +54,8 @@ from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  parse_integra_csv,
                                  create_df_from_integra_csv,
                                  get_files,
+                                 update_ibex_data,
+                                 update_schedule_prices
                                  )
 
 from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH, PDF_INVOICES_PATH)
@@ -63,12 +65,13 @@ from app.helpers.helper_functions_queries import (
                                         is_spot_inv_group,
                                         get_all_inv_groups,
                                         get_time_zone,
-                                        get_list_inv_groups_by_contract
+                                        get_list_inv_groups_by_contract,
+                                        has_ibex_real_data
 )
 
 from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
                                       insert_settlment_cez, insert_settlment_e_pro,
-                                      insert_settlment_evn, insert_settelment_nkji                           
+                                      insert_settlment_evn, insert_settelment_nkji ,update_reported_volume                          
                                       
 )
 from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
@@ -91,6 +94,68 @@ MONEY_ROUND = 9
 @login_required
 def test():
     form = TestForm()
+    if form.validate_on_submit():
+        if form.submit.data:
+            # mp = (
+            #     db.session.query(
+            #         SubContract.itn, 
+            #     )
+            # )
+            mp_subs = SubContract.query.join(Contract).join(ContractType).filter(ContractType.name == 'Mass_Market').all()
+            # mass_market_id = db.session.query(ContractType.id).filter(ContractType.name == 'Mass_MArket').first()[0]
+            # print(f'{mass_market_id}')
+            for sub in mp_subs:
+                sub.update({'has_grid_services':1})
+                print(f'updated {sub.itn}')
+            # itn_count_per_inv_gr = (
+            #     db.session.query(
+                    
+            #         InvoiceGroup.id.label('inv_gr_id_all'),
+            #         func.count(SubContract.itn).label('itns_count')
+            #     )
+            #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+            #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)               
+            #     .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
+            #     .group_by(InvoiceGroup.id)
+            #     .subquery()
+            # )
+
+            # itn_count_per_inv_gr_cez = (
+            #     db.session.query(
+                    
+            #         InvoiceGroup.id.label('inv_gr_id_c'),
+            #         func.count(SubContract.itn).label('itns_count')
+            #     )
+            #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+            #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
+            #     .join(Erp)  
+            #     .filter(Erp.name == 'CEZ')          
+            #     .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
+            #     .group_by(InvoiceGroup.id)
+            #     .subquery()
+            # )
+
+            # cez_full_itns =(
+            #     db.session.query(
+            #         InvoiceGroup.id.label('inv_gr_id_only_cez')
+            #     )
+            #     .
+            # )
+            # # records = (db.session.query(ItnMeta.itn, itn_count_per_inv_gr.c.inv_gr_id)
+            # # .join(Erp)
+            # # .join(SubContract, SubContract.itn == ItnMeta.itn)
+            # # .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id == SubContract.invoice_group_id)
+            # # .filter(Erp.name == 'CEZ')
+            # # .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
+            # # .all())
+            # print(f'{itn_count_per_inv_gr_cez}')       
+
+    return render_template('test.html', title='TEST', form=form)
+
+@app.route('/mailing', methods=['GET', 'POST'])
+@login_required
+def mailing():
+    form = MailForm()
     # form.attachment_files.choices = sorted([(x[0],x[1]) for x in create_list_of_tuples(INV_REFS_PATH, PDF_INVOICES_PATH)])
     if form.validate_on_submit():
         if form.submit.data:
@@ -104,7 +169,7 @@ def test():
                 file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
                 send_email(mails, file_data)       
 
-    return render_template('test.html', title='TEST', form=form)
+    return render_template('mail.html', title='TEST', form=form)
 
 @app.route('/create_invoice', methods=['GET', 'POST'])
 @login_required
@@ -133,7 +198,7 @@ def create_invoice():
 @login_required
 def erp():
     
-    form = InvoiceForm()
+    form = ErpForm()
     if form.validate_on_submit():
         separator = '";"'
         # metas = db.session.query(ItnMeta.itn,MeasuringType.code).join(SubContract,SubContract.itn == ItnMeta.itn).join(MeasuringType).all()
@@ -195,43 +260,7 @@ def monthly_report():
         # temp_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())  
         # temp_df.to_excel('temp/contractors.xlsx')   
 
-    #     # ################################# Initial Ibex  ###################################### 
-        
-    #     invoice_start_date = pd.to_datetime('01/08/2020', format = '%d/%m/%Y')
-    #     invoice_end_date = pd.to_datetime('31/12/2021', format = '%d/%m/%Y')
-        
-    #     time_series = pd.date_range(start = invoice_start_date, end = invoice_end_date , freq='h', tz = 'EET')
-    #     forecast_df = pd.DataFrame(time_series, columns = ['utc'])
-    #     forecast_df['forecast_price'] = 0
-    #     forecast_df['volume'] = 0
-    #     forecast_df['price'] = 0
-    #     forecast_df.set_index('utc', inplace = True)
-        
-    #     forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
-    #     forecast_df.reset_index(inplace = True)
-    #     forecast_df = forecast_df[['utc','price', 'forecast_price', 'volume']]
-    #     stringifyer(forecast_df)
-    #     bulk_update_list = forecast_df.to_dict(orient='records')
     
-    #     db.session.bulk_insert_mappings(IbexData, bulk_update_list)
-    #     db.session.commit()
-    #     # #######################################################################
-
-    #     # # ################################# Upload to Ibex  ###################################### 
-    #     print(f' IN IBEX')
-    #     # invoice_start_date = pd.to_datetime('01/09/2020', format = '%d/%m/%Y')
-    #     # invoice_end_date = pd.to_datetime('22/10/2020', format = '%d/%m/%Y')
-    #     invoice_start_date = form.start_date.data
-    #     invoice_end_date = form.end_date.data
-    #     ibex_df = IbexData.download_from_ibex_web_page(invoice_start_date, invoice_end_date)
-    #     stringifyer(ibex_df)
-    #     bulk_update_list = ibex_df.to_dict(orient='records')
-    #     # print(f' IN IBEX {bulk_update_list}')
-    #     db.session.bulk_update_mappings(IbexData, bulk_update_list)
-    #     db.session.commit()
-    # return render_template('test.html', title='Test', form=form)
-    # #######################################################################
-
 
         start = time.time()
 
@@ -249,7 +278,7 @@ def monthly_report():
                 end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
                 inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
                 weighted_price = get_weighted_price(inv_groups, start_date, end_date)
-
+                # print(f'weighted_price -- {weighted_price}')
             else:            
                 inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]   
 
@@ -260,7 +289,13 @@ def monthly_report():
             for inv_group_name in inv_groups:
                 # print(f'{inv_group_name}')
                 start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
-            
+
+                ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
+
+                if ibex_last_valid_date < end_date:
+                    update_ibex_data(form.start_date.data, form.end_date.data)
+                    update_schedule_prices(start_date, end_date)
+
                 if start_date is None:
                     print(f'There is not data for {inv_group_name}, for period {form.start_date.data} - {form.end_date.data}')
                     continue
@@ -275,7 +310,7 @@ def monthly_report():
                 else:
                     summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
                     create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
-            # return redirect(url_for('test'))     
+            return redirect(url_for('monthly_report'))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
@@ -959,16 +994,6 @@ def upload_contracts():
                     )
                     contracts.append(curr_contract)
 
-                          
-            # contracts = [Contract(internal_id = x[1]['internal_id'], contractor_id = x[1]['contractor_id'], subject = 'None', parent_id =  x[1]['parent_id_initial_zero'], \
-            #             signing_date =  convert_date_to_utc(x[1]['time_zone'].code,x[1]['signing_date'].strftime(t_format),t_format)  , \
-            #             start_date = convert_date_to_utc(x[1]['time_zone'].code, x[1]['start_date'].strftime(t_format),t_format), \
-            #             end_date = convert_date_to_utc(x[1]['time_zone'].code, x[1]['end_date'].strftime(t_format),t_format) , \
-            #             duration_in_days = x[1]['duration_in_days'], invoicing_interval = x[1]['invoicing_interval'], maturity_interval = x[1]['maturity_interval'], \
-            #             contract_type_id = x[1]['contract_type'], is_work_days = x[1]['is_work_day'], automatic_renewal_interval = x[1]['automatic_renewal_interval'], \
-            #             collateral_warranty = x[1]['collateral_warranty'], notes =  x[1]['notes'],time_zone_id = x[1]['time_zone'].id) \
-            #             for x in df.iterrows()]
-
             nan_df = df[df.isna().any(axis=1)]
             if not nan_df.empty:
                 print(f'THERE IS CONTRACT WITH WRONG DATA ! ABORTING ! \n{nan_df}')
@@ -976,21 +1001,20 @@ def upload_contracts():
                 db.session.bulk_save_objects(contracts)
                 db.session.commit()                
                 
-                has_parrent_df = df[df['parent_contract_internal_id'] != 'none']
+                has_parent_contract_df = df[df['parent_contract_internal_id'] != 'none']
                 
-                for index, row in has_parrent_df.iterrows():
-                    child = Contract.query.filter(Contract.internal_id == row['internal_id']).first()
-                    
-                    child.update({'parent_contract_internal_id':Contract.query.filter(Contract.internal_id == row['parent_contract_internal_id']).first().id})
-                    flash(f'parent {Contract.query.filter(Contract.id == child.parent_id).first().internal_id} added to {child.internal_id}','success')
+                for index, row in has_parent_contract_df.iterrows():
+                    child_contract = Contract.query.filter(Contract.internal_id == row['internal_id']).first()                    
+                    child_contract.update({'parent_id':Contract.query.filter(Contract.internal_id == row['parent_contract_internal_id']).first().id})
+                    flash(f'Parent contract {Contract.query.filter(Contract.id == child_contract.parent_id).first().internal_id} added to {child_contract.internal_id}','success')
 
                 has_parent_contractor_df = df[df['parent_contractor_411'] != 'none']
 
                 for index, row in has_parent_contractor_df.iterrows():
-                    parent = Contractor.query.filter(Contractor.acc_411 == row['parent_contractor_411']).first()
-                    child = Contractor.query.filter(Contractor.acc_411 == row['411-3']).first()
-                    child.update({'parent_id':parent.id})
-                    flash(f'parent {parent.name} added to {child.name}','success')           
+                    parent_contractor = Contractor.query.filter(Contractor.acc_411 == row['parent_contractor_411']).first()
+                    child_contractor = Contractor.query.filter(Contractor.acc_411 == row['411-3']).first()
+                    child_contractor.update({'parent_id':parent_contractor.id})
+                    flash(f'Parent contractor {parent_contractor.name} added to {child_contractor.name}','success')           
         else:
             input_set = set(df['data'].columns)
             expected_set = set(template_cols)
@@ -1180,6 +1204,82 @@ def table():
 #     return Contract.query.filter(Contract.internal_id == internal_id).first()
 
 
+@app.route('/monthly_report/<erp>', methods=['GET', 'POST'])
+@login_required
+def monthly_report_by_erp(erp):
+    form = MonthlyReportErpForm()
+    form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
+    form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in db.session.query(InvoiceGroup.name, InvoiceGroup.description).join(Contractor).join(SubContract).join(Contract)
+                        .join(ItnMeta, ItnMeta.itn == SubContract.itn).join(Erp).join(ContractType, ContractType.id == Contract.contract_type_id).filter(Erp.name == erp)
+                        .filter(ContractType.name == "Mass_Market").order_by(Contractor.name).all()]
+    form.contracts.choices =  [ (x,x) for x in Contract.query.join(Contractor).order_by(Contractor.name).all() ]                
+    if form.validate_on_submit():
+        
+        # contractors = (db.session
+        #     .query(Contract.id, Contractor.name, Contractor.vat_number, Contractor.address, Contractor.acc_411)
+        #         .join(Contractor,Contractor.id == Contract.contractor_id)
+        #         .join(ContractType,ContractType.id == Contract.contract_type_id)
+        #         .filter(ContractType.name == "Mass_Market")
+        #         .distinct(Contractor.name)
+        #         .all())
+        # temp_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())  
+        # temp_df.to_excel('temp/contractors.xlsx')   
 
+    
+
+        start = time.time()
+
+        if form.submit_delete.data:
+            delete_excel_files(INV_REFS_PATH, form.ref_files.data, form.delete_all.data)
+            return redirect(url_for('monthly_report'))
+           
+
+        elif form.submit.data:
+            weighted_price = None
+
+            if form.by_contract.data:            
+                time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
+                start_date = convert_date_to_utc(time_zone, form.start_date.data)
+                end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+                inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
+                weighted_price = get_weighted_price(inv_groups, start_date, end_date)
+                # print(f'weighted_price -- {weighted_price}')
+            else:            
+                inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x for x in form.invoicing_group.data]   
+
+            result_df = None
+
+            invoice_ref_path = inetgra_src_path = None
+
+            for inv_group_name in inv_groups:
+                # print(f'{inv_group_name}')
+                start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
+
+                ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
+
+                if ibex_last_valid_date < end_date:
+                    update_ibex_data(form.start_date.data, form.end_date.data)
+                    update_schedule_prices(start_date, end_date)
+
+                if start_date is None:
+                    print(f'There is not data for {inv_group_name}, for period {form.start_date.data} - {form.end_date.data}')
+                    continue
+
+                is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
+                
+                if is_spot:
+                    # print(f'in spot {weighted_price}')
+                    summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
+                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
+                    
+                else:
+                    summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
+                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
+            return redirect(url_for('monthly_report'))     
+                
+        end = time.time()
+        print(f'Time elapsed for generate excel file(s) : {end - start}  !')
+
+    return render_template('monthly_report.html', title=f'Monthly Report {erp}', form=form)
 
     

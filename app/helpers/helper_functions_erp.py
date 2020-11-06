@@ -478,6 +478,7 @@ def insert_settlment_evn(zip_obj,separator):
             for text_file in inner_zip.infolist() if text_file.filename.endswith('.csv')}
            
             for key in dfs_csv_dict.keys():
+                print(f'From upload EVN csv - {key}')
                 try:
                     df = dfs_csv_dict[key]
 

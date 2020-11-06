@@ -62,14 +62,11 @@ def make_header(ws, data, row_num):
 def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period_start_date, period_end_date, is_second = False):        
    
     # contractor = df['contractor_name'].iloc[0]
-    contractor = df['invoice_group_description'].iloc[0]
-    
-    # print(f'contractor --> {contractor}')
+    contractor = df['invoice_group_description'].iloc[0]    
     # period = f'{calendar.month_name[period_end_date.month]}/{period_end_date.year}'
     period = f'{period_end_date.month}/{period_end_date.year}'
-    # print(f'period --> {calendar.month_name[period_start_date.month]}/{period_start_date.year}')
+    
     file_name =f'{period_end_date.year}-{period_end_date.month}_{df.iloc[0].invoice_group_description}_{df.iloc[0].invoice_group_name}_invoice_reference.xlsx' 
-    #  print(f'file_name --> {file_name}')    
     
     writer = pd.ExcelWriter(f'{INV_REFS_PATH}/{file_name}', engine='xlsxwriter')
     src_df = pd.read_excel('app/static/uploads/src_dete.xlsx', header=None) if is_second else pd.read_excel('app/static/uploads/src.xlsx', header=None)
@@ -156,7 +153,7 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
 
         grid_services = df['Мрежови услуги (лв.)'].sum()
         ws['E13'].value = total_consumption if grid_services > 0 else ''
-        ws['E13'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E13'].number_format = '# ##.00000' if total_consumption != 0 else '0'
         ws['E14'].value = total_consumption 
         ws['E14'].number_format = '# ###.00000' if total_consumption != 0 else '0'
         ws['E15'].value = total_consumption 
@@ -240,13 +237,13 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
         ws['G12'].number_format = '### ### ##0.00 лв.'
 
         ws['E13'].value = total_consumption 
-        ws['E13'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E13'].number_format = '# ##0.00000' if total_consumption != 0 else '0'
         ws['E14'].value = total_consumption 
-        ws['E14'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E14'].number_format = '# ##0.00000' if total_consumption != 0 else '0'
         ws['E15'].value = total_consumption 
-        ws['E15'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E15'].number_format = '# ##0.00000' if total_consumption != 0 else '0'
         ws['E16'].value = total_consumption 
-        ws['E16'].number_format = '# ###.00000' if total_consumption != 0 else '0'
+        ws['E16'].number_format = '# ##0.00000' if total_consumption != 0 else '0'
 
         grid_services = df['Мрежови услуги (лв.)'].sum()
         ws['G13'].value = round(grid_services, MONEY_FINAL_ROUND)
@@ -342,11 +339,9 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     df = df.fillna(Decimal('0'))
    
     inv_group_name = df.iloc[0]['invoice_group_name'] 
-    # print(f'inv group name {inv_group_name}')  
+    
     curr_contract = db.session.query(Contract).join(SubContract).join(InvoiceGroup).filter(InvoiceGroup.name == inv_group_name ).filter(SubContract.start_date <= start_date, SubContract.end_date > start_date).first()
   
-    # print(f'current contract from integra creation : {curr_contract} --- {curr_contract.maturity_interval}')
-    
     try:
         df['price'] = (df['Сума за енергия'].sum()) / (df['Потребление (kWh)'].sum())
     except:
@@ -354,7 +349,7 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
 
 
     for_invoice_df = df[['Потребление (kWh)','Сума за енергия','Мрежови услуги (лв.)','Задължение към обществото','Акциз']].sum()
-    # print(f'{for_invoice_df}')
+   
     for_invoice_df = for_invoice_df.to_frame().T   
     for_invoice_df['inv_group']=df.iloc[0]['invoice_group_name'] 
     for_invoice_df['Получател']=df.iloc[0]['contractor_name']    
@@ -363,7 +358,7 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     last_month_date = end_date.replace(day = calendar.monthrange(end_date.year, end_date.month)[1])
     for_invoice_df['Дата на издаване'] = last_month_date.strftime('%d/%m/%Y')
     maturity_date = (dt.date.today() + pd.offsets.BDay(curr_contract.maturity_interval)).strftime('%d/%m/%Y') if curr_contract.maturity_interval <= 15 else (dt.date.today() + dt.timedelta(days = curr_contract.maturity_interval)).strftime('%d/%m/%Y')
-    # print(f'{maturity_date}')
+    
     for_invoice_df['Падеж'] = maturity_date
     reason_date_str = last_month_date.strftime('%m.%Y') 
     for_invoice_df['Основание'] = f' за м.{reason_date_str}г.'
@@ -375,11 +370,13 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     
     for_invoice_df['Стойност без ДДС'] = for_invoice_df['Стойност без ДДС'].apply(lambda x: round(Decimal(x) ,2))
 
-    
+    print(f'{for_invoice_df}')
     for_invoice_df['Код на стоката'] = for_invoice_df['Код на стоката'].apply(lambda x: GOODES_CODE[x])
     for_invoice_df['Основание'] = for_invoice_df.apply(lambda x: x['Основание'] if x['Код на стоката'] == '304-1' else '', axis = 1)
     for_invoice_df['Количество'] = for_invoice_df.apply(lambda x: Decimal(str(x['Потребление (kWh)'])) / Decimal('1000') if x['Код на стоката'] != '498-56' else 1, axis = 1)
-    for_invoice_df['Цена без ДДС'] = for_invoice_df['Код на стоката'].apply(lambda x: df.iloc[0][PRICES[x]] * 1000)
+    
+    for_invoice_df['Цена без ДДС'] = for_invoice_df.apply(lambda x: df.iloc[0][PRICES[x['Код на стоката']]] * 1000 if x['Код на стоката'] != '498-56' else x['Стойност без ДДС'], axis = 1)
+    
     for_invoice_df['номер на фактура'] = ''
     for_invoice_df['Дименсия на количество'] = ''
     for_invoice_df['ЕИК'] = ''

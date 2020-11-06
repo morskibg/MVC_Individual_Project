@@ -88,12 +88,12 @@ def get_weighted_price(inv_group_names, start_date, end_date):
 
     spot_itns_sub = get_spot_itns(inv_group_names, start_date, end_date) 
     fin_res = get_spot_fin_results(spot_itns_sub, start_date, end_date)
-
+    # print(f'fin res {fin_res}')
     if len(fin_res) ==  0:
         return fin_res
 
     fin_res_df = pd.DataFrame.from_records(fin_res, columns = fin_res[0].keys())
-    # print(f'res df {res_df}')
+    print(f'res df {fin_res_df}')
     limits = get_tariff_limits(spot_itns_sub, start_date, end_date)
     if len(limits[0]) > 2:
         print(f'Wrong lower, upper limits count for this invoicing group: {inv_group_names} for period :{start_date} - {end_date}')
@@ -114,7 +114,7 @@ def get_weighted_price(inv_group_names, start_date, end_date):
         fin_res_df['Сума за енергия'] = fin_res_df['total_consumption'].apply(lambda x: Decimal(x) * weighted_price)
         # weighted_price = weighted_price.quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)        
         # return weighted_price.quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)
-        # print(f'weighted price = {weighted_price}')
+        print(f'weighted price = {weighted_price}')
         return weighted_price
 
 def get_summary_df_non_spot(inv_group_name, start_date, end_date, invoice_start_date, invoice_end_date):

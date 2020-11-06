@@ -6,7 +6,7 @@ from wtforms import (
 # from wtforms.fields import DateField
 from wtforms.ext.sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional,NumberRange
-from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice
+from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice,SubContract
 import re
 import sys
 import datetime as dt
@@ -316,12 +316,49 @@ class InvoiceForm(FlaskForm):
     # invoicing_list = StringField('Select records for invoice creation',  validators=[Optional()], render_kw={'size':25})
     create_invoice = SubmitField('Create invoices')
 
-class TestForm(FlaskForm):
-    send_all = BooleanField('Delete all source files', default = False)
+class MailForm(FlaskForm):
+    send_all = BooleanField('Send all mails', default = False)
     attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
+    submit = SubmitField('Send selected')
+
+class TestForm(FlaskForm):
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    # contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
+    # send_all = BooleanField('Send all mails', default = False)
+    # attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
     submit = SubmitField('Test')
 
+class MonthlyReportErpForm(FlaskForm):
+    
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    
+    # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
+    # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
+    bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
+    # invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.join(Contractor).join(SubContract)
+    #                     .join(ItnMeta).join(Erp).filter(Erp.name == 'CEZ').order_by(Contractor.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
 
+    invoicing_group = SelectMultipleField(choices = [], validators=[Optional()], render_kw={'size':15})
+    
+    by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
+    contracts = SelectField('Contracts',validators=[Optional()], render_kw={'size':15})
+    by_contract = BooleanField('Create invoice reference by Contract', default = False)
+
+    def validate_end_date(self, end_date):
+
+        dt_start_obj = dt.datetime.strptime(self.start_date.data, '%Y-%m-%d')
+        dt_end_obj = dt.datetime.strptime(end_date.data, '%Y-%m-%d')
+        if dt_start_obj > dt_end_obj:
+                raise ValidationError('Start Date must be before End Date')
+
+    
+    
+    submit = SubmitField('Create')
+    ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
+    delete_all = BooleanField('Delete all source files', default = False)
+    submit_delete = SubmitField('Delete files') 
 
 
             

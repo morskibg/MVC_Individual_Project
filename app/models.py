@@ -468,6 +468,33 @@ class ItnSchedule(BaseModel):
         connection.execute(delete_sch)
 
 
+    # @classmethod
+    # def autoupdate_prices(cls, mapper, connection, target):
+        
+    #     ibex_data = target
+    #     print(f'target \n{ibex_data}')
+    #     valid_ibex_last_date = (db.session.query(ibex_data.utc, ibex_data.price).filter(ibex_data.price == 0).order_by(ibex_data.utc).first()[0])
+    #     spot_itns = (
+    #         db.session
+    #             .query(SubContract.itn.label('sub_itn'))                                 
+    #             .filter(SubContract.start_date <= valid_ibex_last_date, SubContract.end_date > valid_ibex_last_date) 
+    #             .filter(SubContract.has_spot_price) #!!!!!!!!!!!!!!!!!!!!!!                           
+    #             .distinct(SubContract.itn) 
+    #             .subquery())
+
+    #     records = (
+    #         db.session
+    #             .query(ItnSchedule.itn, ItnSchedule.utc, ItnSchedule.tariff_id, ItnSchedule.price.label('schedule_price'), ibex_data.price.label('ibex_price'))
+    #             .join(spot_itns, spot_itns.c.sub_itn == ItnSchedule.itn)                    
+    #             .join(ibex_data, ibex_data.utc == ItnSchedule.utc)                
+    #             .filter(ItnSchedule.utc >= valid_ibex_last_date - dt.timedelta(days = 60), ItnSchedule.utc <= valid_ibex_last_date)
+    #             .all()
+    #         )
+    #     df = pd.DataFrame.from_records(records, columns = records[0].keys()) 
+    #     df['price'] = df.apply(lambda x: Decimal(str(x['schedule_price'])) + (Decimal(str(x['ibex_price'])) / Decimal('1000')), axis = 1)
+    #     df.drop(columms = ['ibex_price','schedule_price'], inplace = True)
+    #     print(f'FROM listener \n{df}')
+         
 class LeavingItn(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     date = db.Column(db.DateTime, primary_key = True)   
@@ -585,6 +612,7 @@ class Invoice(BaseModel):
 db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
 db.event.listen(SubContract, 'after_update', ItnSchedule.autoupdate_existing)
 db.event.listen(SubContract, 'before_delete', ItnSchedule.before_delete)
+# db.event.listen(IbexData, 'after_update', ItnSchedule.autoupdate_prices)
 # db.event.listen(Contract, 'after_delete', ItnSchedule.after_delete)
 
 # db.event.listen(SubContract, 'before_update', ItnSchedule.autoupdate_existing)
