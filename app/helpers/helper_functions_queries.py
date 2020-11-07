@@ -583,55 +583,104 @@ def create_ibex_schedule(end_date):
     db.session.commit()
 
 # def update_ibex_data():
-def get_inv_gr_id_single_erp(erp, start_date = None, end_date = None):
+def get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed):
 
-    now_date = dt.datetime.utcnow()
-    start_date = now_date - dt.timedelta(days = 28)
-    end_date = start_date + dt.timedelta(days = 10)
 
-    itn_count_per_inv_gr = (
-        db.session.query(
-            
-            InvoiceGroup.id.label('inv_gr_id_all'),
-            func.count(SubContract.itn).label('itns_count')
+    if is_mixed == 'True':        
+        single_erp_inv_ids =(
+            db.session.query(
+                InvoiceGroup.name,
+                InvoiceGroup.description,
+                Contract,                      
+            )                     
+            .join(SubContract,SubContract.invoice_group_id == InvoiceGroup.id)
+            .join(Contract, Contract.id == SubContract.contract_id) 
+            .join(ContractType, ContractType.id == Contract.contract_type_id)         
+            .join(Contractor,Contractor.id == Contract.contractor_id)   
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
+            .join(Erp)  
+            .filter(Erp.name == erp)           
+            .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date) 
+            .filter(ContractType.name == contract_type).order_by(Contractor.name)             
+            .distinct()
+            .all()
         )
-        .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
-        .join(ItnMeta, ItnMeta.itn == SubContract.itn)               
-        .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
-        .group_by(InvoiceGroup.id)
-        .subquery()
-    )
 
-    itn_count_per_inv_gr_erp = (
-        db.session.query(
-            
-            InvoiceGroup.id.label('itn_count_per_inv_gr_erp'),
-            func.count(SubContract.itn).label('itns_count')
+    else:        
+        itn_count_per_inv_gr = (
+            db.session.query(
+                
+                InvoiceGroup.id.label('inv_gr_id_all'),
+                func.count(SubContract.itn).label('itns_count')
+            )
+            .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn)               
+            .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
+            .group_by(InvoiceGroup.id)
+            .subquery()
         )
-        .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
-        .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
-        .join(Erp)  
-        .filter(Erp.name == erp)          
-        .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
-        .group_by(InvoiceGroup.id)
-        .subquery()
-    )
 
+        itn_count_per_inv_gr_erp = (
+            db.session.query(
+                
+                InvoiceGroup.id.label('inv_gr_id_erp'),
+                func.count(SubContract.itn).label('itns_count')
+            )
+            .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
+            .join(Erp)  
+            .filter(Erp.name == erp)          
+            .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
+            .group_by(InvoiceGroup.id)
+            .subquery()
+        )
+
+        single_erp_inv_ids =(
+            db.session.query(
+                InvoiceGroup.name,
+                InvoiceGroup.description,
+                Contract,
+                itn_count_per_inv_gr_erp.c.inv_gr_id_erp           
+            )
+            .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id_all == itn_count_per_inv_gr_erp.c.inv_gr_id_erp)
+            .join(InvoiceGroup, InvoiceGroup.id == itn_count_per_inv_gr_erp.c.inv_gr_id_erp)        
+            .join(SubContract,SubContract.invoice_group_id == itn_count_per_inv_gr_erp.c.inv_gr_id_erp)
+            .join(Contract, Contract.id == SubContract.contract_id) 
+            .join(ContractType, ContractType.id == Contract.contract_type_id) 
+            .join(Contractor,Contractor.id == Contract.contractor_id)              
+            .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)
+            .filter(ContractType.name == contract_type).order_by(Contractor.name)
+            .filter(itn_count_per_inv_gr.c.itns_count == itn_count_per_inv_gr_erp.c.itns_count)
+            .distinct()
+            .all()
+        )
+   
+    return single_erp_inv_ids
+
+def get_inv_gr_id_erp(erp, start_date = None, end_date = None):
+
+    if start_date is None and end_date is None:
+        now_date = dt.datetime.utcnow()
+        start_date = now_date - dt.timedelta(days = 28)
+        end_date = start_date + dt.timedelta(days = 10)
+
+    
     single_erp_inv_ids =(
         db.session.query(
             InvoiceGroup.name,
             InvoiceGroup.description,
-            itn_count_per_inv_gr_erp.c.itn_count_per_inv_gr_erp,
-            
-            
-        )
-        .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id_all == itn_count_per_inv_gr_erp.c.itn_count_per_inv_gr_erp)
-        .join(InvoiceGroup, InvoiceGroup.id == itn_count_per_inv_gr_erp.c.itn_count_per_inv_gr_erp)
-        .filter(itn_count_per_inv_gr.c.itns_count == itn_count_per_inv_gr_erp.c.itns_count)
+            Contract,                      
+        )                     
+        .join(SubContract,SubContract.invoice_group_id == InvoiceGroup.id)
+        .join(Contract, Contract.id == SubContract.contract_id)         
+        .join(Contractor,Contractor.id == Contract.contractor_id)   
+        .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
+        .join(Erp)  
+        .filter(Erp.name == erp)           
+        .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)              
         .distinct()
         .all()
     )
+    # print(f'from erp filter \n{start_date} - {end_date}\n{erp} - {contract_type}\n LEN = {len(single_erp_inv_ids)}')
     return single_erp_inv_ids
 
-
-    

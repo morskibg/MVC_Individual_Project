@@ -11,15 +11,16 @@ from sqlalchemy import extract, or_
 from app import app
 from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm,
-    UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm)
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm, MonthlyReportErpForm,
+    UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm,MonthlyReportOptionsForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
 from werkzeug.urls import url_parse
 
-
 from werkzeug.utils import secure_filename
+import calendar
+
 from app.helpers.helper_function_excel_writer import INV_REFS_PATH
 
 from app.helpers.helper_functions import (get_contract_by_internal_id,
@@ -67,7 +68,8 @@ from app.helpers.helper_functions_queries import (
                                         get_time_zone,
                                         get_list_inv_groups_by_contract,
                                         has_ibex_real_data,
-                                        get_inv_gr_id_single_erp
+                                        get_inv_gr_id_single_erp,
+                                        get_inv_gr_id_erp
 )
 
 from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
@@ -90,6 +92,16 @@ MEASURE_MAP_DICT = {
 MONEY_ROUND = 9
 
 
+@app.route('/monthly_erp', methods=['GET', 'POST'])
+def monthly_erp():
+    form = MonthlyReportOptionsForm()
+    if form.validate_on_submit():
+        if form.submit.data:
+            
+            return redirect(url_for('monthly_report_by_erp', erp = form.erp.data, start_date = form.start_date.data, 
+                            end_date = form.end_date.data, contract_type = form.contract_type.data, is_mixed = form.include_all.data,  **request.args))
+
+    return render_template('quick_template.html', title='TEST', form=form, header = 'Monthly report filters')
 
 @app.route('/test', methods=['GET', 'POST'])
 @login_required
@@ -97,56 +109,17 @@ def test():
     form = TestForm()
     if form.validate_on_submit():
         if form.submit.data:
-            cez_inv_id = get_inv_gr_id_single_erp('CEZ', form.start_date.data, form.end_date.data)
+            start_date =  dt.datetime.strptime(form.start_date.data, '%Y-%m-%d')
+            end_date = form.end_date.data
+            # erp = 'CEZ'
+            # data = get_inv_gr_id_erp(erp, start_date, end_date)
+            first_month_date = start_date.replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12)
+            # last_month_date = start_date.replace(day = calendar.monthrange(first_month_date.year, first_month_date.month)[1])
+            print(f'first_month_date ---> \n{first_month_date}')
+            # print(f'last_month_date ---> \n{last_month_date}')
+
             
-            # itn_count_per_inv_gr = (
-            #     db.session.query(
-                    
-            #         InvoiceGroup.id.label('inv_gr_id_all'),
-            #         func.count(SubContract.itn).label('itns_count')
-            #     )
-            #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
-            #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)               
-            #     .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
-            #     .group_by(InvoiceGroup.id)
-            #     .subquery()
-            # )
-
-            # itn_count_per_inv_gr_cez = (
-            #     db.session.query(
-                    
-            #         InvoiceGroup.id.label('itn_count_per_inv_gr_cez'),
-            #         func.count(SubContract.itn).label('itns_count')
-            #     )
-            #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
-            #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
-            #     .join(Erp)  
-            #     .filter(Erp.name == 'CEZ')          
-            #     .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
-            #     .group_by(InvoiceGroup.id)
-            #     .subquery()
-            # )
-
-            # cez_full_itns =(
-            #     db.session.query(
-            #         InvoiceGroup.description,
-            #         itn_count_per_inv_gr_cez.c.itn_count_per_inv_gr_cez,
-                    
-            #     )
-            #     .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id_all == itn_count_per_inv_gr_cez.c.itn_count_per_inv_gr_cez)
-            #     .join(InvoiceGroup, InvoiceGroup.id == itn_count_per_inv_gr_cez.c.itn_count_per_inv_gr_cez)
-            #     .filter(itn_count_per_inv_gr.c.itns_count == itn_count_per_inv_gr_cez.c.itns_count)
-            #     .distinct()
-            #     .all()
-            # )
-            # records = (db.session.query(ItnMeta.itn, itn_count_per_inv_gr.c.inv_gr_id)
-            # .join(Erp)
-            # .join(SubContract, SubContract.itn == ItnMeta.itn)
-            # .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id == SubContract.invoice_group_id)
-            # .filter(Erp.name == 'CEZ')
-            # .filter(SubContract.start_date <= form.start_date.data, SubContract.end_date > form.end_date.data)
-            # .all())
-            print(f'{cez_inv_id}')       
+       
 
     return render_template('test.html', title='TEST', form=form)
 
@@ -1202,84 +1175,85 @@ def table():
 #     return Contract.query.filter(Contract.internal_id == internal_id).first()
 
 
-@app.route('/monthly_report/<erp>', methods=['GET', 'POST'])
+@app.route('/monthly_report/<erp>/<contract_type>/<start_date>/<end_date>/<is_mixed>', methods=['GET', 'POST'])
 @login_required
-def monthly_report_by_erp(erp):
+def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
     form = MonthlyReportErpForm()
     form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
+    filtered_records = get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed)
     # form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in db.session.query(InvoiceGroup.name, InvoiceGroup.description).join(Contractor).join(SubContract).join(Contract)
-    #                     .join(ItnMeta, ItnMeta.itn == SubContract.itn).join(Erp).join(ContractType, ContractType.id == Contract.contract_type_id).filter(Erp.name == erp)
-    #                     .filter(ContractType.name == "Mass_Market").order_by(Contractor.name).all()]
+    #                     .join(ItnMeta, ItnMeta.itn == SubContract.itn).join(Erp).join(ContractType, ContractType.id == Contract.contract_type_id)
+    #                     .filter(Erp.name == erp)
+    #                     .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)
+    #                     .filter(ContractType.name == contract_type).order_by(Contractor.name)
+    #                     .all()]
 
-    form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in  get_inv_gr_id_single_erp(erp) ]                
-    form.contracts.choices =  [ (x,x) for x in Contract.query.join(Contractor).order_by(Contractor.name).all() ]                
-    if form.validate_on_submit():
-        
-        # contractors = (db.session
-        #     .query(Contract.id, Contractor.name, Contractor.vat_number, Contractor.address, Contractor.acc_411)
-        #         .join(Contractor,Contractor.id == Contract.contractor_id)
-        #         .join(ContractType,ContractType.id == Contract.contract_type_id)
-        #         .filter(ContractType.name == "Mass_Market")
-        #         .distinct(Contractor.name)
-        #         .all())
-        # temp_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())  
-        # temp_df.to_excel('temp/contractors.xlsx')   
-
+    form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in filtered_records]
+                 
+    # form.contracts.choices =  [ (x,x) for x in Contract.query.join(Contractor).order_by(Contractor.name).all() ]    
+    form.contracts.choices = [(x[2],x[2]) for x in filtered_records]   
     
-
-        start = time.time()
-
+    if form.validate_on_submit():        
+       
+        start = time.time()  
         if form.submit_delete.data:
             delete_excel_files(INV_REFS_PATH, form.ref_files.data, form.delete_all.data)
-            return redirect(url_for('monthly_report'))
+            return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, is_mixed = is_mixed, **request.args))
            
 
         elif form.submit.data:
+            counter = 0
             weighted_price = None
 
             if form.by_contract.data:            
                 time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
-                start_date = convert_date_to_utc(time_zone, form.start_date.data)
-                end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+                start_date = convert_date_to_utc(time_zone, start_date)
+                end_date = convert_date_to_utc(time_zone, end_date) + dt.timedelta(hours = 23)
                 inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
                 weighted_price = get_weighted_price(inv_groups, start_date, end_date)
                 # print(f'weighted_price -- {weighted_price}')
             else:            
-                inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x for x in form.invoicing_group.data]   
-
+                inv_groups = [x[0] for x in form.invoicing_group.choices]  if form.bulk_creation.data else [x for x in form.invoicing_group.data]   
+                
             result_df = None
 
             invoice_ref_path = inetgra_src_path = None
 
             for inv_group_name in inv_groups:
+                
                 # print(f'{inv_group_name}')
-                start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
+                start_date_utc, end_date_utc, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, start_date, end_date)
 
                 ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
 
-                if ibex_last_valid_date < end_date:
-                    update_ibex_data(form.start_date.data, form.end_date.data)
+                if ibex_last_valid_date < dt.datetime.strptime(end_date, '%Y-%m-%d'):
+                    update_ibex_data(start_date, end_date)
                     update_schedule_prices(start_date, end_date)
 
-                if start_date is None:
-                    print(f'There is not data for {inv_group_name}, for period {form.start_date.data} - {form.end_date.data}')
+                if start_date_utc is None:
+                    print(f'There is not data for {inv_group_name}, for period {start_date} - {end_date}')
                     continue
 
-                is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
+                is_spot = is_spot_inv_group([inv_group_name], start_date_utc, end_date_utc)
                 
                 if is_spot:
-                    # print(f'in spot {weighted_price}')
-                    summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
-                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
+                    counter += 1
+                    
+                    summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, weighted_price)
+                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
                     
                 else:
-                    summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
-                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
-            return redirect(url_for('monthly_report'))     
+                    counter += 1
+                   
+                    summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
+                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
+
+            flash(f'{counter} invoice references was created !','info')
+            return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, is_mixed = is_mixed, **request.args))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
-    return render_template('monthly_report.html', title=f'Monthly Report {erp}', form=form, erp = erp)
+    return render_template('quick_template_wider.html', title=f'Monthly Report {erp}', form=form, header = f'Monthly Report {erp} - {contract_type} <br> Period: {start_date} / {end_date}<br> Included mixed groups - {is_mixed}')
 
     

@@ -370,7 +370,7 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     
     for_invoice_df['Стойност без ДДС'] = for_invoice_df['Стойност без ДДС'].apply(lambda x: round(Decimal(x) ,2))
 
-    print(f'{for_invoice_df}')
+    # print(f'{for_invoice_df}')
     for_invoice_df['Код на стоката'] = for_invoice_df['Код на стоката'].apply(lambda x: GOODES_CODE[x])
     for_invoice_df['Основание'] = for_invoice_df.apply(lambda x: x['Основание'] if x['Код на стоката'] == '304-1' else '', axis = 1)
     for_invoice_df['Количество'] = for_invoice_df.apply(lambda x: Decimal(str(x['Потребление (kWh)'])) / Decimal('1000') if x['Код на стоката'] != '498-56' else 1, axis = 1)
