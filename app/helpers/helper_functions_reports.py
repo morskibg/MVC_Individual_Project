@@ -6,7 +6,7 @@ import time,re
 from decimal import *
 from flask import  flash
 from app.models import *  
-
+from app import app
 from app.helpers.helper_functions import (convert_date_to_utc,)                                 
 
 from app.helpers.helper_functions_queries import (                                         
@@ -29,17 +29,28 @@ from app.helpers.helper_functions_queries import (
                                         get_spot_fin_results,
                                         get_tariff_limits,
                                         get_time_zone,
-                                        get_list_inv_groups_by_contract   )
+                                        get_list_inv_groups_by_contract,
+                                        get_erp_consumption_records_by_grid,
+                                        get_erp_money_records_by_grid,
+                                        get_total_consumption_by_grid ,
+                                        get_total_money_by_grid  )
 
 from app.helpers.helper_function_excel_writer import (generate_ref_excel, generate_integra_file)
 
 
 
-def create_utc_dates(inv_group_name, local_start_date, local_end_date):
+def create_utc_dates(inv_group_name, start_date, end_date):
 
-    start_date = dt.datetime.strptime(local_start_date, '%Y-%m-%d')  
-    end_date = dt.datetime.strptime(local_end_date, '%Y-%m-%d') 
-    
+
+    if isinstance(start_date, str):
+        start_date = dt.datetime.strptime(start_date, '%Y-%m-%d')
+
+    if isinstance(end_date, str):
+        end_date = dt.datetime.strptime(end_date, '%Y-%m-%d')
+
+    # start_date = dt.datetime.strptime(local_start_date, '%Y-%m-%d') if is  
+    # end_date = dt.datetime.strptime(local_end_date, '%Y-%m-%d') 
+    print(f'{start_date} - {end_date}')
     time_zone = get_time_zone(inv_group_name, start_date, end_date)
     if time_zone is None:
         return None,None,None,None
@@ -222,9 +233,14 @@ def create_report_from_grid(invoice_start_date, invoice_end_date):
     for erp in operators:
 
         erp_consumption_records = get_erp_consumption_records_by_grid(erp, invoice_start_date, invoice_end_date)              
-        erp_money_records = get_erp_money_records_by_grid(erp, invoice_start_date, invoice_end_date)        
-        data_dict = {'Erp':erp, 'Consumption':erp_consumption_records[0][1], 'Value': erp_money_records[0][1] }
-        rows_list.append(data_dict)                
+        erp_money_records = get_erp_money_records_by_grid(erp, invoice_start_date, invoice_end_date)
+        # print(f'{erp}\n{erp_consumption_records}\n{erp_money_records}') 
+        try:       
+            data_dict = {'Erp':erp, 'Consumption':erp_consumption_records[0][1], 'Value': erp_money_records[0][1] }
+        except:
+            print(f'exception from {erp}')
+        else:
+            rows_list.append(data_dict)                
 
     total_consumption_by_grid = get_total_consumption_by_grid(invoice_start_date, invoice_end_date)   
     total_sum_records = get_total_money_by_grid(invoice_start_date, invoice_end_date)     
@@ -232,5 +248,45 @@ def create_report_from_grid(invoice_start_date, invoice_end_date):
     rows_list.append(data_dict)  
     report_df = pd.DataFrame(rows_list)
     date = invoice_start_date.month
-    # report_df.to_excel(f'app/static/reports/grid_report_for_month-{date}___{dt.date.today()}.xlsx')
+    report_df.to_excel(f'app/static/reports/grid_report_for_month-{date}___{dt.date.today()}.xlsx')
     return report_df
+
+def create_full_ref_for_all_itn(files):
+
+    path = os.path.join(app.root_path, app.config['INV_REFS_PATH'])
+    summary_df = pd.DataFrame()
+    for curr_file in files:
+        invoice_group_name = curr_file.split('_')
+        invoice_group_name = f'{invoice_group_name[2]}_{invoice_group_name[3]}'
+        try:           
+            raw_df = pd.read_excel(os.path.join(path , curr_file))
+            
+        except:
+            print(f'There is not file with name {curr_file} in {path}') 
+        else:
+            client = raw_df.iloc[5][raw_df.columns[0]].split(':')[1].strip()            
+            columns = [x for x in raw_df.iloc[26] if str(x) != 'nan']
+            data_df = raw_df.loc[28:]
+            data_df = data_df.dropna(axis=1, how='all')
+            data_df.columns = columns
+            print(f'{columns}')
+            data_df = data_df.assign(contragent = client)        
+            data_df.loc[:,'invoice_group_name'] = invoice_group_name
+            
+            if summary_df.empty:
+                summary_df = data_df
+            else:
+                summary_df= summary_df.append(data_df, ignore_index = True)
+            print(f'{summary_df}')
+            break
+    power_sum = summary_df['Потребление (kWh)'].sum()
+    money_sum = summary_df['Сума за енергия'].sum()
+    zko_sum = summary_df['Задължение към обществото'].sum()
+    grid_sum = summary_df['Мрежови услуги (лв.)'].sum()
+    akciz_sum = summary_df['Акциз'].sum()
+    total_sum = summary_df['Обща сума (без ДДС)'].sum()
+    
+    summary_df.loc[-1] = ['Total', '', '', power_sum, money_sum, zko_sum, grid_sum, akciz_sum, total_sum,'','']  # adding a row
+    summary_df.index = summary_df.index + 1  # shifting index
+    summary_df = summary_df.sort_index()  # sorting by index
+    return summary_df

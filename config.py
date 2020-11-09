@@ -15,4 +15,9 @@ class Config(object):
 	MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
 	MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
 	ADMINS = ['d.petkov@grandenergy.net']
+	INV_REFS_PATH = 'static/inv_ref_files'
+	INTEGRA_INDIVIDUAL_PATH = 'static/integra_individual_files' 
+	INTEGRA_FOR_UPLOAD_PATH = 'static/integra_for_upload' 
+	PDF_INVOICES_PATH = 'static/created_pdf_invoices'
+	REPORTS_PATH = 'static/reports'
 

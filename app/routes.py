@@ -10,7 +10,7 @@ from flask import render_template, flash, redirect, url_for, request, send_file,
 from sqlalchemy import extract, or_
 from app import app
 from app.forms import (
-    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm,
+    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm, AdditionalReports,
     UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm, MonthlyReportErpForm,
     UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm,MonthlyReportOptionsForm)
 from flask_login import current_user, login_user, logout_user, login_required
@@ -21,7 +21,7 @@ from werkzeug.urls import url_parse
 from werkzeug.utils import secure_filename
 import calendar
 
-from app.helpers.helper_function_excel_writer import INV_REFS_PATH
+
 
 from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  convert_date_to_utc,
@@ -56,10 +56,11 @@ from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  create_df_from_integra_csv,
                                  get_files,
                                  update_ibex_data,
-                                 update_schedule_prices
+                                 update_schedule_prices,
+                                 delete_files
                                  )
 
-from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH, PDF_INVOICES_PATH)
+# from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH, PDF_INVOICES_PATH, REPORTS_PATH)
 
 from app.helpers.helper_functions_queries import (                                         
                                         get_contractors_names_and_411,
@@ -79,7 +80,7 @@ from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,ins
 )
 from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
                                          get_summary_spot_df, get_weighted_price, create_utc_dates,
-                                         get_weighted_price, create_excel_files, appned_df)
+                                         get_weighted_price, create_excel_files, appned_df, create_full_ref_for_all_itn)
 
 from app.helpers.invoice_writer import create_invoices
 from app.email import (send_email)
@@ -91,6 +92,31 @@ MEASURE_MAP_DICT = {
             }
 MONEY_ROUND = 9
 
+@app.route('/additional_reports', methods=['GET', 'POST'])
+def add_reports():
+    form = AdditionalReports()
+
+    if form.submit_delete.data:
+            delete_files(os.path.join(app.root_path, app.config['REPORTS_PATH']), form.reports_files.data, 'xlsx', form.delete_all.data)
+            return redirect(url_for('add_reports'))
+
+    # form.ref_files.choices = sorted([(x,x) for x in get_files(INV_REFS_PATH,'xlsx')])
+    # form.reports_files.choices = sorted([(x,x) for x in get_files(REPORTS_PATH,'xlsx')])
+    form.ref_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']),'xlsx')])
+    form.reports_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['REPORTS_PATH']),'xlsx')])
+    
+    if form.validate_on_submit():
+        if form.submit.data:
+            files = form.ref_files.data
+            summary_df = create_full_ref_for_all_itn(files)
+            now = dt.datetime.now()
+            now_string = now.strftime("%Y-%m-%d %H:%M:%S")
+            summary_df.to_excel(os.path.join(os.path.join(app.root_path, app.config['REPORTS_PATH']), f'{now_string}_full_report.xlsx'), index = False)
+            
+       
+        
+
+    return render_template('quick_template_wider.html', title='Additional Reports', form=form, header = 'Additional Reports')
 
 @app.route('/monthly_erp', methods=['GET', 'POST'])
 def monthly_erp():
@@ -106,22 +132,99 @@ def monthly_erp():
 @app.route('/test', methods=['GET', 'POST'])
 @login_required
 def test():
-    form = TestForm()
-    if form.validate_on_submit():
-        if form.submit.data:
-            start_date =  dt.datetime.strptime(form.start_date.data, '%Y-%m-%d')
-            end_date = form.end_date.data
-            # erp = 'CEZ'
-            # data = get_inv_gr_id_erp(erp, start_date, end_date)
-            first_month_date = start_date.replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12)
-            # last_month_date = start_date.replace(day = calendar.monthrange(first_month_date.year, first_month_date.month)[1])
-            print(f'first_month_date ---> \n{first_month_date}')
-            # print(f'last_month_date ---> \n{last_month_date}')
+    # form = TestForm()
+    # summary_df = pd.DataFrame()
+    # if form.validate_on_submit():
+        # 
+    filename = '08-11-2020 de4ko.xlsx'
+    uploads = '/home/dpetkov/Python_Projects/Flask/Ged_EU_v1/app/static/integra_for_upload'
+    # uploads = os.path.join(app.root_path, INTEGRA_FOR_UPLOAD_PATH)
+    print(f'{uploads}')
+    return send_from_directory(directory=uploads, as_attachment=True, filename=filename)
+
+        # files = get_files(INV_REFS_PATH,'xlsx')
+        # # print(f'{files}')
+        # summary_df = create_full_ref_for_all_itn(INV_REFS_PATH,files)
+        
+        
+
+
+        # start_date = dt.datetime.strptime(form.start_date.data, '%Y-%m-%d')  
+        # end_date = dt.datetime.strptime(form.end_date.data, '%Y-%m-%d') 
+        
+        # time_zone = "EET"
+        # erp = 'CEZ'
+        # contract_type = 'Mass_Market'
+        
+
+        # invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))        
+        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
+        
+        # invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))            
+        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)
+
+        # start_date = convert_date_to_utc(time_zone, start_date)
+        # end_date = convert_date_to_utc(time_zone, end_date) + dt.timedelta(hours = 23)
+        # # if form.submit.data:
+        # #     rep_df = create_report_from_grid(invoice_start_date, invoice_end_date)
+        # #     print(f'rep df \n{rep_df}')
+        # itn_count_per_inv_gr = (
+        #     db.session.query(
+                
+        #         InvoiceGroup.id.label('inv_gr_id_all'),
+        #         func.count(SubContract.itn).label('itns_count')
+        #     )
+        #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)               
+        #     .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
+        #     .group_by(InvoiceGroup.id)
+        #     .subquery()
+        # )
+
+        # itn_count_per_inv_gr_erp = (
+        #     db.session.query(
+                
+        #         InvoiceGroup.id.label('inv_gr_id_erp'),
+        #         InvoiceGroup.name.label('inv_descr'),
+        #         InvoiceGroup.description.label('inv_name'),
+        #         func.count(SubContract.itn).label('itns_count')
+        #     )
+        #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
+        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
+        #     .join(Erp)  
+        #     .filter(Erp.name == erp)          
+        #     .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
+        #     .group_by(InvoiceGroup.id)
+        #     .subquery()
+        # )
+
+        # single_erp_inv_ids =(
+        #     db.session.query(
+        #         itn_count_per_inv_gr_erp.c.inv_name,
+        #         itn_count_per_inv_gr_erp.c.inv_descr,
+        #         Contract,
+        #         Contract.internal_id,
+        #         itn_count_per_inv_gr_erp.c.inv_gr_id_erp           
+        #     )
+        #     .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id_all == itn_count_per_inv_gr_erp.c.inv_gr_id_erp)                   
+        #     .join(SubContract,SubContract.invoice_group_id == itn_count_per_inv_gr_erp.c.inv_gr_id_erp)
+        #     .join(Contract, Contract.id == SubContract.contract_id) 
+        #     .join(ContractType, ContractType.id == Contract.contract_type_id) 
+        #     .join(Contractor,Contractor.id == Contract.contractor_id)              
+        #     .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)
+        #     .filter(ContractType.name == contract_type).order_by(Contractor.name)
+        #     .filter(itn_count_per_inv_gr.c.itns_count == itn_count_per_inv_gr_erp.c.itns_count)
+        #     .distinct()
+        #     .all()
+        # )
+
+        # df = list(set([(x[3],x[2]) for x in single_erp_inv_ids] ))  
+        # print(f'{len(df)}')    
 
             
        
 
-    return render_template('test.html', title='TEST', form=form)
+    # return render_template('test.html', title='TEST', form=form)
 
 @app.route('/mailing', methods=['GET', 'POST'])
 @login_required
@@ -135,9 +238,12 @@ def mailing():
                 contractor =  Contractor.query.filter(Contractor.id == inv.contractor_id).first()
                 mails = contractor.email.split(';')
                 mails = [x for x in mails]
+                mails.append('t.kalaidjieva@grandenergy.net')
                 ref_file_name = inv.ref_file_name 
                 inv_file_name = str(inv.id)+ '.pdf'
-                file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
+                # file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
+                file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name), (os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
+                
                 send_email(mails, file_data)       
 
     return render_template('mail.html', title='TEST', form=form)
@@ -152,15 +258,18 @@ def create_invoice():
             
             raw_df = pd.read_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))
             redacted_df = raw_df[raw_df['DocNumber'].isin(form.invoicing_list.data)]
-            create_invoices(redacted_df, PDF_INVOICES_PATH, INV_REFS_PATH)            
+            create_invoices(redacted_df)            
             return redirect(url_for('create_invoice'))   
 
     if form.validate_on_submit():         
         if form.upload_csv.data:
-            invoice_df = create_df_from_integra_csv(request.files.get('file_integra_csv'))
-            invoice_df.to_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))
-                     
-            form.invoicing_list.choices = parse_integra_csv(invoice_df)      
+            try:
+                invoice_df = create_df_from_integra_csv(request.files.get('file_integra_csv'))
+            except:
+                flash(f'Wrong or no csv file is choosen. Abort !','danger')
+            else:
+                invoice_df.to_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))                  
+                form.invoicing_list.choices = parse_integra_csv(invoice_df)      
 
     return render_template('create_invoice.html', title='Invoice Creation', form=form)
 
@@ -218,7 +327,7 @@ def erp():
 @login_required
 def monthly_report():
     form = MonthlyReportForm()
-    form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
+    form.ref_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']),'xlsx')])
     if form.validate_on_submit():
         
         # contractors = (db.session
@@ -236,7 +345,7 @@ def monthly_report():
         start = time.time()
 
         if form.submit_delete.data:
-            delete_excel_files(INV_REFS_PATH, form.ref_files.data, form.delete_all.data)
+            delete_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']), form.ref_files.data, form.delete_all.data)
             return redirect(url_for('monthly_report'))
            
 
@@ -293,12 +402,12 @@ def monthly_report():
 def create_integra_excel():
     
     form = IntegraForm()
-    form.integra_files.choices = sorted([(x,x) for x in get_excel_files(INTEGRA_INDIVIDUAL_PATH)])
-    form.integra_upload_files.choices = sorted([(x,x) for x in get_excel_files(INTEGRA_FOR_UPLOAD_PATH)])
+    form.integra_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INTEGRA_INDIVIDUAL_PATH']),'xlsx')])
+    form.integra_upload_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INTEGRA_FOR_UPLOAD_PATH']),'xlsx')])
     if form.validate_on_submit(): 
 
         if form.delete_integra.data:
-            delete_excel_files(INTEGRA_INDIVIDUAL_PATH, form.integra_files.data , form.delete_all.data)
+            delete_excel_files(os.path.join(app.root_path, app.config['INTEGRA_INDIVIDUAL_PATH']), form.integra_files.data , form.delete_all.data)
 
             return redirect(url_for('create_integra_excel'))             
             
@@ -309,14 +418,14 @@ def create_integra_excel():
             if not form.concatenate_all.data:
                 files_to_concat = sorted(form.integra_files.data)
             else:
-                for root, dirs, files in os.walk(INTEGRA_INDIVIDUAL_PATH):            
+                for root, dirs, files in os.walk(os.path.join(app.root_path, app.config['INTEGRA_INDIVIDUAL_PATH'])):            
                     for filename in files:
                         if filename.endswith('.xlsx') & (filename.find('~') == -1):
                             files_to_concat.append(filename)
                 files_to_concat = sorted(files_to_concat)
 
             for filename in files_to_concat:
-                curr_df = pd.read_excel(os.path.join(INTEGRA_INDIVIDUAL_PATH, filename))
+                curr_df = pd.read_excel(os.path.join(os.path.join(app.root_path, app.config['INTEGRA_INDIVIDUAL_PATH']), filename))
                 if concated_df.empty:
                     concated_df = curr_df
                 else:
@@ -324,21 +433,15 @@ def create_integra_excel():
                     curr_df['№ по ред']  = las_num + 1
                     concated_df = concated_df.append(curr_df,ignore_index=True)      
 
-            concated_df.to_excel(os.path.join(INTEGRA_FOR_UPLOAD_PATH,form.file_name.data), index = False)
+            concated_df.to_excel(os.path.join(os.path.join(app.root_path, app.config['INTEGRA_FOR_UPLOAD_PATH']),form.file_name.data), index = False)
             return redirect(url_for('create_integra_excel'))
 
         elif form.delete_upload_integra.data:
             
-            delete_excel_files(INTEGRA_FOR_UPLOAD_PATH, form.integra_upload_files.data, form.delete_all_upload.data)
+            delete_excel_files(os.path.join(app.root_path, app.config['INTEGRA_FOR_UPLOAD_PATH']), form.integra_upload_files.data, form.delete_all_upload.data)
             return redirect(url_for('create_integra_excel')) 
 
-        elif form.proba.data:
-            print(f'proba {form.integra_upload_files.data}')
-            print(f'{os.path.join(INTEGRA_FOR_UPLOAD_PATH,form.file_name.data)}')
-            DIR = os.path.dirname(os.path.abspath(form.integra_upload_files.data[0]))
-            print(f'{os.path.join(DIR,form.integra_upload_files.data[0])}')
-            # return send_from_directory(INTEGRA_FOR_UPLOAD_PATH, as_attachment=True, filename="qqq.xlsx")
-            # return send_file(INTEGRA_FOR_UPLOAD_PATH, as_attachment=True)
+        
 
     return render_template('create_excel_for_integra.html', title='Integra file', form=form)
      
@@ -1179,7 +1282,7 @@ def table():
 @login_required
 def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
     form = MonthlyReportErpForm()
-    form.ref_files.choices = sorted([(x,x) for x in get_excel_files(INV_REFS_PATH)])
+    form.ref_files.choices = sorted([(x,x) for x in get_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']))])
     filtered_records = get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed)
     # form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in db.session.query(InvoiceGroup.name, InvoiceGroup.description).join(Contractor).join(SubContract).join(Contract)
     #                     .join(ItnMeta, ItnMeta.itn == SubContract.itn).join(Erp).join(ContractType, ContractType.id == Contract.contract_type_id)
@@ -1188,16 +1291,18 @@ def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
     #                     .filter(ContractType.name == contract_type).order_by(Contractor.name)
     #                     .all()]
 
-    form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in filtered_records]
+    form.invoicing_group.choices = sorted(list(set([ (x[0],f'{x[0]} - {x[1]} ') for x in filtered_records])),key = lambda y: y[1].split(' - ')[1])
+
                  
-    # form.contracts.choices =  [ (x,x) for x in Contract.query.join(Contractor).order_by(Contractor.name).all() ]    
-    form.contracts.choices = [(x[2],x[2]) for x in filtered_records]   
+    # form.contracts.choices =  [ (x,x) for x in Contract.query.join(Contractor).order_by(Contractor.name).all() ]   
     
+    form.contracts.choices = sorted(list(set([(x[3],f'{x[2]}') for x in filtered_records] )) ,key = lambda y: y[1].split(' - ')[1]) 
+
     if form.validate_on_submit():        
-       
+        
         start = time.time()  
         if form.submit_delete.data:
-            delete_excel_files(INV_REFS_PATH, form.ref_files.data, form.delete_all.data)
+            delete_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']), form.ref_files.data, form.delete_all.data)
             return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, is_mixed = is_mixed, **request.args))
            
 
@@ -1205,12 +1310,13 @@ def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
             counter = 0
             weighted_price = None
 
-            if form.by_contract.data:            
-                time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
-                start_date = convert_date_to_utc(time_zone, start_date)
-                end_date = convert_date_to_utc(time_zone, end_date) + dt.timedelta(hours = 23)
-                inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
-                weighted_price = get_weighted_price(inv_groups, start_date, end_date)
+            if form.by_contract.data:   
+                print(f'{form.contracts.data}')         
+                time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data).first().code
+                start_date_ = convert_date_to_utc(time_zone, start_date)
+                end_date_ = convert_date_to_utc(time_zone, end_date) + dt.timedelta(hours = 23)
+                inv_groups = get_list_inv_groups_by_contract(form.contracts.data, start_date_, end_date_)
+                weighted_price = get_weighted_price(inv_groups, start_date_, end_date_)
                 # print(f'weighted_price -- {weighted_price}')
             else:            
                 inv_groups = [x[0] for x in form.invoicing_group.choices]  if form.bulk_creation.data else [x for x in form.invoicing_group.data]   
@@ -1223,6 +1329,7 @@ def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
                 
                 # print(f'{inv_group_name}')
                 start_date_utc, end_date_utc, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, start_date, end_date)
+                print(f'{inv_group_name}-{end_date_utc}-{invoice_start_date}-{invoice_end_date}')
 
                 ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
 

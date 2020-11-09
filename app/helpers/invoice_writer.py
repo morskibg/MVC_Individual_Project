@@ -28,6 +28,7 @@ import xlsxwriter
 from openpyxl.styles import Alignment
 from openpyxl import load_workbook
 
+from app import app
 from app.models import *
 from app.helpers.helper_functions import convert_date_to_utc, update_or_insert
 
@@ -219,12 +220,12 @@ class SumTextWriter:
 
 class InvoiceCreator:
 
-    def __init__(self, pdf_file, df, p_style, sum_writer):
+    def __init__(self, pdf_file_name, df, p_style, sum_writer):
         
         self.raw_df = df
         self.p_style = p_style
         self.sum_writer = sum_writer
-        self.canvas = canvas.Canvas(pdf_file, pagesize=A4)
+        self.canvas = canvas.Canvas(os.path.join(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), pdf_file_name), pagesize=A4)
         self.styles = getSampleStyleSheet()
         self.width, self.height = letter
         self.grid = df[df['StockName'] == 'ПРЕНОС И ДОСТЪП ДО ЕЛ.МРЕЖАТА']
@@ -359,7 +360,7 @@ class InvoiceCreator:
                 break
 
         ein = self.lead_data['TaxNum'].values[0]
-        vat = self.lead_data['BULSTAT'].values[0]  
+        vat = self.lead_data['BULSTAT'].values[0] if not pd.isnull(self.lead_data['BULSTAT'].values[0]) else ''
         store_name = ''      
         city_ = self.lead_data['CityName'].values[0] if isinstance(self.lead_data['CityName'].values[0], str) else ''   
         address_ = self.lead_data['Address'].values[0] if isinstance(self.lead_data['Address'].values[0], str) else ''
@@ -696,10 +697,11 @@ def fonts_init():
     # addMapping('Vera', 0, 1, 'Vera-Italic') #italic
     addMapping('DejaVuSerif', 1, 0, 'DejaVuSerifBold') #bold
 
-def ref_num_injector(raw_df, ref_path):
+def ref_num_injector(raw_df):
 
+    filename = os.path.join(os.path.join(app.root_path, app.config['INV_REFS_PATH']) , raw_df.iloc[0].RepFileName)
     try:
-        wb = load_workbook(filename = os.path.join(ref_path , raw_df.iloc[0].RepFileName))
+        wb = load_workbook(filename = filename)
     except Exception as e:         
         print(f'{e}  \n Exception at row --->{print(sys.exc_info()[2].tb_lineno)}')
     else:
@@ -710,9 +712,9 @@ def ref_num_injector(raw_df, ref_path):
         ws['A4'].value = final_text
         ws.merge_cells('A4:J4')        
         ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
-        wb.save(os.path.join(ref_path , raw_df.iloc[0].RepFileName))
+        wb.save(filename)
         
-def create_invoices(raw_df, dest_path, ref_path):
+def create_invoices(raw_df):
 
 
     fonts_init()
@@ -721,11 +723,11 @@ def create_invoices(raw_df, dest_path, ref_path):
     
     grouped_dict = dict(tuple(raw_df.groupby('DocNumber')))    
     for key in grouped_dict.keys():        
-        print(f'{key}')
-        pdf_file_name = f'{dest_path}/{key}.pdf'
+        print(f'{key}')        
+        filename = f'{key}.pdf'
         df = grouped_dict[key]
         par_styler.reset()
-        invoice = InvoiceCreator(pdf_file_name, df, par_styler, sum_writer)  
+        invoice = InvoiceCreator(filename, df, par_styler, sum_writer)  
         invoice.create_footer()      
         invoice.create_barcode()
         invoice.create_logo()
@@ -738,7 +740,7 @@ def create_invoices(raw_df, dest_path, ref_path):
         invoice.create_signature_fields()
         invoice.create_notes()
         invoice.save()
-        invoice.upload_to_db()
-        ref_num_injector(df, ref_path)
-        invoice.upload_to_db()
+        # invoice.upload_to_db()
+        ref_num_injector(df)
+        # invoice.upload_to_db()
 

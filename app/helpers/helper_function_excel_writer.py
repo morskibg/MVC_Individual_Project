@@ -7,6 +7,7 @@ from decimal import Decimal,ROUND_HALF_UP
 
 from flask import flash
 from app.models import *
+from app import app
 
 import xlsxwriter
 from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
@@ -23,10 +24,12 @@ MONEY_FINAL_ROUND = 2
 MONEY_ROUND = 6
 ENERGY_ROUND = 3
 ENERGY_ROUND_MW = 6
-INV_REFS_PATH = 'app/static/inv_ref_files'
-INTEGRA_INDIVIDUAL_PATH = 'app/static/integra_individual_files' 
-INTEGRA_FOR_UPLOAD_PATH = 'app/static/integra_for_upload' 
-PDF_INVOICES_PATH = 'app/static/created_pdf_invoices'
+# INV_REFS_PATH = 'app/static/inv_ref_files'
+# INTEGRA_INDIVIDUAL_PATH = 'app/static/integra_individual_files' 
+# INTEGRA_FOR_UPLOAD_PATH = 'app/static/integra_for_upload' 
+# PDF_INVOICES_PATH = 'app/static/created_pdf_invoices'
+# REPORTS_PATH = 'app/static/reports'
+
 
 GOODES_CODE = {'Сума за енергия':'304-1', 'Мрежови услуги (лв.)':'498-56','Задължение към обществото':'459-2','Акциз':'456-1'}
 PRICES = {'304-1':'price', '498-56':'Мрежови услуги (лв.)','459-2':'zko','456-1':'akciz'}
@@ -68,14 +71,15 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
     
     file_name =f'{period_end_date.year}-{period_end_date.month}_{df.iloc[0].invoice_group_description}_{df.iloc[0].invoice_group_name}_invoice_reference.xlsx' 
     
-    writer = pd.ExcelWriter(f'{INV_REFS_PATH}/{file_name}', engine='xlsxwriter')
+    # writer = pd.ExcelWriter(f'{INV_REFS_PATH}/{file_name}', engine='xlsxwriter')
+    writer = pd.ExcelWriter(os.path.join(os.path.join(app.root_path, app.config['INV_REFS_PATH']),file_name), engine='xlsxwriter')
     src_df = pd.read_excel('app/static/uploads/src_dete.xlsx', header=None) if is_second else pd.read_excel('app/static/uploads/src.xlsx', header=None)
     src_df.to_excel(writer, sheet_name="Sheet1", index=False, header=False)
     df_grid.to_excel(writer, sheet_name = 'мрежови услуги')
     writer.close()
 
-    wb = load_workbook(filename = f'{INV_REFS_PATH}/{file_name}')
-
+    # wb = load_workbook(filename = f'{INV_REFS_PATH}/{file_name}')
+    wb = load_workbook(filename = os.path.join(os.path.join(app.root_path, app.config['INV_REFS_PATH']),file_name))
     ws = wb.active
     
     thin_cell_border = Border(left=Side(border_style='thin', color='FF000000'),
@@ -317,7 +321,7 @@ def generate_ref_excel(df, df_grid, invoice_start_date, invoice_end_date, period
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToHeight = False
     ws.print_title_rows = '28:29'
-    wb.save(f'{INV_REFS_PATH}/{file_name}')
+    wb.save(os.path.join(os.path.join(app.root_path, app.config['INV_REFS_PATH']),file_name))
     return file_name
    
     
@@ -398,6 +402,6 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     
     for_invoice_df.insert(loc=0, column = '№ по ред', value = 1 )
     # for_invoice_df.to_excel(INTEGRA_INDIVIDUAL_PATH + '/' + file_name,index = False)
-    for_invoice_df.to_excel(os.path.join(INTEGRA_INDIVIDUAL_PATH, file_name),index = False)
+    for_invoice_df.to_excel(os.path.join(os.path.join(app.root_path, app.config['INTEGRA_INDIVIDUAL_PATH']), file_name),index = False)
     
     

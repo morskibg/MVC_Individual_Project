@@ -10,7 +10,7 @@ from decimal import Decimal,ROUND_HALF_UP
 from sqlalchemy.exc import ProgrammingError
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
-from app.helpers.helper_function_excel_writer import (INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
+# from app.helpers.helper_function_excel_writer import (INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
                         
                                       
 
@@ -676,6 +676,28 @@ def delete_excel_files(path, files, is_delete_all):
                     continue
                 print(f'File: {filename} removed !')   
 
+def delete_files(path, files, file_type, is_delete_all):
+    print(f'{files}')    
+    file_type = f'.{file_type}'
+    custom_del_files = []
+    if not is_delete_all:
+        custom_del_files = files               
+
+    for root, dirs, files in os.walk(path):            
+        for filename in files:
+            if filename.endswith(file_type) & (filename.find('~') == -1) :
+                
+                if is_delete_all:
+                    os.remove(os.path.join(root, filename))                            
+                    
+                elif filename in custom_del_files:   
+                                       
+                    os.remove(os.path.join(root, filename))
+                        
+                else:
+                    continue
+                print(f'File: {filename} removed !')         
+
 def parse_integra_csv(df):
     
 
@@ -687,7 +709,7 @@ def parse_integra_csv(df):
     list_df = list_df.dropna()
     
     res = list_df.to_records().tolist()
-
+    
     return res
 
 def create_df_from_integra_csv(csv_file):

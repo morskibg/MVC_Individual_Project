@@ -240,8 +240,10 @@ class EditSubForm(FlaskForm):
 
 class MonthlyReportForm(FlaskForm):
     
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
@@ -306,7 +308,7 @@ class IntegraForm(FlaskForm):
     delete_all_upload = BooleanField('Delete all upload files', default = False) 
     delete_upload_integra = SubmitField('Delete Integra upload files') 
 
-    proba = SubmitField('Proba') 
+    # proba = SubmitField('Proba') 
 
 class InvoiceForm(FlaskForm):
 
@@ -323,8 +325,10 @@ class MailForm(FlaskForm):
     submit = SubmitField('Send selected')
 
 class TestForm(FlaskForm):
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()])
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     # contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     # send_all = BooleanField('Send all mails', default = False)
     # attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
@@ -337,7 +341,8 @@ class MonthlyReportErpForm(FlaskForm):
     invoicing_group = SelectMultipleField(choices = [], validators=[Optional()], render_kw={'size':15})
     
     by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
-    contracts = SelectField('Contracts',validators=[Optional()], render_kw={'size':15})
+    contracts = SelectField(choices = [],validators=[Optional()], render_kw={'size':15})
+    # contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     by_contract = BooleanField('Create invoice reference by Contract', default = False)
 
     def validate_end_date(self, end_date):
@@ -365,6 +370,20 @@ class MonthlyReportOptionsForm(FlaskForm):
     include_all = BooleanField('Include invoice groups with ITN from different ERP', default = False)
     # attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
     submit = SubmitField('Apply filters')
+
+class AdditionalReports(FlaskForm):
+
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    bulk_creation = BooleanField('Select all files', default = False)
+    ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
+    submit = SubmitField('Generate Full Report')
+    reports_files = SelectMultipleField('Report files',  validators=[Optional()], render_kw={'size':20})
+    delete_all = BooleanField('Delete all report files', default = False)
+    submit_delete = SubmitField('Delete files')
+
 
 
             

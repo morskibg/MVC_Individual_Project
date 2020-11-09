@@ -33,9 +33,12 @@
                     <ul class="nav navbar-nav">
                         <li><a class="nav-link"  href="{{ url_for('monthly_report') }}">Monthly Reports</a></li>
                         <li><a class="nav-link"  href="{{ url_for('monthly_erp') }}">Filtered Monthly Reports</a></li>
-                        <li><a class="nav-link"  href="{{ url_for('create_integra_excel') }}">Integra files</a></li>
-                        <li><a class="nav-link"  href="{{ url_for('create_invoice') }}">Invoices</a></li>
-                        <li><a class="nav-link"  href="{{ url_for('mailing') }}">Mails</a></li>
+                        <li><a class="nav-link"  href="{{ url_for('add_reports') }}">Additional Reports</a></li>
+                        {% if not current_user.is_anonymous %}
+                            <li><a class="nav-link"  href="{{ url_for('create_integra_excel') }}">Integra files</a></li>
+                            <li><a class="nav-link"  href="{{ url_for('create_invoice') }}">Invoices</a></li>
+                            <li><a class="nav-link"  href="{{ url_for('mailing') }}">Mails</a></li>
+                        {% endif %}
                         
                     </ul>
                     <ul class="nav navbar-nav navbar-right">
