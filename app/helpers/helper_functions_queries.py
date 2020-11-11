@@ -585,7 +585,7 @@ def create_ibex_schedule(end_date):
 # def update_ibex_data():
 def get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed):
 
-
+    # contr_type_list
     if is_mixed == 'True':        
         single_erp_inv_ids =(
             db.session.query(

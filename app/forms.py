@@ -273,6 +273,7 @@ class ErpForm(FlaskForm):
     file_epro = FileField('Browse for E_PRO Zip File')
     file_evn = FileField('Browse for EVN Zip File')
     file_nkji = FileField('Browse for NKJI Zip File')
+    file_eso = FileField('Browse for ESO Zip File')
 
     submit = SubmitField('Upload')
 
@@ -321,7 +322,7 @@ class InvoiceForm(FlaskForm):
 
 class MailForm(FlaskForm):
     send_all = BooleanField('Send all mails', default = False)
-    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
+    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':35})  
     submit = SubmitField('Send selected')
 
 class TestForm(FlaskForm):
@@ -369,6 +370,8 @@ class MonthlyReportOptionsForm(FlaskForm):
     erp = SelectField(choices = ['CEZ','E-PRO','EVN'], validators = [DataRequired()])
     include_all = BooleanField('Include invoice groups with ITN from different ERP', default = False)
     # attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
+    
+
     submit = SubmitField('Apply filters')
 
 class AdditionalReports(FlaskForm):

@@ -460,12 +460,12 @@ class InvoiceCreator:
         bank_table.wrapOn(self.canvas, 100, 100)
         bank_table.drawOn(self.canvas,*self.coord(ext_x, ext_y, mm))
 
-        if self.raw_df.iloc[0].EasyPay == 1:
+        if self.raw_df.iloc[0].EasyPay == 1: #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             self.p_style.fontSize = 8
             self.p_style.leading = 11
             easy_pay_custom_num = int(self.raw_df.iloc[0].easy_pay_num)
             easy_pay_name = self.raw_df.iloc[0].easy_pay_name
-            p_text = f'<b>За плащане през EasyPay / ePay, Вашите Име и Клиентски номер са:</b><br /> <b>{easy_pay_name} - {easy_pay_custom_num}</b>' 
+            p_text = f'<b>За плащане през EasyPay / ePay, Вашите \'Име\' - \'Клиентски номер\' са:</b><br /> <b>{easy_pay_name} - {easy_pay_custom_num}</b>' 
             self.__paragraph_writer__(p_text, ext_x, ext_y + 9)
         
     
@@ -643,7 +643,7 @@ class InvoiceCreator:
         maturity_date = self.lead_data['PayDate'].values[0].replace('.','/')
         maturity_date = dt.datetime.strptime(maturity_date, '%d/%m/%Y')
 
-        
+        ref_file_name = self.lead_data['RepFileName'].values[0].replace('"',' ')
         if len(old_invoice) == 0:
 
             invoice = Invoice(id = int(self.lead_data['DocNumber'].values[0]),
@@ -654,7 +654,7 @@ class InvoiceCreator:
                                 zko_sum = Decimal(self.zko.ItemSuma.values[0]),
                                 akciz_sum = Decimal(self.akciz.ItemSuma.values[0]),
                                 additional_tax_sum = 0,
-                                ref_file_name = self.lead_data['RepFileName'].values[0],
+                                ref_file_name = ref_file_name,
                                 easypay_num = int(self.lead_data['easy_pay_num'].values[0]),
                                 easypay_name = self.lead_data['easy_pay_name'].values[0],
                                 is_easypay = self.lead_data['EasyPay'].values[0],
@@ -673,7 +673,7 @@ class InvoiceCreator:
                                 'zko_sum' : Decimal(self.zko.ItemSuma.values[0]),
                                 'akciz_sum' : Decimal(self.akciz.ItemSuma.values[0]),
                                 'additional_tax_sum' : 0,
-                                'ref_file_name' : self.lead_data['RepFileName'].values[0],
+                                'ref_file_name' : ref_file_name,
                                 'easypay_num' : int(self.lead_data['easy_pay_num'].values[0]),
                                 'easypay_name' : self.lead_data['easy_pay_name'].values[0],
                                 'is_easypay' : self.lead_data['EasyPay'].values[0],
@@ -742,5 +742,5 @@ def create_invoices(raw_df):
         invoice.save()
         # invoice.upload_to_db()
         ref_num_injector(df)
-        # invoice.upload_to_db()
+        invoice.upload_to_db()
 

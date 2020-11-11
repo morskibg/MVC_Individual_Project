@@ -68,6 +68,9 @@ class Contractor(BaseModel):
     def __repr__(self):
         return '<Contractor {} - {}>'.format(self.name, self.acc_411)  
 
+    def __str__(self):
+        return f'{self.name} - {self.acc_411}'
+
 class TimeZone(BaseModel):
     id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
     code = db.Column(db.String(32), unique=True, nullable = False)

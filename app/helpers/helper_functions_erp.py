@@ -1,4 +1,5 @@
 import sys, pytz, datetime as dt
+import calendar
 
 import pandas as pd
 import os
@@ -376,11 +377,13 @@ def insert_settlment_e_pro(zip_obj, separator):
     ERP = 'E-PRO'
     ordered_dict = order_files_by_date(zip_obj)
     incomming_points = []
+    incoming_non_stp_records = []
+    distribution_stp_records = 0
     # incoming_stp_itns_list = []
     for date_created, file_name in ordered_dict.items():
         if file_name.endswith('.zip'):
             
-            # print(file_name, file = sys.stdout)
+            print(file_name, file = sys.stdout)
             
             inner_zfiledata = BytesIO(zip_obj.read(file_name))
             inner_zip =  ZipFile(inner_zfiledata)
@@ -396,26 +399,88 @@ def insert_settlment_e_pro(zip_obj, separator):
                 client_name = [x for x in df.columns if(x.find('Unnamed:') == -1)][0]
                 itn = df.iloc[:1][client_name].values[0].split(': ')[1]                       
                 
-                df = df.rename(columns={client_name:'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})        
-                
-                df_for_db = create_db_df_eepro_evn(df, itn)
+                df = df.rename(columns={client_name:'1','Unnamed: 1':'2', 'Unnamed: 2':'3'})                
+                df_for_db = create_db_df_eepro_evn(df, itn,True)
 
-                min_date = min(df_for_db['utc']).to_pydatetime()                    
-                max_date = max(df_for_db['utc']).to_pydatetime()
-                
-                if(not df_for_db.empty):
+                raw_date = max(df_for_db['utc']).to_pydatetime()
+                max_date = raw_date.replace(day = calendar.monthrange(raw_date.year, raw_date.month)[1])
+                min_date  = raw_date.replace(day = 1)
 
-                    incoming_non_stp_records = get_incoming_non_stp_records(df_for_db,min_date, max_date)
-                    incomming_points.append(incoming_non_stp_records)
-                    # print(f'e pro \n{df_for_db}')
+
+                
+                ######################################################################################
+
+                if(not df_for_db.empty):  
+
+                        print(f'min max date {min_date} --- {max_date} ---- {df_for_db.iloc[0].itn}')                         
+                        
+                        if distribution_stp_records == 0:
+
+                            db_stp_records = get_stp_from_db(ERP, min_date, max_date)                            
+                            
+                            db_non_stp_records = get_non_stp_from_db(ERP, min_date, max_date)
+                           
+                            # min_date_inv = min_date.replace(min_date.year, min_date.month, 11,0,0,0)
+                            # max_date_inv = max_date.replace(max_date.year, max_date.month + 1, 10,23,0,0) 
+
+                            invoice_start_date = min_date + dt.timedelta(hours = (10 * 24 + 1))
+                            invoice_end_date = max_date + dt.timedelta(hours = (10 * 24))
+
+                            # print(f'invoice_start_date invoice_end_date date {invoice_start_date} --- {invoice_end_date} ---- {df_for_db.iloc[0].itn}') 
+
+                            distribution_stp_records = get_distribution_stp_records(ERP,min_date,max_date)
+
+                            stp_records_df = pd.DataFrame.from_records(distribution_stp_records, columns=distribution_stp_records[0].keys())
+                            
+                            update_stp_consumption_vol(stp_records_df, min_date, max_date, True) 
+
+                            distribution_non_stp_records = get_distribution_non_stp(ERP,invoice_start_date, invoice_end_date)
+                            # print(f'stp records df \n{stp_records_df}')
+
+                        if(not df_for_db.empty):
+                            incoming_non_stp_records.append(list(zip(set(df_for_db.itn), )))               
+
+                            applicable_subcontracts = get_subcontracts_by_itn_and_utc_dates(df_for_db.iloc[0]['itn'], min_date, max_date)
+
+                            for subcontarct in applicable_subcontracts:
+                                print(f'$$$$$$$$$$$$$$$ applicable_subcontracts  $$$$$$$$$$$$$$$$\n{subcontarct}')
+                                partial_df = df_for_db[((df_for_db.utc >= subcontarct.start_date) & (df_for_db.utc <= subcontarct.end_date))].copy()
+                                print(f'$$$$$$$$$$$$$$$ applicable_subcontracts -- partial_df $$$$$$$$$$$$$$$$\n{partial_df}')
+                                # incoming_non_stp_records.append(list(zip(set(partial_df.itn), )))
+                                if len(incomming_points) == 0:
+                                    incomming_points = partial_df.itn
+                                else:
+                                    [y for x in [incomming_points, partial_df.itn] for y in x]
+                                    # incomming_points += partial_df.itn
+                                
+                                update_non_stp_consumption_settelment_vol(partial_df, subcontarct.start_date, subcontarct.end_date)
                    
-                    update_non_stp_consumption_settelment_vol(df_for_db, min_date, max_date)
-                    
                 else:
                     print('Values in file ', key, ' was only 0 !')
 
-                # except Exception as e: 
-                #     print(f'File {key} was NOT proceeded .Exception message: {e}!')
+
+
+
+
+
+                ######################################################################################
+
+                # min_date = min(df_for_db['utc']).to_pydatetime()                    
+                # max_date = max(df_for_db['utc']).to_pydatetime()
+                
+                # if(not df_for_db.empty):
+
+                #     incoming_non_stp_records = get_incoming_non_stp_records(df_for_db,min_date, max_date)
+                #     incomming_points.append(incoming_non_stp_records)
+                #     # print(f'e pro \n{df_for_db}')
+                   
+                #     update_non_stp_consumption_settelment_vol(df_for_db, min_date, max_date)
+                    
+                # else:
+                #     print('Values in file ', key, ' was only 0 !')
+
+                # # except Exception as e: 
+                # #     print(f'File {key} was NOT proceeded .Exception message: {e}!')
             
             
         elif file_name.endswith('.csv'):
@@ -431,27 +496,24 @@ def insert_settlment_e_pro(zip_obj, separator):
                 insert_mrus(df, file_name, ERP) 
                 # print(f'from e pro csv reading ----- >\n{df}')
 
-        elif file_name == '021CIN03.xlsx':
+        # elif file_name == '021CIN03.xlsx':
             
-            incoming_stp_itns_list = proceed_e_pro_stp_excel_file(zip_obj, file_name) #!!!!!!!!!!!!!!!!!!!!!!!!
-            # print(f'incoming_stp_itns_list\n{incoming_stp_itns_list}')
+        #     incoming_stp_itns_list = proceed_e_pro_stp_excel_file(zip_obj, file_name) #!!!!!!!!!!!!!!!!!!!!!!!!
+        #     # print(f'incoming_stp_itns_list\n{incoming_stp_itns_list}')
             
-            # print(f'incomming_points\n{incomming_points}')
+        #     # print(f'incomming_points\n{incomming_points}')
             
 
-    incomming_points = [x[0] for x in incomming_points if len(x) > 0]
-    incomming_points += incoming_stp_itns_list
+    # incomming_points = [x[0] for x in incomming_points if len(x) > 0]
+    # incomming_points += incoming_stp_itns_list
+    # get_missing_extra_points_by_erp(ERP, incomming_points)
+
+    incoming_non_stp_records = [x[0] for x in incoming_non_stp_records if len(x) > 0]
+    [y for x in [incomming_points, incoming_non_stp_records] for y in x]
+    # incomming_points += incoming_non_stp_records
     get_missing_extra_points_by_erp(ERP, incomming_points)
 
 
-
-    # print(f'FROM NON stp E-Pro')
-    
-    # incomming_points = [x[0] for x in incomming_points if len(x) > 0]
-    # # print(f'INCOMING POINTS -----------------------> \n{incomming_points}')
-    # db_non_stp_records = get_non_stp_from_db('E-PRO', min_date, max_date)
-    # get_missing_points(incomming_points, db_non_stp_records)
-    # get_extra_points(incomming_points, db_non_stp_records)
 
 def insert_settlment_evn(zip_obj,separator):
     
@@ -504,7 +566,7 @@ def insert_settlment_evn(zip_obj,separator):
                     if(not df_for_db.empty):  
                         min_date = min(df_for_db['utc']).to_pydatetime()                    
                         max_date = max(df_for_db['utc']).to_pydatetime()
-                        # print(f'min max date {min_date} --- {max_date} ---- {df_for_db.iloc[0].itn}')                         
+                        print(f'min max date {min_date} --- {max_date} ---- {df_for_db.iloc[0].itn}')                         
                         
                         if distribution_stp_records == 0:
 
@@ -623,7 +685,35 @@ def insert_settelment_nkji(zip_obj):
                 
                 update_non_stp_consumption_settelment_vol(db_df, min_date, max_date)
 
-                
+def insert_settelment_eso(zip_obj):
+
+    dfs = {text_file.filename: pd.read_excel(zip_obj.read(text_file.filename))
+    for text_file in zip_obj.infolist() if text_file.filename.endswith('.xlsx')}
+
+    for key in dfs.keys():
+        
+        df = dfs[key]
+        cols = df.columns
+        itn = key.rsplit('_',1)[1].split('.')[0]
+        df[cols[0]] = df[cols[0]].apply(lambda x: x.replace('.','/'))
+
+        df_for_db= pd.DataFrame(columns=['itn','utc','consumption_vol']) 
+        
+        df_for_db['utc'] = pd.to_datetime(df[cols[0]], format = '%d/%m/%Y %H:%M')
+        df_for_db['itn'] = itn  
+        
+        df_for_db['consumption_vol'] = df[cols[1]].astype(float) 
+        df_for_db.set_index('utc', inplace = True)
+    
+        df_for_db.index = df_for_db.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_convert(None)
+        df_for_db.index = df_for_db.index.shift(periods=-1, freq='h')
+    
+        df_for_db.reset_index(inplace = True)
+        min_date = min(df_for_db['utc']).to_pydatetime()                    
+        max_date = max(df_for_db['utc']).to_pydatetime()
+        update_non_stp_consumption_settelment_vol(df_for_db, min_date , max_date)
+
+
         
         
         
@@ -850,7 +940,7 @@ def get_hours_between_dates(start_date, end_date):
 def update_non_stp_consumption_settelment_vol(input_df, min_date, max_date):
 
    
-    print(f'from update_non_stp_consumption_settelment_vol --- input df ----- {min_date} ----- {max_date} \n{input_df} ') #!!!!!!!!!!!!!!!!!!!!!!!!!
+    # print(f'from update_non_stp_consumption_settelment_vol --- input df ----- {min_date} ----- {max_date} \n{input_df} ') #!!!!!!!!!!!!!!!!!!!!!!!!!
 
     colision_points = resolve_poins_colision(input_df, min_date, max_date)
 
@@ -887,7 +977,7 @@ def update_non_stp_consumption_settelment_vol(input_df, min_date, max_date):
         non_stp_df = input_df.merge(non_stp_records_df, on = 'itn', how = 'right') 
         non_stp_df['settelment_vol'] = non_stp_df['consumption_vol']
         non_stp_df.drop(columns = 'measuring_id', inplace = True)
-        print(f'from update_non_stp_consumption_settelment_vol --- update df \n{non_stp_df}') #!!!!!!!!!!!!!!!!!!!!
+        # print(f'from update_non_stp_consumption_settelment_vol --- update df \n{non_stp_df}') #!!!!!!!!!!!!!!!!!!!!
         update_reported_volume(non_stp_df, ItnSchedule.__table__.name)
 
 def update_stp_settelment_vol(input_df, stp_records_df, stp_records):
@@ -1036,7 +1126,7 @@ def proceed_e_pro_stp_excel_file(zip_obj, file_name):
         return summary_df['itn'].tolist()               
 
 
-def create_db_df_eepro_evn(df, ITN):      
+def create_db_df_eepro_evn(df, ITN, is_epro = False):      
     try:
         df = df.fillna(0)
         df = df.iloc[3:]
@@ -1051,7 +1141,11 @@ def create_db_df_eepro_evn(df, ITN):
         
         df_for_db['consumption_vol'] = df['3'].astype(float) if is_manufacturer else df['2'].astype(float)  
         df_for_db.set_index('utc', inplace = True)
-        df_for_db.index = df_for_db.index.shift(periods=-1, freq='h').tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_convert(None)  
+        if is_epro:
+            df_for_db.index = df_for_db.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_convert(None)
+            df_for_db.index = df_for_db.index.shift(periods=-1, freq='h')
+        else:
+            df_for_db.index = df_for_db.index.shift(periods=-1, freq='h').tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_convert(None)  
 
         df_for_db.reset_index(inplace = True)
     except Exception as e:
@@ -1145,34 +1239,54 @@ def order_files_by_date(zip_obj):
         raw_dict[dt.datetime(*info.date_time)] = info.filename   
     ordered_dict = collections.OrderedDict(sorted(raw_dict.items()))
     # for k, v in ordered_dict.items(): print(f' key: {k} ----> value {v}', file = sys.stdout)
-    xlsx_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'xlsx'}
-    if xlsx_dict:        
-        csv_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'csv'}
-        zip_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'zip'}
-        csv_dict.update(zip_dict)
-        csv_dict.update(xlsx_dict)
-        for k, v in csv_dict.items(): print(f' from xlsx --> key: {k} ----> value {v}', file = sys.stdout)
-        # return csv_dict
-    else:
-        csv_dict = {}
-        non_csv_dict = {}
-        for k, v in ordered_dict.items():
+    csv_dict = {}
+    non_csv_dict = {}
+    for k, v in ordered_dict.items():
+        if v.endswith('csv'):            
+            csv_dict[k] = v
 
-            inner_zfiledata = BytesIO(zip_obj.read(v))
-            inner_zip =  ZipFile(inner_zfiledata)
-            print(f'inner ZIP ---> {inner_zip.infolist()[0]}')
-            if inner_zip.infolist()[0].filename.endswith('.csv'):
-                csv_dict[k] = v
-            else:
-                non_csv_dict[k] = v
+        elif v.endswith('.zip'):           
+            non_csv_dict[k] = v
 
-        csv_dict.update(non_csv_dict)
-        for k, v in csv_dict.items(): print(f' key: {k} ----> value {v}', file = sys.stdout)
+        else:
+            continue
+
+    csv_dict.update(non_csv_dict)
+    # for k, v in csv_dict.items(): print(f' key: {k} ----> value {v}', file = sys.stdout)
     return csv_dict
-    # sum([zinfo.file_size for zinfo in  zip_obj.filelist])
-    # for zf in zip_obj.filelist:
-    #     print(f'file size {zf.filename}     -> {zf.file_size}')
-    # return ordered_dict
+
+
+    
+    # xlsx_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'xlsx'}
+    # print(f'{xlsx_dict}')
+
+    # if xlsx_dict:        
+    #     csv_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'csv'}
+    #     zip_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'zip'}
+    #     csv_dict.update(zip_dict)
+    #     csv_dict.update(xlsx_dict)
+    #     for k, v in csv_dict.items(): print(f' from xlsx --> key: {k} ----> value {v}', file = sys.stdout)
+    #     # return csv_dict
+    # else:
+    #     csv_dict = {}
+    #     non_csv_dict = {}
+    #     for k, v in ordered_dict.items():
+    #         print(f'KKKKKKKKKKKKKKKKKK \n{k} --- {v}')
+    #         inner_zfiledata = BytesIO(zip_obj.read(v))
+    #         inner_zip =  ZipFile(inner_zfiledata)
+    #         print(f'inner ZIP ---> {inner_zip.infolist()[0]}')
+    #         if inner_zip.infolist()[0].filename.endswith('.csv'):
+    #             csv_dict[k] = v
+    #         else:
+    #             non_csv_dict[k] = v
+
+    #     csv_dict.update(non_csv_dict)
+    #     for k, v in csv_dict.items(): print(f' key: {k} ----> value {v}', file = sys.stdout)
+    # return csv_dict
+    # # sum([zinfo.file_size for zinfo in  zip_obj.filelist])
+    # # for zf in zip_obj.filelist:
+    # #     print(f'file size {zf.filename}     -> {zf.file_size}')
+    # # return ordered_dict
 
 def order_files_by_size(zip_obj):
     raw_dict = {}

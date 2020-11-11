@@ -91,6 +91,7 @@ def get_grid_services(inv_group_name, start_date, end_date, invoice_start_date, 
         grid_services_distrib_records_df = pd.DataFrame.from_records(grid_services_distrib_records, columns = grid_services_distrib_records[0].keys())
         grid_services_df = pd.concat([grid_services_tech_records_df,grid_services_distrib_records_df])
         grid_services_df = grid_services_df.sort_values(by='Идентификационен код', ascending=False, ignore_index=True)
+        grid_services_df['Брой дни'] = grid_services_df['Брой дни'].apply(lambda x: x + dt.timedelta(days = 1))
 
     return grid_services_sub, grid_services_df
 

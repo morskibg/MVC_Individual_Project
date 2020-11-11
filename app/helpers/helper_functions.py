@@ -707,10 +707,12 @@ def parse_integra_csv(df):
     
     list_df.set_index('DocNumber', drop = True, inplace = True)
     list_df = list_df.dropna()
+    list_df['RepFileName'] = list_df['RepFileName'].apply(lambda x: x.rsplit('_',2)[0])
+    result_list = [(x[0],f'{x[0]} - {x[1]}') for x in list_df.to_records()]
+    print(f'{result_list}')
+    # res = list_df.to_records().tolist()
     
-    res = list_df.to_records().tolist()
-    
-    return res
+    return result_list
 
 def create_df_from_integra_csv(csv_file):
 
