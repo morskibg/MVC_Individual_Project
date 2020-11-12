@@ -141,16 +141,22 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
         erp_name = 'E-PRO'
-        # c =(db.session.query(Contractor.name, Contractor.acc_411)
+
+        mass = Contract.query.with_entities(Contract.internal_id, Contract.maturity_interval).join(ContractType).filter(ContractType.name == "Mass_Market").all()
+        
+        print(f'{mass}')
+        
+        # c =(db.session.query(Contractor.name, Contractor.acc_411, ContractType.name.label('contract_type'), InvoiceGroup.name.label('invoice_group_name'), InvoiceGroup.description, Contractor.email)
         #     .join(Contract,Contract.contractor_id == Contractor.id)
+        #     .join(InvoiceGroup, InvoiceGroup.contractor_id == Contractor.id)
         #     .join(ContractType, ContractType.id == Contract.contract_type_id)
         #     .filter(Contract.start_date <= start_date, Contract.end_date > start_date)
-        #     .filter(ContractType.name == 'Mass_Market')
+        #     # .filter(ContractType.name == 'Mass_Market')
         #     .distinct()
         #     .all())
-        # r = [x[1] for x in c]
+        # # r = [x[1] for x in c]
         # df = pd.DataFrame.from_records(c, columns=c[0].keys())
-        # df['has_easy_pay'] = 1
+        # # df['has_easy_pay'] = 1
         # print(f'{df}')
         # df.to_excel('temp/contractors_mass_market.xlsx')
         # obshti_df = pd.read_excel('temp/ob6ti.xlsx')
@@ -211,7 +217,7 @@ def test():
         
         # df = pd.DataFrame.from_records(records, columns=records[0].keys())
         # print(f'{records}')
-        # df.to_excel('ruse_itn.xlsx')
+        # df.to_excel('temp/emails.xlsx')
     
         # 
     # filename = '08-11-2020 de4ko.xlsx'
@@ -320,9 +326,14 @@ def mailing():
                 ref_file_name = inv.ref_file_name 
                 inv_file_name = str(inv.id)+ '.pdf'
                 # file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
-                file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name), (os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
+                if form.send_excel.data:
+                    file_data = [(os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
+                elif form.send_pdf.data:
+                    file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name)]
+                else:
+                    file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name), (os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
                 
-                send_email(mails, file_data)       
+                send_email(mails, file_data, form.subject.data)       
 
     return render_template('mail.html', title='TEST', form=form)
 
@@ -333,9 +344,13 @@ def create_invoice():
     form = InvoiceForm()
     
     if form.create_invoice.data:
+
+            full_path = os.path.join(os.path.join(app.root_path, app.config['TEMP_INVOICE_PATH']),app.config['TEMP_INVOICE_NAME'])
+            dtype_dict= {'BULSTAT': str, 'TaxNum' : str, 'DocNumber' : str}    
+            raw_df = pd.read_excel(full_path, dtype = dtype_dict)
+            print(f'raw_df {raw_df}')
+            redacted_df = raw_df[raw_df['DocNumber'].isin([str(x) for x in form.invoicing_list.data])]
             
-            raw_df = pd.read_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))
-            redacted_df = raw_df[raw_df['DocNumber'].isin(form.invoicing_list.data)]
             create_invoices(redacted_df)            
             return redirect(url_for('create_invoice'))   
 
@@ -343,10 +358,14 @@ def create_invoice():
         if form.upload_csv.data:
             try:
                 invoice_df = create_df_from_integra_csv(request.files.get('file_integra_csv'))
+                
             except:
                 flash(f'Wrong or no csv file is choosen. Abort !','danger')
             else:
-                invoice_df.to_excel(os.path.join('app/static/upload_for_csv' , 'invoice.xlsx'))                  
+                full_path = os.path.join(os.path.join(app.root_path, app.config['TEMP_INVOICE_PATH']),app.config['TEMP_INVOICE_NAME'])
+                # delete_files(os.path.join(app.root_path, app.config['TEMP_INVOICE_PATH']), app.config['TEMP_INVOICE_NAME'], 'xlsx', True)
+                invoice_df.to_excel(full_path)    
+                            
                 form.invoicing_list.choices = parse_integra_csv(invoice_df)      
 
     return render_template('create_invoice.html', title='Invoice Creation', form=form)

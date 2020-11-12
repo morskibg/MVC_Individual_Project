@@ -104,9 +104,15 @@ def get_tech_point(df, erp_invoice = None):
 
         df = df[df['content'] == 'Техническа част'].copy()
         
-        df['old_readings'] = df.apply(lambda x: x['new_readings'] - x['readings_difference'] if ((x['old_readings'] == Decimal('0')) & \
-                                                (~pd.isnull(x['new_readings'])) & (~pd.isnull(x['readings_difference']))) else Decimal('0'), axis = 1)
-        
+        try:
+            df['old_readings'] = df.apply(lambda x: x['new_readings'] - x['readings_difference'] if ((x['old_readings'] == Decimal('0')) & \
+                                                    (~pd.isnull(x['new_readings'])) & (~pd.isnull(x['readings_difference']))) else Decimal(x['old_readings']), axis = 1)
+        except:
+            print(f'exception of old reading from csv')
+
+
+        print(f'{df.old_readings}')
+
         cols_to_drop = ['content','tariff','calc_amount','price','value','event','correction_note']    
         df = df.drop(cols_to_drop, axis = 1)
         df.drop_duplicates(subset=['itn', 'start_date','new_readings','total_amount'],keep='first',inplace = True) 

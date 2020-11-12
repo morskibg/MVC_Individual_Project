@@ -257,6 +257,7 @@ class InvoiceGroup(BaseModel):
     name = db.Column(db.String(32), nullable=False, unique = True)
     contractor_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     description = db.Column(db.String(128), nullable=True, unique = False)
+    email_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=True)
 
     contractor = db.relationship('Contractor', back_populates = 'invoice_groups')
     sub_contracts = db.relationship("SubContract", back_populates="invoice_group", lazy="dynamic")
@@ -311,6 +312,12 @@ class StpCoeffs(BaseModel):
 
     def __repr__(self):
         return '<Utc: {}, StpCoeffs {}>'.format(self.utc, self.value)
+
+class Mail(BaseModel):
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(32), nullable=False, unique = True)
+    def __repr__(self):
+        return f'{self.name}'
 
 class ItnScheduleTemp(BaseModel):
     itn = db.Column(db.String(33), primary_key = True)

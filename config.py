@@ -20,4 +20,6 @@ class Config(object):
 	INTEGRA_FOR_UPLOAD_PATH = 'static/integra_for_upload' 
 	PDF_INVOICES_PATH = 'static/created_pdf_invoices'
 	REPORTS_PATH = 'static/reports'
+	TEMP_INVOICE_PATH = 'static/temp_invoice_from_csv'
+	TEMP_INVOICE_NAME = 'temp_invoice.xlsx'
 

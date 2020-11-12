@@ -322,7 +322,10 @@ class InvoiceForm(FlaskForm):
 
 class MailForm(FlaskForm):
     send_all = BooleanField('Send all mails', default = False)
-    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':35})  
+    subject = StringField(id='Subject', validators = [DataRequired()], default = 'From GED automated invoice sender')
+    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':45})  
+    send_excel = BooleanField('Send only excel file', default = False)
+    send_pdf = BooleanField('Send only pdf file', default = False)
     submit = SubmitField('Send selected')
 
 class TestForm(FlaskForm):

@@ -359,7 +359,8 @@ class InvoiceCreator:
             else:
                 break
 
-        ein = self.lead_data['TaxNum'].values[0]
+        ein = self.lead_data['TaxNum'].values[0] if not pd.isnull(self.lead_data['TaxNum'].values[0]) else ''
+        
         vat = self.lead_data['BULSTAT'].values[0] if not pd.isnull(self.lead_data['BULSTAT'].values[0]) else ''
         store_name = ''      
         city_ = self.lead_data['CityName'].values[0] if isinstance(self.lead_data['CityName'].values[0], str) else ''   

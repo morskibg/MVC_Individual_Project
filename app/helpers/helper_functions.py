@@ -698,28 +698,31 @@ def delete_files(path, files, file_type, is_delete_all):
                     continue
                 print(f'File: {filename} removed !')         
 
-def parse_integra_csv(df):
+def parse_integra_csv(df):    
     
-
+   
     list_df = df[['DocNumber','RepFileName']]
-    
+
     list_df = list_df.drop_duplicates(subset = ["DocNumber"], keep = 'first')
     
     list_df.set_index('DocNumber', drop = True, inplace = True)
     list_df = list_df.dropna()
     list_df['RepFileName'] = list_df['RepFileName'].apply(lambda x: x.rsplit('_',2)[0])
-    result_list = [(x[0],f'{x[0]} - {x[1]}') for x in list_df.to_records()]
-    print(f'{result_list}')
-    # res = list_df.to_records().tolist()
+    list_df = list_df.sort_values('DocNumber')
+    result_list = [(x[0],f'{x[0]} - {x[1]}') for x in list_df.astype(str).to_records()]
+    
     
     return result_list
 
 def create_df_from_integra_csv(csv_file):
 
-    raw_df = pd.read_csv(csv_file, sep = '|')
-    appl_numbers = list(set(raw_df[raw_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ']['DocNumber']))
+    dtype_dic= {'BULSTAT': str, 'TaxNum' : str, 'DocNumber' : str}
+    # raw_df = pd.read_csv(csv_file, sep = '|', converters={'BULSTAT': lambda x: str(x),'TaxNum': lambda x: str(x)}) 
+    raw_df = pd.read_csv(csv_file, sep = '|', dtype = dtype_dic) 
+    appl_numbers = sorted(list(set(raw_df[raw_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ']['DocNumber'])))
+    
     df = raw_df[raw_df['DocNumber'].isin(appl_numbers)]    
-
+    
     return df
 
 def get_files(path, file_type):
