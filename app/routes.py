@@ -142,168 +142,9 @@ def test():
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
         erp_name = 'E-PRO'
 
-        mass = Contract.query.with_entities(Contract.internal_id, Contract.maturity_interval).join(ContractType).filter(ContractType.name == "Mass_Market").all()
+     
         
-        print(f'{mass}')
-        
-        # c =(db.session.query(Contractor.name, Contractor.acc_411, ContractType.name.label('contract_type'), InvoiceGroup.name.label('invoice_group_name'), InvoiceGroup.description, Contractor.email)
-        #     .join(Contract,Contract.contractor_id == Contractor.id)
-        #     .join(InvoiceGroup, InvoiceGroup.contractor_id == Contractor.id)
-        #     .join(ContractType, ContractType.id == Contract.contract_type_id)
-        #     .filter(Contract.start_date <= start_date, Contract.end_date > start_date)
-        #     # .filter(ContractType.name == 'Mass_Market')
-        #     .distinct()
-        #     .all())
-        # # r = [x[1] for x in c]
-        # df = pd.DataFrame.from_records(c, columns=c[0].keys())
-        # # df['has_easy_pay'] = 1
-        # print(f'{df}')
-        # df.to_excel('temp/contractors_mass_market.xlsx')
-        # obshti_df = pd.read_excel('temp/ob6ti.xlsx')
-        # obshti_411 = list(obshti_df.num)
-        # records =(
-        #     db.session.query(
-        #         InvoiceGroup.name,     
-        #     )
-        #     .join(Contractor,Contractor.id == InvoiceGroup.contractor_id)
-        #     .join(Contract)
-        #     .join(SubContract, SubContract.contract_id == Contract.id)
-        #     .filter(Contractor.acc_411.in_(obshti_411))
-        #     .filter( ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
-        #     .distinct(InvoiceGroup.name)
-        #     .all()
-        # )
-        # records =(
-        #     db.session.query(
-        #         InvoiceGroup.name, Contractor.name    
-        #     )
-        #     .join(Contractor,Contractor.id == InvoiceGroup.contractor_id)
-        #     .join(Contract)
-        #     .join(SubContract, SubContract.contract_id == Contract.id)
-        #     .filter(Contractor.acc_411.in_(obshti_411))
-        #     .filter( ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
-        #     .distinct(InvoiceGroup.name)
-        #     .all()
-        # )
-        # inv_groups = [x[1] for x in records]
-        # # weighted_price = get_weighted_price(inv_groups, start_date, end_date)
-        # print(f'{inv_groups}')
-        # itns = ['32Z41A0016490730','32Z410001649074Y','32Z410104008343X','32Z410103203057G','32Z410001105097R','32Z410001105005L','32Z410111104101B','32Z4101111041029','32Z410101805039J','32Z4101018050211','32Z4505854223522']
-        # metas = ItnMeta.query.filter(ItnMeta.itn.in_(itns)).all()
-        # for itn in metas:
-        #     itn.delete()
-        #     print(f'{itn} deleted')
-
-        # distribution_stp_records = (
-        #     db.session 
-        #         .query(Distribution.itn, ItnSchedule.tariff_id, MeasuringType.id.label('measuring_id'))   
-        #         .join(SubContract, SubContract.itn == Distribution.itn)                       
-        #         .join(MeasuringType)
-        #         .join(ItnMeta, ItnMeta.itn == Distribution.itn)  
-        #         .join(ItnSchedule, ItnSchedule.itn == Distribution.itn) 
-        #         .join(Erp, Erp.id == ItnMeta.erp_id)         
-        #         .join(ErpInvoice,ErpInvoice.id == Distribution.erp_invoice_id)
-        #         .filter( ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
-        #         .filter(~((MeasuringType.code == 'UNDIRECT') | (MeasuringType.code == 'DIRECT'))) 
-        #         .filter(ErpInvoice.date >= start_date, ErpInvoice.date <= end_date)
-        #         .filter(Erp.name == erp_name)
-        #         .filter(ItnSchedule.utc >= start_date, ItnSchedule.utc <= invoice_end_date)
-        #         .distinct(SubContract.itn)
-        #         .all())
-
-        # stp_records_df = pd.DataFrame.from_records(distribution_stp_records, columns=distribution_stp_records[0].keys())
-        # print(f'{stp_records_df}')
-        # records = db.session.query(ItnSchedule.itn, ItnSchedule.utc, ItnSchedule.consumption_vol).filter(ItnSchedule.itn == '32Z470001241049T', ItnSchedule.utc >= "2020-09-30 20:00:00",ItnSchedule.utc <= "2020-10-31 22:00:00").all()
-        
-        # df = pd.DataFrame.from_records(records, columns=records[0].keys())
-        # print(f'{records}')
-        # df.to_excel('temp/emails.xlsx')
-    
-        # 
-    # filename = '08-11-2020 de4ko.xlsx'
-    # uploads = '/home/dpetkov/Python_Projects/Flask/Ged_EU_v1/app/static/integra_for_upload'
-    # # uploads = os.path.join(app.root_path, INTEGRA_FOR_UPLOAD_PATH)
-    # print(f'{uploads}')
-    # return send_from_directory(directory=uploads, as_attachment=True, filename=filename)
-
-        # files = get_files(INV_REFS_PATH,'xlsx')
-        # # print(f'{files}')
-        # summary_df = create_full_ref_for_all_itn(INV_REFS_PATH,files)
-        
-        
-
-
-        # start_date = dt.datetime.strptime(form.start_date.data, '%Y-%m-%d')  
-        # end_date = dt.datetime.strptime(form.end_date.data, '%Y-%m-%d') 
-        
-        # time_zone = "EET"
-        # erp = 'CEZ'
-        # contract_type = 'Mass_Market'
-        
-
-        # invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))        
-        # invoice_start_date = convert_date_to_utc(time_zone, invoice_start_date)
-        
-        # invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))            
-        # invoice_end_date = convert_date_to_utc(time_zone, invoice_end_date)
-
-        # start_date = convert_date_to_utc(time_zone, start_date)
-        # end_date = convert_date_to_utc(time_zone, end_date) + dt.timedelta(hours = 23)
-        # # if form.submit.data:
-        # #     rep_df = create_report_from_grid(invoice_start_date, invoice_end_date)
-        # #     print(f'rep df \n{rep_df}')
-        # itn_count_per_inv_gr = (
-        #     db.session.query(
-                
-        #         InvoiceGroup.id.label('inv_gr_id_all'),
-        #         func.count(SubContract.itn).label('itns_count')
-        #     )
-        #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
-        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)               
-        #     .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
-        #     .group_by(InvoiceGroup.id)
-        #     .subquery()
-        # )
-
-        # itn_count_per_inv_gr_erp = (
-        #     db.session.query(
-                
-        #         InvoiceGroup.id.label('inv_gr_id_erp'),
-        #         InvoiceGroup.name.label('inv_descr'),
-        #         InvoiceGroup.description.label('inv_name'),
-        #         func.count(SubContract.itn).label('itns_count')
-        #     )
-        #     .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)
-        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)   
-        #     .join(Erp)  
-        #     .filter(Erp.name == erp)          
-        #     .filter(SubContract.start_date <= start_date, SubContract.end_date > end_date)
-        #     .group_by(InvoiceGroup.id)
-        #     .subquery()
-        # )
-
-        # single_erp_inv_ids =(
-        #     db.session.query(
-        #         itn_count_per_inv_gr_erp.c.inv_name,
-        #         itn_count_per_inv_gr_erp.c.inv_descr,
-        #         Contract,
-        #         Contract.internal_id,
-        #         itn_count_per_inv_gr_erp.c.inv_gr_id_erp           
-        #     )
-        #     .join(itn_count_per_inv_gr,itn_count_per_inv_gr.c.inv_gr_id_all == itn_count_per_inv_gr_erp.c.inv_gr_id_erp)                   
-        #     .join(SubContract,SubContract.invoice_group_id == itn_count_per_inv_gr_erp.c.inv_gr_id_erp)
-        #     .join(Contract, Contract.id == SubContract.contract_id) 
-        #     .join(ContractType, ContractType.id == Contract.contract_type_id) 
-        #     .join(Contractor,Contractor.id == Contract.contractor_id)              
-        #     .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)
-        #     .filter(ContractType.name == contract_type).order_by(Contractor.name)
-        #     .filter(itn_count_per_inv_gr.c.itns_count == itn_count_per_inv_gr_erp.c.itns_count)
-        #     .distinct()
-        #     .all()
-        # )
-
-        # df = list(set([(x[3],x[2]) for x in single_erp_inv_ids] ))  
-        # print(f'{len(df)}')    
+  
 
             
        
@@ -314,14 +155,38 @@ def test():
 @login_required
 def mailing():
     form = MailForm()
-    # form.attachment_files.choices = sorted([(x[0],x[1]) for x in create_list_of_tuples(INV_REFS_PATH, PDF_INVOICES_PATH)])
+    # # form.attachment_files.choices = sorted([(x[0],x[1]) for x in create_list_of_tuples(INV_REFS_PATH, PDF_INVOICES_PATH)])
+    # if form.validate_on_submit():
+    #     if form.submit.data:
+    #         selected_invoices = form.attachment_files.data
+    #         for inv in selected_invoices:
+    #             contractor =  Contractor.query.filter(Contractor.id == inv.contractor_id).first()
+    #             mails = contractor.email.split(';')
+    #             mails = [x for x in mails]
+    #             mails.append('t.kalaidjieva@grandenergy.net')
+    #             ref_file_name = inv.ref_file_name 
+    #             inv_file_name = str(inv.id)+ '.pdf'
+    #             # file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
+    #             if form.send_excel.data:
+    #                 file_data = [(os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
+    #             elif form.send_pdf.data:
+    #                 file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name)]
+    #             else:
+    #                 file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name), (os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
+                
+    #             send_email(mails, file_data, form.subject.data)   
+    # 
     if form.validate_on_submit():
         if form.submit.data:
             selected_invoices = form.attachment_files.data
             for inv in selected_invoices:
-                contractor =  Contractor.query.filter(Contractor.id == inv.contractor_id).first()
-                mails = contractor.email.split(';')
-                mails = [x for x in mails]
+                tokens = inv.ref_file_name.split('-')
+                
+                inv_group_name = db.session.query(InvoiceGroup.name).filter(InvoiceGroup.id == inv.invoice_group_id).first()[0]
+                raw_mails =  db.session.query(Mail.name).join(InvoiceGroup, InvoiceGroup.email_id == Mail.id).filter(InvoiceGroup.name == inv_group_name).first()[0]
+                
+                mails =[x for x in raw_mails.split(';')]
+                print(f'{mails}')
                 mails.append('t.kalaidjieva@grandenergy.net')
                 ref_file_name = inv.ref_file_name 
                 inv_file_name = str(inv.id)+ '.pdf'
@@ -334,6 +199,7 @@ def mailing():
                     file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name), (os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
                 
                 send_email(mails, file_data, form.subject.data)       
+    
 
     return render_template('mail.html', title='TEST', form=form)
 

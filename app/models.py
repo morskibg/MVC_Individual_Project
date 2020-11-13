@@ -257,7 +257,7 @@ class InvoiceGroup(BaseModel):
     name = db.Column(db.String(32), nullable=False, unique = True)
     contractor_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     description = db.Column(db.String(128), nullable=True, unique = False)
-    email_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=True)
+    email_id = db.Column(db.Integer, db.ForeignKey('mail.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=True)
 
     contractor = db.relationship('Contractor', back_populates = 'invoice_groups')
     sub_contracts = db.relationship("SubContract", back_populates="invoice_group", lazy="dynamic")
@@ -607,16 +607,17 @@ class Invoice(BaseModel):
     last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
 
     def __repr__(self):
-        contractor = Contractor.query.filter(Contractor.id == self.contractor_id).all()
-        contractor_name = contractor[0].name
-        emails = contractor[0].email
-        return f'{self.id} - {contractor_name} - {self.total_sum} - {self.creation_date} - {emails}'
+        # contractor = Contractor.query.filter(Contractor.id == self.contractor_id).all()
+        # contractor_name = contractor[0].name
+        # emails = contractor[0].email
+        return self.__str__()
 
     def __str__(self):
         contractor = Contractor.query.filter(Contractor.id == self.contractor_id).all()
-        contractor_name = contractor[0].name
-        emails = contractor[0].email
-        return f'{self.id} - {contractor_name} - {self.total_sum} - {self.creation_date} - {emails}'
+        contractor_name = contractor[0].name        
+        mail = Mail.query.join(InvoiceGroup, InvoiceGroup.email_id == Mail.id).filter(InvoiceGroup.id == self.invoice_group_id).first()
+        emails = mail.name
+        return f'{self.id} - {contractor_name} - {self.total_sum} - {self.creation_date} -   {emails}'
 
 
 db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
