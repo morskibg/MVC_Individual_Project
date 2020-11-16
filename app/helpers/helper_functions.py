@@ -783,7 +783,9 @@ def update_schedule_prices(start_date, end_date):
     print(f'Enter updating schedule prices for {df.shape[0]} records.')  
     db.session.bulk_update_mappings(ItnSchedule, bulk_update_list)
     db.session.commit()
-    
+
+
+
 
     
 

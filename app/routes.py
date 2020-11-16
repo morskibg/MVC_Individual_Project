@@ -70,7 +70,9 @@ from app.helpers.helper_functions_queries import (
                                         get_list_inv_groups_by_contract,
                                         has_ibex_real_data,
                                         get_inv_gr_id_single_erp,
-                                        get_inv_gr_id_erp
+                                        get_inv_gr_id_erp,
+                                        get_inv_groups_by_internal_id_and_dates,
+                                        get_subcontacts_by_internal_id_and_start_date
 )
 
 from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
@@ -141,6 +143,11 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
         erp_name = 'E-PRO'
+        # rec = get_inv_groups_by_internal_id_and_dates('ТК45', start_date)
+        rec = get_subcontacts_by_internal_id_and_start_date('ТК45', start_date)
+        
+        print(f'ddddddddddddddd --- > {start_date}')
+        print(f'{rec}')
 
      
         
@@ -964,13 +971,13 @@ def upload_contracts():
         #     c.update({'contract_type_id':int(input_idx)})
         #     # c.update({'contract_type_id':3})
         
-        
-        
-        if set(df.columns).issubset(['411-3', 'parent_contract_internal_id', 'internal_id', 'contractor',
+        template_cols = ['411-3', 'parent_contract_internal_id', 'internal_id', 'contractor',
                                     'signing_date', 'start_date', 'end_date', 'duration',
                                     'invoicing_interval', 'maturity_interval', 'contract_type',
                                     'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
-                                    'notes', 'time_zone','parent_contractor_411']):
+                                    'notes', 'time_zone','parent_contractor_411']
+        
+        if set(df.columns).issubset(template_cols):
 
             tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
             parent_tks = df['parent_contract_internal_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
@@ -1069,7 +1076,126 @@ def upload_contracts():
     return render_template('upload_contracts.html', title='Upload Contracts', form=form)
 
 
+@app.route('/upload_linked_contracts', methods=['GET', 'POST'])
+@login_required
+def upload_linked_contracts():
 
+    
+    form = UploadContractsForm()
+    if form.validate_on_submit():
+        print(f'in upload_linked_contracts')
+        df = pd.read_excel(request.files.get('file_'))
+        # print(f'{df.columns}')
+        template_cols = ['411-3', 'linked_contract_internal_id', 'internal_id', 'contractor',
+                        'signing_date', 'start_date', 'end_date', 'duration',
+                        'invoicing_interval', 'maturity_interval', 'contract_type',
+                        'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
+                        'notes', 'time_zone','parent_contractor_411','invoice_group_name','invoice_group_description',
+                        'zko','akciz','has_grid_services','has_spot_price','time_zone','tariff_name','price_day','price_night','make_invoice','lower_limit','upper_limit']
+
+        if set(df.columns).issubset(template_cols):
+
+
+            tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
+            parent_tks = df['linked_contract_internal_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
+            # print(f'{parent_tks}')    
+            all_cyr = tks.all()
+            all_cyr_parent = parent_tks.all()
+            # print(f'all_cyr ---> {all_cyr}')
+            # print(f'all_cyr_parent ---> {all_cyr_parent}')
+            if not (all_cyr & all_cyr_parent):
+                flash('There is tk in latin, aborting', 'danger')
+                return redirect(url_for('upload_contracts'))
+
+            
+            df = df.fillna(0)
+
+            contractors = get_contractors_names_and_411()
+            contractors_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())
+            df = df.merge(contractors_df, on = '411-3', how = 'left' )            
+            
+            df['parent_id_initial_zero'] = 0
+            df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
+            df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days, axis = 1)
+            df['time_zone'] = df['time_zone'].apply(lambda x: TimeZone.query.filter(TimeZone.code == x).first() if TimeZone.query.filter(TimeZone.code == x).first() is not None else x)
+            
+            renewal_dict = {'удължава се автоматично с още 12 м. ако никоя от страните не заяви писмено неговото прекратяване':12,
+                            'Подновява се автоматично за 1 година , ако никоя от страните не възрази писмено за прекратяването му поне 15 дни преди изтичането му':12,
+                            'удължава се автоматично с още 6 м. ако никоя от страните не заяви писмено неговото прекратяване':6,
+                            'удължава се автоматично за 3 м. ако никоя от страните не заяви писмено неговото прекратяване с допълнително споразумение.':3,
+                            'За срок от една година. Подновява се с ДС / не се изготвя справка към ф-ра':12,
+                            'За срок от една година. Подновява се с ДС.':12,
+                            'с неустойка, удължава се с доп. спораз-е': -1}
+                            
+            df['automatic_renewal_interval'] = df['notes'].apply(lambda x: renewal_dict[x.strip()] if(renewal_dict.get(str(x).strip())) else 0 )
+
+            invoicing_dict = {'до 12-то число, следващ месеца на доставката':42,'на 10 дни':10,'на 15 дни':15,'последно число':31,'конкретна дата':-1}
+            df['invoicing_interval'] = df['invoicing_interval'].apply(lambda x: invoicing_dict[x.strip()] if(invoicing_dict.get(str(x).strip())) else 0 )
+            contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}
+
+            # df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
+            df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
+
+            work_day_dict = {'календарни дни':0, 'работни дни':1}
+            df['is_work_day'] = df['is_work_day'].apply(lambda x: work_day_dict[x.strip()] if(work_day_dict.get(str(x).strip())) else 0 )
+            t_format = '%Y-%m-%dT%H:%M'
+            contracts = []
+            # print(f'proceeded df \n{df}')
+            for index,row in df.iterrows():
+                #print(f'in rows --------------->>{row.internal_id}')
+                curr_contract = get_contract_by_internal_id(row['internal_id'])
+                a = row['internal_id']
+                print(f'curr_contract \n{curr_contract} -- {a}')
+                if curr_contract is not None :
+                    internal_id = row['internal_id']
+                    flash(f'There is a contract with this internal id {internal_id} ! Skipping !','danger')
+                    print(f'There is a contract with this internal id {internal_id} ! Skipping !')
+                    continue
+                else:
+                    parent_linked_contract = get_contract_by_internal_id(row['linked_contract_internal_id'])
+                    # a = row['linked_contract_internal_id']
+                    # print(f'parent_linked_contract \n{parent_linked_contract.internal_id} -- {a}')
+                    curr_contract = (
+                        Contract(internal_id = row['internal_id'], contractor_id = row['contractor_id'], subject = 'None', parent_id =  row['parent_id_initial_zero'],                                
+                                signing_date =  convert_date_to_utc(row['time_zone'].code,row['signing_date'].strftime(t_format),t_format),
+                                start_date = convert_date_to_utc(row['time_zone'].code, row['start_date'].strftime(t_format),t_format), 
+                                end_date = convert_date_to_utc(row['time_zone'].code, row['end_date'].strftime(t_format),t_format), 
+                                duration_in_days = row['duration_in_days'], invoicing_interval = row['invoicing_interval'], maturity_interval = row['maturity_interval'], 
+                                contract_type_id = row['contract_type'], is_work_days = row['is_work_day'], automatic_renewal_interval = row['automatic_renewal_interval'], 
+                                collateral_warranty = row['collateral_warranty'], notes =  row['notes'],time_zone_id = row['time_zone'].id) 
+                    )
+                    contracts.append(curr_contract)
+
+            nan_df = df[df.isna().any(axis=1)]
+            if not nan_df.empty:
+                print(f'THERE IS CONTRACT WITH WRONG DATA ! ABORTING ! \n{nan_df}')
+            else:
+                print(f'in save')
+                # db.session.bulk_save_objects(contracts)
+                # db.session.commit()                
+                
+                # has_parent_contract_df = df[df['parent_contract_internal_id'] != 'none']
+                
+                # for index, row in has_parent_contract_df.iterrows():
+                #     child_contract = Contract.query.filter(Contract.internal_id == row['internal_id']).first()                    
+                #     child_contract.update({'parent_id':Contract.query.filter(Contract.internal_id == row['parent_contract_internal_id']).first().id})
+                #     flash(f'Parent contract {Contract.query.filter(Contract.id == child_contract.parent_id).first().internal_id} added to {child_contract.internal_id}','success')
+
+                # has_parent_contractor_df = df[df['parent_contractor_411'] != 'none']
+
+                # for index, row in has_parent_contractor_df.iterrows():
+                #     parent_contractor = Contractor.query.filter(Contractor.acc_411 == row['parent_contractor_411']).first()
+                #     child_contractor = Contractor.query.filter(Contractor.acc_411 == row['411-3']).first()
+                #     child_contractor.update({'parent_id':parent_contractor.id})
+                #     flash(f'Parent contractor {parent_contractor.name} added to {child_contractor.name}','success')         
+
+            
+        else:
+                input_set = set(df.columns)
+                expected_set = set(template_cols)
+                mismatched = list(expected_set - input_set)
+                print(f'Columns from input file mismatch {mismatched}')
+    return render_template('quick_template.html', title='Upload Linked Contracts', form=form)
 
 @app.route('/create_subcontract', methods=['GET', 'POST'])
 @login_required

@@ -363,7 +363,7 @@ def get_grid_services_tech_records(itn_with_grid_services_sub, invoice_start_dat
                 Tech.old_readings.label('Показания старо'),
                 Tech.readings_difference.label('Разлика (квтч)'),
                 Tech.constant.label('Константа'),
-                Tech.readings_difference.label('Корекция (квтч)'),
+                Tech.correction.label('Корекция (квтч)'),
                 Tech.storno.label('Приспаднати (квтч)'),
                 Tech.total_amount.label('Общо количество (квтч)'),               
             ) 
@@ -705,3 +705,26 @@ def get_inv_gr_id_erp(erp, start_date = None, end_date = None):
     # print(f'from erp filter \n{start_date} - {end_date}\n{erp} - {contract_type}\n LEN = {len(single_erp_inv_ids)}')
     return single_erp_inv_ids
 
+def get_inv_groups_by_internal_id_and_dates(internal_id, start_date):
+
+    records = (InvoiceGroup
+                .query
+                .join(SubContract,SubContract.invoice_group_id == InvoiceGroup.id)
+                .join(Contract, Contract.id == SubContract.contract_id)
+                .filter(Contract.internal_id == internal_id)
+                .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)
+                .all()
+                )
+    return records
+
+def get_subcontacts_by_internal_id_and_start_date(internal_id, start_date):
+
+    records = (SubContract
+                .query
+                .join(InvoiceGroup,InvoiceGroup.id == SubContract.invoice_group_id)
+                .join(Contract, Contract.id == SubContract.contract_id)
+                .filter(Contract.internal_id == internal_id)
+                .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)
+                .all()
+                )
+    return records
