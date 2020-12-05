@@ -22,4 +22,7 @@ class Config(object):
 	REPORTS_PATH = 'static/reports'
 	TEMP_INVOICE_PATH = 'static/temp_invoice_from_csv'
 	TEMP_INVOICE_NAME = 'temp_invoice.xlsx'
-
+	ERP_IMPORT_PATH = 'static/logs/monthly_erp_upload'
+	ERP_IMPORT_MISSING_NAME = 'erp_upload_log.xlsx'
+	BGPOSHTI_FOR_UPLOAD_PATH = 'static/bg_post_for_upload'
+	E_PRO_STP_SETTELMENT = '021CIN03.xlsx'

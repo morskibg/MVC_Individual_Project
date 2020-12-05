@@ -10,8 +10,8 @@ from flask import render_template, flash, redirect, url_for, request, send_file,
 from sqlalchemy import extract, or_
 from app import app
 from app.forms import (
-    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm, AdditionalReports,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm, MonthlyReportErpForm,
+    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm, AdditionalReports, RedactEmailForm,
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm, MonthlyReportErpForm, PostForm,
     UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm,MonthlyReportOptionsForm)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
@@ -57,7 +57,10 @@ from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  get_files,
                                  update_ibex_data,
                                  update_schedule_prices,
-                                 delete_files
+                                 delete_files,
+                                 apply_linked_collision_function,
+                                 convert_datetime64_to_datetime,
+                                 generate_tariff_hours
                                  )
 
 # from app.helpers.helper_function_excel_writer import ( INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH, PDF_INVOICES_PATH, REPORTS_PATH)
@@ -72,12 +75,19 @@ from app.helpers.helper_functions_queries import (
                                         get_inv_gr_id_single_erp,
                                         get_inv_gr_id_erp,
                                         get_inv_groups_by_internal_id_and_dates,
-                                        get_subcontacts_by_internal_id_and_start_date
+                                        get_subcontacts_by_internal_id_and_start_date,
+                                        get_subcontracts_by_inv_gr_name_and_date,
+                                        get_grid_itns_by_erp_for_period,
+                                        get_non_grid_itns_by_erp_for_period,
+                                        get_all_itns_by_erp_for_period,
+                                        get_incomming_grid_itns, 
+                                        get_incomming_non_grid_itns
 )
 
-from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus,
+from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus, get_distribution_stp_records,
                                       insert_settlment_cez, insert_settlment_e_pro, insert_settelment_eso,
-                                      insert_settlment_evn, insert_settelment_nkji ,update_reported_volume,order_files_by_date                         
+                                      insert_settlment_evn, insert_settelment_nkji ,update_reported_volume,order_files_by_date,
+                                      get_missing_extra_points_by_erp_for_period, create_report_by_itn,                     
                                       
 )
 from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
@@ -86,6 +96,7 @@ from app.helpers.helper_functions_reports import (create_report_from_grid, get_s
 
 from app.helpers.invoice_writer import create_invoices
 from app.email import (send_email)
+from app.helpers.helper_functions_bgposhti import cash_receipt_generation, upload_file_generation
 
 MEASURE_MAP_DICT = {
                 'B01':'EPRO_B01','B02':'EPRO_B02','B03':'EPRO_B03','B04':'EPRO_B04','H01':'EPRO_H01','H02':'EPRO_H02','S01':'EPRO_S01','BD000':'EVN_BD000','G0':'EVN_G0','G1':'EVN_G1','G2':'EVN_G2',
@@ -93,6 +104,8 @@ MEASURE_MAP_DICT = {
                 'DIRECT':'DIRECT','UNDIRECT':'UNDIRECT'    
             }
 MONEY_ROUND = 9
+
+
 
 @app.route('/additional_reports', methods=['GET', 'POST'])
 def add_reports():
@@ -114,7 +127,7 @@ def add_reports():
             now = dt.datetime.now()
             now_string = now.strftime("%Y-%m-%d %H:%M:%S")
             summary_df.to_excel(os.path.join(os.path.join(app.root_path, app.config['REPORTS_PATH']), f'{now_string}_full_report.xlsx'), index = False)
-            
+            return redirect(url_for('add_reports'))
        
         
 
@@ -129,29 +142,457 @@ def monthly_erp():
             return redirect(url_for('monthly_report_by_erp', erp = form.erp.data, start_date = form.start_date.data, 
                             end_date = form.end_date.data, contract_type = form.contract_type.data, is_mixed = form.include_all.data,  **request.args))
 
-    return render_template('quick_template.html', title='TEST', form=form, header = 'Monthly report filters')
+    return render_template('quick_template.html', title='Monthly reports filter', form=form, header = 'Monthly report filters')
+
+@app.route('/redact_email', methods=['GET', 'POST'])
+@login_required
+def redact_email():
+    form = RedactEmailForm()
+    
+    if form.validate_on_submit():
+        res = form.inv_goups_mails.data
+        new_mail = form.new_mail.data
+        mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
+        if mail_to_add is None:
+            mail_to_add = Mail(name = new_mail)
+            mail_to_add.save()
+            print(f'adding new mail {mail_to_add}')
+            mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
+        curr_inv_group = form.inv_goups_mails.data
+        curr_inv_group.update({'email_id':mail_to_add.id})
+        print(f'Invoicing group {curr_inv_group.name} will mail to {mail_to_add.name} !')
+        return redirect(url_for('redact_email'))
+
+    return render_template('quick_template_wider.html', title='Readcting Email', form=form, header = 'Redacting EMAILS')
+
+@app.route('/bgpost', methods=['GET', 'POST'])
+@login_required
+def bgpost():
+    form = PostForm()
+    
+    if form.validate_on_submit():
+        if form.upload_csv.data:
+            dtype_dict= {'ANUM': str, 'PHONE' : str, 'INVOICE' : str,'AMOUNT':float}
+            df = pd.read_csv(request.files.get('file_easypay_csv'), sep=';', dtype = dtype_dict)
+            upload_file_generation(df)
+
+    return render_template('quick_template.html', title='BgPost', form=form, header = 'Create BgPost file')
 
 @app.route('/test', methods=['GET', 'POST'])
 @login_required
 def test():
     form = TestForm()
     # summary_df = pd.DataFrame()
+    # form = PostForm()
     if form.validate_on_submit():
-        print(f'in test')
-        start_date = convert_date_to_utc('EET',form.start_date.data)   
-        end_date = convert_date_to_utc('EET',form.end_date.data) 
-        invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
-        invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
-        erp_name = 'E-PRO'
-        # rec = get_inv_groups_by_internal_id_and_dates('ТК45', start_date)
-        rec = get_subcontacts_by_internal_id_and_start_date('ТК45', start_date)
-        
-        print(f'ddddddddddddddd --- > {start_date}')
-        print(f'{rec}')
 
-     
+        metas = ItnMeta.query.all()
+        count = 1
+        for itn in metas:
+            itn.delete()
+            print(f'{count} - {itn} deleted')
+            count+=1
         
-  
+        # erp_invoice_df =  pd.read_sql(ErpInvoice.query.statement, db.session.bind) 
+        # df = erp_invoice_df.drop_duplicates(subset=['composite_key'], keep = 'last')
+        # print(f'{erp_invoice_df.shape}')
+        # print(f'{df.shape}')
+        # erp_name = 'E-PRO'
+        # start_date = convert_date_to_utc('EET',form.start_date.data)   
+        # end_date = convert_date_to_utc('EET',form.end_date.data) 
+        # # start_date = convert_date_to_utc('EET','2020-10-01')   
+        # # end_date = convert_date_to_utc('EET','2020-10-31') 
+        # end_date = end_date + dt.timedelta(hours = 23)
+        # invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
+        # invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
+
+        
+        # get_missing_extra_points_by_erp_for_period(erp_name, start_date, end_date)
+
+        # grid_db_itns = get_grid_itns_by_erp_for_period(erp_name, start_date, end_date)
+        # non_grid_db_itns = get_non_grid_itns_by_erp_for_period(erp_name, start_date, end_date)
+        # incomming_grid_itns = get_incomming_grid_itns(erp_name, start_date, end_date)
+        # incomming_non_grid_itns = get_incomming_non_grid_itns(erp_name, start_date, end_date)
+        # a = "32Z470001214089K" in non_grid_db_itns
+        # print(a)
+        # extra_non_grid = list(set(incomming_non_grid_itns) - set(non_grid_db_itns) - set(incomming_grid_itns))
+        # extra = list(set(incomming_non_grid_itns) - set(non_grid_db_itns) - set(grid_db_itns))
+        # print(f'{extra}')
+
+        # # all_db_itns = get_all_itns_by_erp_for_period(ERP, start_date, end_date)
+        # # print(f'{len(all_db_itns)}')
+        # itn_records = (
+        #     db.session
+        #         .query(
+        #             SubContract.itn                                
+        #         )  
+        #         .join(ItnMeta, ItnMeta.itn == SubContract.itn) 
+        #         .join(Erp, Erp.id == ItnMeta.erp_id)                                
+        #         .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))                        
+        #         .distinct(SubContract.itn) 
+        #         .all())
+        # all_itns = [x[0] for x in itn_records]
+        # print(f'{len(all_itns)}')
+
+        # all_incomming_itn =(
+        #     db.session.query(
+        #         IncomingItn.itn
+        #     )
+        #     .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)               
+        #     .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        #     .distinct(IncomingItn.itn) 
+        #     .all()
+
+        # )
+        # all_incomming_itn = [x[0] for x in all_incomming_itn]
+        # print(f'{len(all_incomming_itn)}')
+
+        # missing = list(set(all_itns) - set(all_incomming_itn))
+        # df = pd.DataFrame()
+        # for itn in missing:
+        #     rec = (db.session
+        #         .query(ItnMeta.itn, Erp.name.label('erp'), Contract.internal_id, InvoiceGroup.description.label('inv_description'),
+        #             InvoiceGroup.name.label('invoice_name'), SubContract.start_date.label('sub_start_date'), SubContract.end_date.label('sub_end_date'), MeasuringType.code.label('measuring_type'))
+        #         .join(SubContract, SubContract.itn == ItnMeta.itn)
+        #         .join(Contract, Contract.id == SubContract.contract_id)
+        #         .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
+        #         .join(MeasuringType, MeasuringType.id == SubContract.measuring_type_id)
+        #         .join(Erp, Erp.id == ItnMeta.erp_id)
+        #         .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #         .filter(ItnMeta.itn == itn).
+        #         all()
+        #     )
+        
+        #     temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
+        #     if df.empty:
+        #         df = temp_df
+        #     else:
+        #         df = df.append(temp_df, ignore_index=True)
+        # df = df.sort_values(['erp','inv_description'])
+        # df.to_excel('temp/all_missing_10.xlsx')
+        # print(f'{df}')
+        # # get_missing_extra_points_by_erp_for_period(ERP, start_date, end_date)
+        # grid_db_itns = get_grid_itns_by_erp_for_period(ERP, start_date, end_date)
+        # non_grid_db_itns = get_non_grid_itns_by_erp_for_period(ERP, start_date, end_date)
+
+        # incomming_grid_itns = (
+        #     db.session.query(
+        #         IncomingItn.itn
+        #     )
+        #     .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)  
+        #     .filter(Erp.name == ERP) 
+        #     .filter(IncomingItn.as_grid == 1)       
+        #     .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        #     .all()
+
+        # )
+        # incomming_grid_itns = [x[0] for x in incomming_grid_itns]
+        # print(f'incomming_grid_itns from {ERP} -- {len(incomming_grid_itns)}')
+
+        # incomming_non_grid_itns = (
+        #     db.session.query(
+        #         IncomingItn.itn
+        #     )
+        #     .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)  
+        #     .filter(Erp.name == ERP) 
+        #     .filter(IncomingItn.as_grid == 0)       
+        #     .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        #     .all()
+
+        # )
+        # incomming_non_grid_itns = [x[0] for x in incomming_non_grid_itns]
+        # print(f'incomming_non_grid_itns from {ERP} -- {len(incomming_non_grid_itns)}')
+
+        # incomming_sett_itns = (
+        #     db.session.query(
+        #         IncomingItn.itn
+        #     )
+        #     .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)  
+        #     .filter(Erp.name == ERP) 
+        #     .filter(IncomingItn.as_settelment == 1)       
+        #     .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        #     .all()
+
+        # )
+        # incomming_sett_itns = [x[0] for x in incomming_sett_itns]
+        # print(f'incomming_sett_itns from {ERP} -- {len(incomming_sett_itns)}')
+        # print(f'grid_db_itns {len(grid_db_itns)}')
+        # print(f'non_grid_db_itns {len(non_grid_db_itns)}')
+
+
+        # missing_grid = list(set(grid_db_itns) - set(incomming_grid_itns)) 
+        # print(f'missing_grid---> {missing_grid}')
+        # a = '32Z103003032365Y' in grid_db_itns
+        # print(a)
+        # [print(x) for x in missing_grid]
+        # missing_grid_df = create_report_by_itn(missing_grid, start_date, end_date, ERP, True)
+        # print(f'missing_df \n{missing_grid_df}')
+
+        # missing_non_grid = list(set(non_grid_db_itns) - set(incomming_non_grid_itns))
+        # missing_non_grid_df = create_report_by_itn(missing_non_grid, start_date, end_date, ERP, True)
+        # print(f'missing_non_grid_df \n{missing_non_grid_df}')
+
+        # all_incomming_itns= (
+        #         db.session.query(
+        #             IncomingItn.itn
+        #         )
+        #     .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)  
+        #     .filter(Erp.name == ERP)                    
+        #     .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        #     .all()
+        # )
+        # all_incomming_itns = [x[0] for x in all_incomming_itns]
+
+        # all_db_itns= (            
+        #     db.session.query(
+        #             SubContract.itn                                
+        #         )  
+        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn) 
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)
+        #     .filter(Erp.name == ERP)                  
+        #     .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))                          
+        #     .distinct(SubContract.itn) 
+        #     .all()
+        # )
+        # all_db_itns = [x[0] for x in all_db_itns]
+
+        # missing_all_itns = list(set(all_db_itns) - set(all_incomming_itns))
+        # missing_all_itns_df = create_report_by_itn(missing_all_itns, start_date, end_date, ERP, True)
+        # print(f'missing_all_itns_df \n{missing_all_itns_df}')
+        # print(f'{missing_all_itns}')
+        # get_missing_extra_points_by_erp_for_period(ERP, start_date, end_date)
+        # distribution_stp_records = get_distribution_stp_records(ERP,start_date,end_date)
+
+        # stp_records_df = pd.DataFrame.from_records(distribution_stp_records, columns=distribution_stp_records[0].keys())
+        # total_consumption_records = (
+        #    db.session
+        #     .query(Distribution.itn.label('itn'), 
+        #         func.sum(Distribution.calc_amount).label('total_consumption')) 
+            
+        #     .join(ErpInvoice, ErpInvoice.id == Distribution.erp_invoice_id)   
+        #     .filter(Distribution.itn.in_(stp_records_df['itn']))      
+        #     .filter(Distribution.tariff.in_(['Достъп','Пренос през електропреносната мрежа', 'Разпределение'])) 
+        #     .filter(ErpInvoice.date >= invoice_start_date, ErpInvoice.date <= invoice_end_date) 
+        #     .group_by(Distribution.itn)
+        #     .all()
+        # )
+        # # print(f'{total_consumption_records}')
+        # total_consumption_df = pd.DataFrame.from_records(total_consumption_records, columns=total_consumption_records[0].keys())
+        # total_consumption_df.to_excel('temp/total_consumption_df.xlsx')
+        # stp_records_df.to_excel('temp/stp_records_df.xlsx')
+        # # print(f'@@@@@@@@@@@@@@@@@@@ TOTAL CONSUMPTION DF @@@@@@@@@@@@@@@@@@ \n {total_consumption_df}')
+        # total_consumption_df = total_consumption_df.merge(stp_records_df, on = 'itn', how = 'right')
+        # total_consumption_df.to_excel('temp/total_consumption_df_2.xlsx')
+        
+        # missing_points = total_consumption_df[total_consumption_df['total_consumption'].isnull()]['itn']   
+        
+        # total_consumption_df['total_consumption'] = total_consumption_df['total_consumption'].apply(lambda x: Decimal('0') if pd.isnull(x) else x)
+        # print(f'Missing point from input CSV files regard input settelment file \n{missing_points}')
+
+
+        # r = db.session.query(Mail.id, Mail.name).all()
+        # mail_df = pd.DataFrame.from_records(r, columns=r[0].keys())
+        # mail_df['mask'] = mail_df['name'].apply(lambda x: str(x).find(',') != -1 )
+        # res_df = mail_df[mail_df['mask']]
+        # res_df['name'] = res_df['name'].apply(lambda x: str(x).replace(',',';'))
+        # # bulk_update_list = res_df.to_dict(orient='records')  
+        
+        # # db.session.bulk_update_mappings(Mail, bulk_update_list)
+        # # db.session.commit()
+        # print(f'{res_df}')
+        # curr_mails = db.session.query(Contractor.email).filter(Contractor.id == 1565).first()[0]
+        # db_mails = db.session.query(Mail.id, Mail.name).filter(Mail.name == curr_mails).all()
+        # mail_id = db.session.query(Mail.id).filter(Mail.name == curr_mails).first()[0]
+        # df = pd.DataFrame.from_records(db_mails, columns=db_mails[0].keys())
+        
+        
+        # df['mask'] = df['name'].apply(lambda x: str(x).find(a) != -1)
+        # df= df[df['mask']]
+        # print(f'{len(db_mails)}')
+        # contracts_mails = (db.session
+        #                 .query(InvoiceGroup.id,InvoiceGroup.name, InvoiceGroup.description, Contractor.acc_411)                                               
+        #                 .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)   
+        #                 .join(Contractor, Contractor.id == InvoiceGroup.contractor_id)                      
+        #                 # .filter( ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #                 .distinct()
+        #                 .all()
+        # )
+        # df_c = pd.DataFrame.from_records(contracts_mails, columns=contracts_mails[0].keys())
+        # mails = Contractor.query.with_entities(Contractor.acc_411,Contractor.email.label('mail')).distinct().all()
+        # df = pd.DataFrame.from_records(mails, columns=mails[0].keys())
+        # df['mail'] = df['mail'].apply(lambda x: str(x).strip().lower())
+        # df_1 = df.merge(df_c, on='acc_411')
+        # db_mails = db.session.query(Mail.id.label('email_id'), Mail.name.label('mail')).all()
+        # df_mails = pd.DataFrame.from_records(db_mails, columns=db_mails[0].keys())
+        # df_1 = df_1.merge(df_mails, on='mail')
+        # db_df = df_1[['id','email_id']]
+        # bulk_update_list = db_df.to_dict(orient='records')  
+        
+        # db.session.bulk_update_mappings(InvoiceGroup, bulk_update_list)
+        # db.session.commit()
+        # a = df_1[df_1['mail'] == 'daci.r@abv.bg']
+        # a = df_c[df_c['acc_411'] == '411-3-126']
+        # print(f'{a}')
+
+
+        # db.session.query(IncomingItn).delete()
+        # db.session.commit()
+        # s = IncomingItn.query.delete()
+        # print(f'{s}')
+        # delete_sch = IncomingItn.__table__.delete()
+        
+        # db.session.execute(delete_sch)
+        # db.session.commit()
+        # time_zone = 'EET'
+        # start_date = convert_date_to_utc('EET',form.start_date.data)   
+        # end_date = convert_date_to_utc('EET',form.end_date.data) 
+        # end_date_f = end_date + dt.timedelta(hours = 23)
+        # erp_name = 'E-PRO'
+        # print(f'{start_date} --- {end_date_f}')
+        # itn_records_in_db = (
+        #     db.session
+        #         .query(ItnMeta.itn)            
+        #         .join(SubContract, SubContract.itn == ItnMeta.itn)  
+        #         .join(Erp, Erp.id == ItnMeta.erp_id)  
+        #         .filter(Erp.name == erp_name)        
+        #         .filter(~((SubContract.start_date > end_date_f) | (SubContract.end_date < start_date)))
+        #         .distinct(ItnMeta.itn)
+        #         .all())
+        # itn_in_db = [x[0] for x in itn_records_in_db]
+
+        # itn_records_in_incoming = (
+        #     db.session
+        #         .query(IncomingItn.itn)   
+        #         .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        #         .join(Erp, Erp.id == ItnMeta.erp_id)  
+        #         .filter(Erp.name == erp_name)        
+        #         .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date_f)
+        #         .all())
+            
+        # incoming_itns = [x[0] for x in itn_records_in_incoming]
+        # # print(f'{incoming_itns}')
+
+        # db_itn_set = set(itn_in_db)
+        # incoming_itns = set(incoming_itns)
+        # missing = list(db_itn_set - incoming_itns)
+        # print(f'This itn points are in the database but not came data for them from ERP: {erp_name} files ---> {missing}')
+        # extra = list(incoming_itns - db_itn_set)
+        # print(f'This itn points are NOT in the database but came data for them from ERP: {erp_name} files ---> {extra}')
+
+        # missing_df = pd.DataFrame()
+        # for itn in missing:
+        #     rec = (db.session
+        #         .query(ItnMeta.itn, Contract.internal_id, InvoiceGroup.description.label('inv_fescription'),
+        #             InvoiceGroup.name.label('invoice_name'), SubContract.start_date.label('sub_start_date'), SubContract.end_date.label('sub_end_date'))
+        #         .join(SubContract, SubContract.itn == ItnMeta.itn)
+        #         .join(Contract, Contract.id == SubContract.contract_id)
+        #         .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
+        #         .filter(~((SubContract.start_date > end_date_f) | (SubContract.end_date < start_date)))
+        #         .filter(ItnMeta.itn == itn).
+        #         all()
+        #     )
+        #     temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
+        #     temp_df['sub_start_date'] = temp_df['sub_start_date'].apply(lambda x: convert_date_from_utc('EET', x, True, "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"))
+        #     temp_df['sub_end_date'] = temp_df['sub_end_date'].apply(lambda x: convert_date_from_utc('EET', x, True, "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"))
+        #     if missing_df.empty:
+        #         missing_df = temp_df
+        #     else:
+        #         missing_df = missing_df.append(temp_df, ignore_index=True)
+        # print(f'{missing_df}')
+
+        # start_date_f = convert_date_to_utc('EET',"2020-11-01")
+        # end_date_f = convert_date_to_utc('EET',"2020-12-31")
+        # end_date_f_ = end_date_f + dt.timedelta(hours = 23)
+        # print(f'{start_date_f} --- {end_date_f} --- {end_date_f_}')
+
+        # local_start_date = convert_date_from_utc(time_zone, start_date_f, False)    
+        # local_end_date = convert_date_from_utc(time_zone, end_date_f, False)
+        # local_start_date_2 =  local_end_date.replace(day = 1)
+        # local_start_date_2 =  convert_date_from_utc(time_zone, local_start_date_2 , False)
+        # print(f'{local_start_date} --- {local_end_date} --- {local_start_date_2}')
+
+
+        # time_series = pd.date_range(start = local_start_date, end = local_end_date , freq='h', tz = time_zone)
+        # forecast_df = pd.DataFrame(time_series, columns = ['utc'])
+        # forecast_df['weekday'] = forecast_df['utc'].apply(lambda x: x.strftime('%A'))
+        # forecast_df['hour'] = forecast_df['utc'].apply(lambda x: x.hour)
+
+
+        # invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
+        # invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
+        
+        # invoice_group = '411-3-135_1'
+        # itn = '32Z4700032380151'
+        # tarrif = Tariff.query.first()
+        # # itn = 'BG5521900880000000000000002288570'
+        
+        # end_date_ = end_date + dt.timedelta(hours = 23)
+        # rec = (
+        #     db.session.query(ItnSchedule.itn, ItnSchedule.utc, ItnSchedule.forecast_vol, ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
+        #     .filter(ItnSchedule.itn == itn, ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date_)
+        #     .all()
+
+        # )
+        # df = pd.DataFrame.from_records(rec, columns=rec[0].keys())
+        # df.set_index('utc', inplace = True)
+        # df.index = df.index.tz_localize('UTC').tz_convert(time_zone)
+        # df.reset_index(inplace = True)
+        # df['weekday'] = df['utc'].apply(lambda x: x.strftime('%A'))
+        # df['hour'] = df['utc'].apply(lambda x: x.hour)
+        # df['consumption_vol']  = df['consumption_vol'].astype(float)
+        # df = df[['weekday','hour','consumption_vol']].groupby(['weekday','hour']).mean()
+
+        # merged_df = forecast_df.merge(df,on = ['weekday','hour'], how = 'right')
+        # # merged_df.drop(columns = ['utc_y'], inplace = True)
+        # # merged_df.rename(columns = {'utc_x':'utc'}, inplace = True)
+        # merged_df.set_index('utc', inplace = True)
+        # merged_df.index = merged_df.index.tz_convert('UTC').tz_localize(None)
+        # merged_df.sort_index(inplace=True)
+        # merged_df.to_excel('temp/merged.xlsx')
+        # # df['weekday'] = df.index.map(lambda x: x.to_pydatetime().weekday()) 
+        # # df['hour'] = df.index.map(lambda x: x.to_pydatetime().hour) 
+        # # # df.reset_index(inplace = True)
+        # # df['consumption_vol']  = df['consumption_vol'].astype(float)
+        # # df['proba'] = df.index.map(lambda x: generate_tariff_hours(x, tarrif)) # x.name because use index
+        # # df['proba2'] = df.index.map(lambda x: generate_tariff_hours(x, tarrif) * Decimal(str(df.loc[x]['consumption_vol']))) 
+        # # averaged_df = df[['hour','consumption_vol','weekday']].groupby(['hour','weekday']).mean()
+        # # df.apply(lambda x: print(f'{x.index}')) # x.name because use index
+        # # a = convert_datetime64_to_datetime(df.head(1).utc.values[0])
+        # # b = convert_datetime64_to_datetime(df.tail(1).utc.values[0])
+        # print(f'{merged_df}')
+        # rec = get_inv_groups_by_internal_id_and_dates('ТК45', start_date)
+        # rec = get_subcontacts_by_internal_id_and_start_date('ТК45', start_date)
+        
+        # print(f'ddddddddddddddd --- > {start_date}')
+        # print(f'{rec}')
+        # inv_groups_itns = (
+        #     SubContract
+        #     .query
+        #     .join(InvoiceGroup,InvoiceGroup.id == SubContract.invoice_group_id)
+        #     .filter(InvoiceGroup.name == '411-3-135_1')
+        #     .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #     .all()
+        # )
+        # linked_contract = Contract.query.filter(Contract.internal_id == 'ТК45').first()
+        # linked_contract_start_date = linked_contract.start_date
+        # linked_contract_end_date = linked_contract.end_date
+        
+        
+        # inv_groups_itns_linked = (
+        #     SubContract
+        #     .query
+        #     .join(InvoiceGroup,InvoiceGroup.id == SubContract.invoice_group_id)
+        #     .filter(InvoiceGroup.name == '411-3-135_1')
+        #     .filter((SubContract.start_date < linked_contract_end_date) & (SubContract.end_date >= linked_contract_end_date))
+        #     .all()
+        # )
+
+        # print(f'ddddddddddddddd --- > {inv_groups_itns_linked}')
 
             
        
@@ -194,7 +635,7 @@ def mailing():
                 
                 mails =[x for x in raw_mails.split(';')]
                 print(f'{mails}')
-                mails.append('t.kalaidjieva@grandenergy.net')
+                mails.append('openmarket@grandenergy.net')
                 ref_file_name = inv.ref_file_name 
                 inv_file_name = str(inv.id)+ '.pdf'
                 # file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
@@ -250,6 +691,9 @@ def erp():
     
     form = ErpForm()
     if form.validate_on_submit():
+        if form.delete_incoming_table.data:
+            db.session.query(IncomingItn).delete()
+            db.session.commit()
         separator = '";"'
         # metas = db.session.query(ItnMeta.itn,MeasuringType.code).join(SubContract,SubContract.itn == ItnMeta.itn).join(MeasuringType).all()
         # itn_meta_df = pd.DataFrame.from_records(metas, columns = metas[0].keys()) 
@@ -443,6 +887,7 @@ def upload_initial_data():
             raw_contractor_df = raw_contractor_df[['Name', 'EIC','Address','Vat_Number','E_Mail','Acc_411']]
             raw_contractor_df.rename(columns = {'Name':'name', 'EIC':'eic','Address':'address','Vat_Number':'vat_number','E_Mail':'email','Acc_411':'acc_411'}, inplace = True)
             raw_contractor_df = raw_contractor_df.replace( ':','-', regex=True)
+            raw_contractor_df = raw_contractor_df.replace( ',',';', regex=True)
            
             update_or_insert(raw_contractor_df, Contractor.__table__.name)
 
@@ -456,19 +901,25 @@ def upload_initial_data():
 
         if request.files.get('file_stp').filename != '':
             print(f'in upload stp coeffs')
+
             START_DATE = '01/01/2020 00:00:00'
             END_DATE = '31/12/2020 23:00:00'
             FORMAT = '%d/%m/%Y %H:%M:%S'
-
             df = pd.read_excel(request.files.get('file_stp'),sheet_name='full')
+
+            # START_DATE = '01/01/2021 00:00:00'
+            # END_DATE = '31/12/2021 23:00:00'
+            # FORMAT = '%d/%m/%Y %H:%M:%S'
+            # df = pd.read_excel(request.files.get('file_stp'),sheet_name='full_with_dates_2021')
+
             sDate = pd.to_datetime(START_DATE,format = FORMAT)
             eDate = pd.to_datetime(END_DATE,format = FORMAT)
             timeseries = pd.date_range(start=sDate, end=eDate, tz='EET', freq='h')
             Utc = timeseries.tz_convert('UTC').tz_localize(None) 
             df['utc'] = Utc
             df_m = pd.melt(df, id_vars =['utc'], value_vars =['CEZ_B1', 'CEZ_B2', 'CEZ_B3', 'CEZ_B4', 'CEZ_B5', 'CEZ_H1', 'CEZ_H2',
-                'CEZ_S1', 'EPRO_B01', 'EPRO_B02', 'EPRO_B03', 'EPRO_B04', 'EPRO_H0',
-                'EPRO_H1', 'EPRO_S0','EPRO_S01', 'EVN_G0', 'EVN_G1', 'EVN_G2', 'EVN_G3', 'EVN_G4',
+                'CEZ_S1', 'EPRO_B01', 'EPRO_B02', 'EPRO_B03', 'EPRO_B04', 'EPRO_H01',
+                'EPRO_H02', 'EPRO_S01', 'EVN_G0', 'EVN_G1', 'EVN_G2', 'EVN_G3', 'EVN_G4',
                 'EVN_H0', 'EVN_H1', 'EVN_H2', 'EVN_BD000'],var_name='code') 
             
             df_measure_code = pd.read_sql(MeasuringType.query.statement, db.session.bind)
@@ -662,7 +1113,7 @@ def login():
     return render_template('login.html', title='Sign In', form=form)	
     
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register_gyz', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
@@ -1091,7 +1542,7 @@ def upload_linked_contracts():
                         'invoicing_interval', 'maturity_interval', 'contract_type',
                         'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
                         'notes', 'time_zone','parent_contractor_411','invoice_group_name','invoice_group_description',
-                        'zko','akciz','has_grid_services','has_spot_price','time_zone','tariff_name','price_day','price_night','make_invoice','lower_limit','upper_limit']
+                        'zko','akciz','has_grid_services','has_balancing','has_spot_price','time_zone','tariff_name','price_day','price_night','make_invoice','lower_limit','upper_limit']
 
         if set(df.columns).issubset(template_cols):
 
@@ -1144,27 +1595,39 @@ def upload_linked_contracts():
             for index,row in df.iterrows():
                 #print(f'in rows --------------->>{row.internal_id}')
                 curr_contract = get_contract_by_internal_id(row['internal_id'])
-                a = row['internal_id']
-                print(f'curr_contract \n{curr_contract} -- {a}')
+                # a = row['internal_id']
+                # print(f'curr_contract \n{curr_contract} -- {a}')
+                zko = round(Decimal(str(row['zko'])) / Decimal('1000'), MONEY_ROUND)
+                akciz = round(Decimal(str(row['akciz'])) / Decimal('1000'), MONEY_ROUND)                
+                start_date = convert_date_to_utc(row['time_zone'].code, row['start_date'].strftime(t_format),t_format) 
+                end_date = convert_date_to_utc(row['time_zone'].code, row['end_date'].strftime(t_format),t_format)
                 if curr_contract is not None :
                     internal_id = row['internal_id']
                     flash(f'There is a contract with this internal id {internal_id} ! Skipping !','danger')
                     print(f'There is a contract with this internal id {internal_id} ! Skipping !')
                     continue
                 else:
-                    parent_linked_contract = get_contract_by_internal_id(row['linked_contract_internal_id'])
+                    parent_contract = get_contract_by_internal_id(row['linked_contract_internal_id'])
                     # a = row['linked_contract_internal_id']
                     # print(f'parent_linked_contract \n{parent_linked_contract.internal_id} -- {a}')
-                    curr_contract = (
+
+                    new_linked_contract = (
                         Contract(internal_id = row['internal_id'], contractor_id = row['contractor_id'], subject = 'None', parent_id =  row['parent_id_initial_zero'],                                
                                 signing_date =  convert_date_to_utc(row['time_zone'].code,row['signing_date'].strftime(t_format),t_format),
-                                start_date = convert_date_to_utc(row['time_zone'].code, row['start_date'].strftime(t_format),t_format), 
-                                end_date = convert_date_to_utc(row['time_zone'].code, row['end_date'].strftime(t_format),t_format), 
+                                start_date = start_date, 
+                                end_date = end_date, 
                                 duration_in_days = row['duration_in_days'], invoicing_interval = row['invoicing_interval'], maturity_interval = row['maturity_interval'], 
                                 contract_type_id = row['contract_type'], is_work_days = row['is_work_day'], automatic_renewal_interval = row['automatic_renewal_interval'], 
                                 collateral_warranty = row['collateral_warranty'], notes =  row['notes'],time_zone_id = row['time_zone'].id) 
                     )
-                    contracts.append(curr_contract)
+                    new_linked_contract.save() #!!!!!
+                    print(f'saved new linked contract --- > {new_linked_contract}')
+                    apply_linked_collision_function(parent_contract, new_linked_contract, row['invoice_group_name'], row['invoice_group_description'], zko, akciz, row['has_grid_services'], row['has_spot_price'],
+                                                                                row['has_balancing'], row['tariff_name'], row['price_day'],	row['price_night'], row['make_invoice'], row['lower_limit'], row['upper_limit']) 
+                    # subcontracts = get_subcontracts_by_inv_gr_name_and_date(row['invoice_group_name'], start_date, end_date)
+                    # print(f'subcontracts --- > {subcontracts}')
+                    # contracts.append(new_linked_contract)
+                    
 
             nan_df = df[df.isna().any(axis=1)]
             if not nan_df.empty:
@@ -1195,7 +1658,7 @@ def upload_linked_contracts():
                 expected_set = set(template_cols)
                 mismatched = list(expected_set - input_set)
                 print(f'Columns from input file mismatch {mismatched}')
-    return render_template('quick_template.html', title='Upload Linked Contracts', form=form)
+    return render_template('quick_template.html', title='Upload Linked Contracts', form=form, header = 'Upload ANNEX')
 
 @app.route('/create_subcontract', methods=['GET', 'POST'])
 @login_required
@@ -1217,7 +1680,7 @@ def create_subcontract():
         form_start_date_utc, form_end_date_utc = validate_subcontracts_dates(form_start_date_utc, form_end_date_utc, curr_contract)
 
         if form_start_date_utc is None:
-            flash('Wrong dates according the contract !','danger')
+            flash(f'Wrong dates according the contract {curr_contract.internal_id}!','danger')
             return redirect(url_for('create_subcontract'))
        
         form_zko = round(Decimal(str(form.zko.data)) / Decimal('1000'), MONEY_ROUND)

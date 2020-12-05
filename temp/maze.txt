@@ -23,6 +23,45 @@ contracts_mails = (db.session
         db.session.commit()
 ############################################################################
 
+        mails = (
+            db.session.query(InvoiceGroup.id,InvoiceGroup.name, 
+                            InvoiceGroup.description, Contractor.acc_411,
+                            Mail.name,                    
+
+            )
+            .join(SubContract, SubContract.invoice_group_id == InvoiceGroup.id)   
+            .join(Contractor, Contractor.id == InvoiceGroup.contractor_id)
+            .join(Contract, Contract.id == SubContract.contract_id)
+            .join(Mail, Mail.id == InvoiceGroup.email_id)            
+            .distinct(InvoiceGroup.id)
+            .all()
+        )
+        df_mails = pd.DataFrame.from_records(mails, columns=mails[0].keys())
+        contr_mails = Contractor.query.with_entities(Contractor.acc_411,Contractor.email.label('contr_mail')).distinct().all()
+        df_contr_mails = pd.DataFrame.from_records(contr_mails, columns=contr_mails[0].keys())
+        print(f'{df_contr_mails}')
+        merged_df = df_contr_mails.merge(df_mails, on='acc_411', how = 'right')
+        print(f'{merged_df}')
+        merged_df.to_excel('temp/mails3.xlsx')
+
+
+
+
+
+    subs = (SubContract.query
+                    .join(Contract, Contract.id == SubContract.contract_id)
+                    .join(ContractType, ContractType.id == Contract.contract_type_id)
+                    .filter(ContractType.name == 'Mass_Market')
+                    # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+                    .filter(SubContract.has_grid_services == 0)
+                    .all()
+                    )
+        print(f'{len(subs)}')
+        for s in subs:
+            # s.update({'has_grid_services':1})
+            print(f'{s.itn} ')
+
+            
        # c =(db.session.query(Contractor.name, Contractor.acc_411, ContractType.name.label('contract_type'), InvoiceGroup.name.label('invoice_group_name'), InvoiceGroup.description, Contractor.email)
         #     .join(Contract,Contract.contractor_id == Contractor.id)
         #     .join(InvoiceGroup, InvoiceGroup.contractor_id == Contractor.id)

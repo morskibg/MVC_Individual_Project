@@ -11,6 +11,7 @@ from sqlalchemy.exc import ProgrammingError
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
 # from app.helpers.helper_function_excel_writer import (INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
+
                         
                                       
 
@@ -22,8 +23,8 @@ def stringifyer(df):
     """check first row value of each colum if is datetime or decimal and convert them to string if yes"""
     for col in df.columns:
         if isinstance(df[col].iloc[0], dt.date): 
-            
-            df[col] = df.apply(lambda x: x[col].strftime('%Y-%m-%d %H:%M:%S'), axis=1)
+            df.loc[:,col] = df.apply(lambda x: x[col].strftime('%Y-%m-%d %H:%M:%S'), axis=1)
+            # df[col] = df.apply(lambda x: x[col].strftime('%Y-%m-%d %H:%M:%S'), axis=1)
         elif isinstance(df[col].iloc[0], Decimal):            
             
             df[col] = df.apply(lambda x: str(x[col]), axis=1)
@@ -70,7 +71,7 @@ def update_or_insert(df, table_name, remove_nan = False):
        
 
 
-def convert_date_from_utc(time_zone, dt_obj, is_string = True, t_format = "%Y-%m-%d %H:%M:%S"):
+def convert_date_from_utc(time_zone, dt_obj, is_string = True, t_format = "%Y-%m-%d %H:%M:%S", str_format = "%Y-%m-%d"):
     if(dt_obj is None):
         return None
     if isinstance(dt_obj, str):
@@ -80,7 +81,7 @@ def convert_date_from_utc(time_zone, dt_obj, is_string = True, t_format = "%Y-%m
     dt_obj = utc.localize(dt_obj)
     dt_obj = dt_obj.astimezone(new_zone).replace(tzinfo=None)  
     if is_string:
-        dt_obj = dt_obj.strftime("%Y-%m-%d")
+        dt_obj = dt_obj.strftime(str_format)
     return dt_obj
 
 def convert_date_to_utc(time_zone, dt_str, t_format = "%Y-%m-%d"):
@@ -268,11 +269,11 @@ def generate_forecast_schedule(measuring_type, itn, forecast_vol, weekly_forecas
 
     if has_spot_price:
         print(f'IN HAS SPOT PRICE !!!!!!!!!!!!!!!!!!')
-        forecast_df = forecast_df.merge(ibex_df, left_index=True, right_index=True)
-        forecast_df['price'] = forecast_df.apply(lambda x: generate_tariff_hours(x.name, tariff) + x['ibex_price'] / 1000, axis = 1) # x.name because use index
+        forecast_df = forecast_df.merge(ibex_df, left_index=True, right_index=True)        
+        forecast_df['price'] = forecast_df.index.map(lambda x: generate_tariff_hours(x, tariff) + (Decimal(str(forecast_df.loc[x]['ibex_price'])) / Decimal('1000'))) 
         forecast_df.drop(columns = ['ibex_price'], inplace = True)
-    else:
-        forecast_df['price'] = forecast_df.apply(lambda x: generate_tariff_hours(x.name, tariff), axis = 1) # x.name because use index
+    else:        
+        forecast_df['price'] = forecast_df.index.map(lambda x: generate_tariff_hours(x, tariff)) 
 
     # forecast_df['price'] = forecast_df.apply(lambda x: generate_tariff_hours(x.name, tariff), axis = 1)
     forecast_df.reset_index(inplace = True)   
@@ -386,8 +387,20 @@ def create_invoicing_group(name, description, contractor_id):
     if curr_inv_group is not None:
         print(f'founded such a invoicing group - returning {curr_inv_group}')
         return curr_inv_group
+    # curr_mails = Mail.query.filter(Mail.name == )
+    curr_mails = db.session.query(Contractor.email).filter(Contractor.id == contractor_id).first()[0]
+    if curr_mails is None:
+        curr_mails = 'missing_mail@grandenergy.net'
+        no_mail_contractor = Contractor.query.filter(Contractor.id == contractor_id).first()
+        print(f'Contarctor {no_mail_contractor.name} dosn\'t has an email ! missing_mail@grandenergy.net is attached !')
 
-    curr_inv_group = InvoiceGroup(name = name, contractor_id = contractor_id, description = description)
+    db_mails = db.session.query(Mail.name).filter(Mail.name == curr_mails).first()
+    print(f'curr_mails -- > {curr_mails} --- {contractor_id}')
+    if db_mails is None:
+        mail = Mail(name = curr_mails)
+        mail.save()
+    mail_id = db.session.query(Mail.id).filter(Mail.name == curr_mails).first()[0]
+    curr_inv_group = InvoiceGroup(name = name, contractor_id = contractor_id, description = description, email_id = mail_id)
     curr_inv_group.save()
     return curr_inv_group
 
@@ -445,7 +458,7 @@ def generate_subcontract_from_file(row, curr_contract, df, curr_itn_meta):
         activation_date_utc, sub_end_date_utc = validate_subcontracts_dates(activation_date_utc, sub_end_date_utc, curr_contract)
 
         if activation_date_utc is None:
-            flash('Wrong dates according the contract !','danger')
+            flash(f'Wrong dates according the contract {curr_contract.internal_id}!','danger')
             return None
             
         curr_measuring_type = get_measuring_type(row['measuring_type']) 
@@ -518,7 +531,7 @@ def generate_provisional_subcontract(input_df, curr_subcontract):
 def convert_datetime64_to_datetime(dt_obj):
 
     if not isinstance(dt_obj, np.datetime64):
-        #print(f'NOT NP,DATETIME, actual is :{type(dt_obj)}', file = sys.stdout)
+        print(f'NOT NP,DATETIME, actual is :{type(dt_obj)}')
         return None
     return dt.datetime.strptime(np.datetime_as_string(dt_obj,unit='s'), '%Y-%m-%dT%H:%M:%S')
 
@@ -631,6 +644,138 @@ def new_is_left_inner(new_subcontract,old_subcontract):
 
 def new_is_right_inner(new_subcontract,old_subcontract):
     old_subcontract.update({'end_date':new_subcontract.start_date - dt.timedelta(hours = 1)})
+
+def apply_linked_collision_function(parent_contract, linked_contract, invoice_group_name, invoice_group_description, zko, akciz, has_grid_services, has_spot_price, has_balancing, tariff_name, price_day,	price_night, make_invoice, lower_limit,	upper_limit):
+
+    collision_subcontracts = (SubContract
+                                .query
+                                .join(InvoiceGroup,InvoiceGroup.id == SubContract.invoice_group_id)
+                                .filter(InvoiceGroup.name == invoice_group_name)
+                                .filter(~((SubContract.start_date > linked_contract.end_date) | (SubContract.end_date < linked_contract.start_date)))
+                                .all()
+    )
+    if len(collision_subcontracts) < 1:
+        last_subcontracts = (SubContract
+                                .query
+                                .join(InvoiceGroup,InvoiceGroup.id == SubContract.invoice_group_id)
+                                .filter(InvoiceGroup.name == invoice_group_name)
+                                .filter(SubContract.end_date == parent_contract.end_date)
+                                .all()
+        )
+        for curr_sub in last_subcontracts:
+            curr_tariff = create_tariff(tariff_name, price_day, price_night) 
+            curr_inv_group = create_invoicing_group(invoice_group_name, invoice_group_description, linked_contract.contractor_id)            
+            forecast_df = create_forecast_algo(curr_sub.measuring_type_id, curr_tariff, curr_sub.itn, curr_sub.end_date, linked_contract)
+
+
+            curr_sub_contract = (SubContract(itn = curr_sub.itn,
+                                    contract_id = linked_contract.id, 
+                                    object_name = '',                                    
+                                    invoice_group_id = curr_inv_group.id, 
+                                    measuring_type_id = curr_sub.measuring_type_id, 
+                                    start_date = linked_contract.start_date,
+                                    end_date =  linked_contract.end_date,
+                                    zko = round(Decimal(str(zko)) , MONEY_ROUND),
+                                    akciz = round(Decimal(str(akciz)) , MONEY_ROUND),
+                                    has_grid_services = has_grid_services,
+                                    has_spot_price = has_spot_price,
+                                    has_balancing = has_balancing,
+                                    make_invoice = make_invoice))  
+            curr_sub_contract.save()   #!!!!!!                       
+            print(f'currr subbbb saved --- > \n{curr_sub_contract}')
+        # print(f'last_subcontracts {len(last_subcontracts)} --- {parent_contract.end_date}')
+    else:
+        print(f'collision_subcontracts {len(collision_subcontracts)} --- {parent_contract.end_date}')
+
+def create_forecast_algo(measuring_type_id, curr_tariff, itn, old_subcontract_last_date_utc, linked_contract):
+
+    time_zone = TimeZone.query.filter(TimeZone.id == linked_contract.time_zone_id).first().code
+
+    forecast_period_local_end_date = convert_date_from_utc(time_zone, old_subcontract_last_date_utc, False)
+    forecast_period_local_start_date = forecast_period_local_end_date.replace(day = 1, hour = 0)
+    forecast_period_utc_start_date = old_subcontract_last_date_utc.replace(day = 1)
+    forecast_period_utc_start_date =  convert_date_to_utc(time_zone, forecast_period_utc_start_date)
+    
+
+    time_series = pd.date_range(start = linked_contract.start_date, end = linked_contract.end_date , freq='h', tz = time_zone)
+    
+    forecast_df = pd.DataFrame(time_series, columns = ['utc'])
+    forecast_df['weekday'] = forecast_df['utc'].apply(lambda x: x.strftime('%A'))
+    forecast_df['hour'] = forecast_df['utc'].apply(lambda x: x.hour)
+    schedule = (
+            db.session.query(ItnSchedule.itn, ItnSchedule.utc, ItnSchedule.forecast_vol, ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
+            .filter(ItnSchedule.itn == itn, ItnSchedule.utc >= forecast_period_utc_start_date, ItnSchedule.utc <= old_subcontract_last_date_utc)
+            .all()
+    )
+    
+    try:
+        last_month_df = pd.DataFrame.from_records(schedule, columns=schedule[0].keys())
+    except:
+        print(f'Error ! No last month schedule for {itn}. Can not create forecast schedule !')
+        return pd.DataFrame()
+    else:
+        measuring_type = MeasuringType.query.filter(MeasuringType.id == measuring_type_id).first()    
+
+        last_month_df.set_index('utc', inplace = True)
+        last_month_df.index = last_month_df.index.tz_localize('UTC').tz_convert(time_zone)
+        last_month_df.reset_index(inplace = True)
+        last_month_df['weekday'] = last_month_df['utc'].apply(lambda x: x.strftime('%A'))
+        last_month_df['hour'] = last_month_df['utc'].apply(lambda x: x.hour)
+        last_month_df['consumption_vol']  = last_month_df['consumption_vol'].astype(float)
+        
+        if measuring_type.code in ['DIRECT','UNDIRECT']:
+           
+            weekly_forecast_df = last_month_df[['weekday','hour','consumption_vol']].groupby(['weekday','hour']).mean()
+            # print(f'in direct BEFORE \n{forecast_df.head()}')
+            forecast_df = forecast_df.merge(weekly_forecast_df, on = ['weekday','hour'], how = 'right' )
+            forecast_df.rename(columns = {'consumption_vol':'forecast_vol'}, inplace = True)
+            print(f'in direct\n {forecast_df.head()}')
+            # forecast_df.set_index('utc', inplace = True)
+            # forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
+            # forecast_df.sort_index(inplace=True)
+            
+        else:
+            forecast_vol =  last_month_df[['consumption_vol']].sum().values[0]
+            stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == measuring_type.id).statement, db.session.bind) 
+            stp_df.set_index('utc', inplace = True)
+            stp_df.index = stp_df.index.tz_localize('UTC').tz_convert(time_zone)
+            stp_df.reset_index(inplace = True) 
+           
+            if not stp_df.empty:
+                forecast_df = forecast_df.merge(stp_df, on = 'utc', how = 'left')
+                forecast_df = forecast_df.fillna(0)
+                forecast_df['forecast_vol'] = forecast_df['value'].apply(lambda x: Decimal(str(x)) * Decimal(str(forecast_vol)))
+                # forecast_df.set_index('utc', inplace = True)
+                # forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
+                # forecast_df.sort_index(inplace=True)
+               
+            else:                 
+                forecast_df['forecast_vol'] = Decimal(str(forecast_vol))
+            print(f'in NON direct {forecast_df.head()}')
+
+        forecast_df.set_index('utc', inplace = True)
+        forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
+        forecast_df.sort_index(inplace=True)
+        forecast_df['itn'] = itn
+        forecast_df['consumption_vol'] = -1
+
+        delete_sch = ItnScheduleTemp.__table__.delete()
+        db.session.execute(delete_sch)
+
+        # forecast_df.set_index('utc', inplace = True)
+        forecast_df['tariff_id'] = curr_tariff.id
+        forecast_df['settelment_vol'] = -1
+        forecast_df['price'] = forecast_df.index.map(lambda x: generate_tariff_hours(x, curr_tariff)) 
+        forecast_df.reset_index(inplace = True)
+
+        forecast_df.rename(columns={'index':'utc'}, inplace = True)  
+        print(f'last\n {forecast_df.head()}')
+        forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]    
+        update_or_insert(forecast_df, ItnScheduleTemp.__table__.name)
+        # print(f'from create_forcast_algo \n{forecast_df}')
+
+
+
 
 
 def validate_input_df(df):

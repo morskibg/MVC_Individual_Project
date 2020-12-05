@@ -291,3 +291,28 @@ def create_full_ref_for_all_itn(files):
     summary_df.index = summary_df.index + 1  # shifting index
     summary_df = summary_df.sort_index()  # sorting by index
     return summary_df
+
+def log_writer(path, df, unique_columns):
+    
+    if df.empty:
+        print(f'Empty dataframe is passed ! Nothing to record !')
+    else:
+        try:
+            curr_file = pd.read_excel(path)
+        except:
+            print(f'There is not such a file: {path}. Creating !')
+            df = df.sort_values(by=['erp','category','input_type','inv_description'], ascending=True)
+            df.to_excel(path, index=False)
+        else:
+            
+            if set(df.columns).issubset(set(curr_file.columns)):
+                # print(f'in file append DF\n {df}')
+                
+                curr_file = curr_file.append(df, ignore_index = True)
+                curr_file.drop_duplicates(subset = unique_columns , keep = 'last', inplace = True)
+                curr_file = curr_file.sort_values(by=['erp','category','inv_description'], ascending=True)
+                print(f'in file append curr_file\n {curr_file}')
+                curr_file.to_excel(path, index=False)
+            else:
+                print(f'Columns mismatch ! \nPointed file has: {curr_file.columns}. Data to add has: {df.columns} columns !\nAborting !')
+

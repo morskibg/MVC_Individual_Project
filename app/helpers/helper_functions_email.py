@@ -27,8 +27,8 @@ def send_async_email(app, msg):
 
 
 def send_email(recipients, file_data, subject = "From GED automated invoice sender", sender = app.config['MAIL_DEFAULT_SENDER'], 
-                text_body = 'This is automated invoice sender! Please, DO NOT respond to this email address! For further clarification, please contact: office@grandenergy.net', 
-                html_body = "<b>This is automated invoice sender! Please, DO NOT respond to this email address! For further clarification, please contact: office@grandenergy.net</b>" ):
+                text_body = 'This is automated invoice sender! Please, DO NOT respond to this email address! For further clarification, please contact: openmarket@grandenergy.net', 
+                html_body = "<b>This is automated invoice sender! Please, DO NOT respond to this email address! For further clarification, please contact: openmarket@grandenergy.net</b>" ):
        
     msg = Message(subject, sender=sender, recipients=recipients)
     msg.body = text_body

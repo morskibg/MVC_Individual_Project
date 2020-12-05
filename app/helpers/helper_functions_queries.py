@@ -5,6 +5,7 @@ import xlrd
 import time,re
 from decimal import Decimal
 from flask import  flash
+from sqlalchemy import or_
 
 from app.models import *    
 from app.helpers.helper_functions import update_or_insert, stringifyer, convert_date_to_utc, convert_date_from_utc
@@ -728,3 +729,123 @@ def get_subcontacts_by_internal_id_and_start_date(internal_id, start_date):
                 .all()
                 )
     return records
+
+def get_subcontracts_by_inv_gr_name_and_date(invoice_group_name, start_date, end_date):
+
+    records = (SubContract
+                .query
+                .join(InvoiceGroup,InvoiceGroup.id == SubContract.invoice_group_id)
+                .filter(InvoiceGroup.name == invoice_group_name)
+                .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+                .all()
+    )
+    return records
+
+def get_grid_itns_by_erp_for_period(erp_name, start_date, end_date):
+    itn_records = (
+        db.session
+            .query(
+                SubContract.itn                                
+            )  
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn) 
+            .join(Erp, Erp.id == ItnMeta.erp_id)
+            .filter(Erp.name == erp_name)                  
+            .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))                 
+            .filter(SubContract.has_grid_services)            
+            .distinct(SubContract.itn) 
+            .all())
+    grid_itns = [x[0] for x in itn_records]
+    return grid_itns
+
+def get_non_grid_itns_by_erp_for_period(erp_name, start_date, end_date):
+    itn_records = (
+        db.session
+            .query(
+                SubContract.itn                                
+            )  
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn) 
+            .join(Erp, Erp.id == ItnMeta.erp_id)
+            .filter(Erp.name == erp_name)                  
+            .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))                 
+            .filter(~SubContract.has_grid_services)            
+            .distinct(SubContract.itn) 
+            .all())
+    non_grid_itns = [x[0] for x in itn_records]
+    return non_grid_itns
+
+def get_incomming_grid_itns(erp_name, start_date, end_date):
+    incomming_grid_itns = (
+        db.session.query(
+            IncomingItn.itn
+        )
+        .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        .join(Erp, Erp.id == ItnMeta.erp_id)  
+        .filter(Erp.name == erp_name) 
+        .filter(IncomingItn.as_grid == 1)       
+        .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        .all()
+
+    )
+    incomming_grid_itns = [x[0] for x in incomming_grid_itns]
+    return incomming_grid_itns
+
+def get_incomming_non_grid_itns(erp_name, start_date, end_date):
+    incomming_non_grid_itns = (
+        db.session.query(
+            IncomingItn.itn
+        )
+        .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        .join(Erp, Erp.id == ItnMeta.erp_id)  
+        .filter(Erp.name == erp_name) 
+        .filter(or_(IncomingItn.as_grid == 0, IncomingItn.as_settelment == 1))       
+        .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        .all()
+
+    )
+    incomming_non_grid_itns = [x[0] for x in incomming_non_grid_itns]
+    return incomming_non_grid_itns
+
+def get_all_itns_by_erp_for_period(erp_name, start_date, end_date):
+    itn_records = (
+        db.session
+            .query(
+                SubContract.itn                                
+            )  
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn) 
+            .join(Erp, Erp.id == ItnMeta.erp_id)
+            .filter(Erp.name == erp_name)                  
+            .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))                        
+            .distinct(SubContract.itn) 
+            .all())
+    all_itns = [x[0] for x in itn_records]
+    return all_itns
+
+def get_all_incomming_itns(erp_name, start_date, end_date):
+    incomming_itns = (
+        db.session.query(
+            IncomingItn.itn
+        )
+        .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+        .join(Erp, Erp.id == ItnMeta.erp_id)  
+        .filter(Erp.name == erp_name)              
+        .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+        .all()
+    )
+    incomming_itns = [x[0] for x in incomming_itns]
+    return incomming_itns
+# def get_incomming_itns_by_type(erp_name, start_date, end_date, is_grid, is_settlement):
+#     incomming_grid_itns = (
+#         db.session.query(
+#             IncomingItn.itn
+#         )
+#         .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
+#         .join(Erp, Erp.id == ItnMeta.erp_id)  
+#         .filter(Erp.name == erp_name) 
+#         .filter(IncomingItn.as_grid == is_grid)   
+#         .filter(IncomingItn.as_settelment == is_settlement)        
+#         .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
+#         .all()
+
+#     )
+#     incomming_grid_itns = [x[0] for x in incomming_grid_itns]
+#     return incomming_grid_itns

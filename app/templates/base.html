@@ -27,29 +27,41 @@
                         <span class="icon-bar"></span>
                         <span class="icon-bar"></span>
                     </button>
-                    <a class="navbar-brand" href="{{ url_for('upload_initial_data') }}">EndUsersApp</a>
+                    {% if current_user.username == 'dpetkov' %}
+                        <a class="navbar-brand" href="{{ url_for('upload_initial_data') }}">EndUsersApp</a>
+                    {% else %}
+                        <a class="navbar-brand" href="{{ url_for('login') }}">EndUsersApp</a>
+                    {% endif %}
                 </div>
                 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-                    <ul class="nav navbar-nav">
-                        <li><a class="nav-link"  href="{{ url_for('monthly_report') }}">Monthly Reports</a></li>
-                        <li><a class="nav-link"  href="{{ url_for('monthly_erp') }}">Filtered Monthly Reports</a></li>
-                        <li><a class="nav-link"  href="{{ url_for('add_reports') }}">Additional Reports</a></li>
-                        {% if not current_user.is_anonymous %}
+                    <ul class="nav navbar-nav">                        
+                        {% if not current_user.is_anonymous and current_user.username != 'email_redactor' %}
+                            <li><a class="nav-link"  href="{{ url_for('test') }}">Test</a></li>
+                            <li><a class="nav-link"  href="{{ url_for('monthly_report') }}">Monthly Reports</a></li>
+                            <li><a class="nav-link"  href="{{ url_for('monthly_erp') }}">Filtered Monthly Reports</a></li>
+                            <li><a class="nav-link"  href="{{ url_for('add_reports') }}">Additional Reports</a></li>
                             <li><a class="nav-link"  href="{{ url_for('create_integra_excel') }}">Integra files</a></li>
                             <li><a class="nav-link"  href="{{ url_for('create_invoice') }}">Invoices</a></li>
                             <li><a class="nav-link"  href="{{ url_for('mailing') }}">Mails</a></li>
+                            <li><a class="nav-link"  href="{{ url_for('bgpost') }}">Bg POST</a></li>
+                        {% endif %}
+                        {% if current_user.username == 'email_redactor' or current_user.username == 'dpetkov' %}
+                            <li><a class="nav-link"  href="{{ url_for('redact_email') }}">Redacting Emails</a></li>
                         {% endif %}
                         
                     </ul>
                     <ul class="nav navbar-nav navbar-right">
                         {% if current_user.is_anonymous %}
-                        <li><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                            <li><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                        {% elif  current_user.username != 'email_redactor' %}
+                            <li><a class="nav-link" href="{{ url_for('upload_contracts') }}">Upload Contracts</a></li>
+                            <li><a class="nav-link" href="{{ url_for('upload_linked_contracts') }}">Upload Annex</a></li>
+                            <li><a class="nav-link" href="{{ url_for('upload_itns') }}">Upload ITNs</a></li>
+                            <li><a class="nav-link" href="{{ url_for('erp') }}">Upload ERP</a></li> 
+                            <!-- <li><a class="nav-link" href="{{ url_for('create_subcontract') }}">Create SubContract</a></li>                        -->
+                            <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
                         {% else %}
-                        <li><a class="nav-link" href="{{ url_for('upload_contracts') }}">Upload Contracts</a></li>
-                        <li><a class="nav-link" href="{{ url_for('upload_itns') }}">Upload ITNs</a></li>
-                        <li><a class="nav-link" href="{{ url_for('erp') }}">Upload ERP</a></li> 
-                        <!-- <li><a class="nav-link" href="{{ url_for('create_subcontract') }}">Create SubContract</a></li>                        -->
-                        <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+                            <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
                         {% endif %}
                     </ul>
                 </div>

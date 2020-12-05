@@ -6,7 +6,7 @@ from wtforms import (
 # from wtforms.fields import DateField
 from wtforms.ext.sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional,NumberRange
-from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice,SubContract
+from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice,SubContract, Mail
 import re
 import sys
 import datetime as dt
@@ -274,6 +274,7 @@ class ErpForm(FlaskForm):
     file_evn = FileField('Browse for EVN Zip File')
     file_nkji = FileField('Browse for NKJI Zip File')
     file_eso = FileField('Browse for ESO Zip File')
+    delete_incoming_table = BooleanField('Delete incoming itns table', default = False)
 
     submit = SubmitField('Upload')
 
@@ -323,7 +324,7 @@ class InvoiceForm(FlaskForm):
 class MailForm(FlaskForm):
     send_all = BooleanField('Send all mails', default = False)
     subject = StringField(id='Subject', validators = [DataRequired()], default = 'From GED automated invoice sender')
-    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':45})  
+    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':65})  
     send_excel = BooleanField('Send only excel file', default = False)
     send_pdf = BooleanField('Send only pdf file', default = False)
     submit = SubmitField('Send selected')
@@ -390,10 +391,21 @@ class AdditionalReports(FlaskForm):
     delete_all = BooleanField('Delete all report files', default = False)
     submit_delete = SubmitField('Delete files')
 
+class PostForm(FlaskForm):
 
+    file_easypay_csv = FileField('Browse for EasyPay CSV File')
+    upload_csv = SubmitField('Upload CSV')
 
-            
+    # invoicing_list = SelectMultipleField('Select records for invoice creation',coerce=int, choices=[],  render_kw={'size':25})
+    # # invoicing_list = StringField('Select records for invoice creation',  validators=[Optional()], render_kw={'size':25})
+    # create_invoice = SubmitField('Create invoices')
 
+class RedactEmailForm(FlaskForm):   
+
+    inv_goups_mails = QuerySelectField(query_factory = lambda: InvoiceGroup.query.join(Mail, Mail.id == InvoiceGroup.email_id).order_by(InvoiceGroup.description).all(), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':65})
+    new_mail = StringField(id='New Email', validators = [DataRequired()], default = '')
+
+    submit = SubmitField('Apply changes')
 
             
     

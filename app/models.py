@@ -263,8 +263,9 @@ class InvoiceGroup(BaseModel):
     sub_contracts = db.relationship("SubContract", back_populates="invoice_group", lazy="dynamic")
 
     def __str__(self):
-        
-        return f'{self.name} - {self.description}'
+
+        email = Mail.query.filter(Mail.id == self.email_id).first().name
+        return f'{self.name} - {self.description} - {email}'
 
     def __repr__(self):
         return '<InvoiceGroup:{}, {}, Contractor_id {}>'.format(self.id, self.name, self.contractor_id)
@@ -353,90 +354,14 @@ class ItnSchedule(BaseModel):
         bulk_list =  schedule_df.to_dict(orient='records')
         return bulk_list
 
-
-    # def generate_bulk_list(itn, start_date, end_date,  price, measuring_type_id, is_remaining_schedule = True):
-        
-
-       
-        # time_series = pd.date_range(start=start_date, end=end_date, freq='H')
-        
-        # df = pd.DataFrame(time_series, columns = ['utc'])
-        # df['itn'] = itn  
-        # df['price'] = price
-        
-        # stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == measuring_type_id).statement, db.session.bind)
-        
-        # if not stp_df.empty:
-        #     # generated or updated subcontract is STP, merge with stp table and goes to list of dict creation for bulk insert
-        #     df = df.merge(stp_df, on = 'utc', how = 'left')
-        #     df = df.fillna(0)
-        #     df['forecast_vol'] = df['value'].apply(lambda x: Decimal(str(x)) * Decimal(str(forecast_vol)))
-        #     # #print(df.head, file = sys.stdout)
-        # else:                     
-        #     forcasted_schedule = g.pop('forcasted_schedule', None)
-        #     if forcasted_schedule is not None:
-        #         # generated or updated subcontract is NOT STP, check for hourly forecast schedule from excel file and goes to list of dict creation for bulk insert 
-        #         forcasted_schedule.set_index('date', inplace = True)
-        #         forcasted_schedule.index = forcasted_schedule.index.tz_localize('EET', ambiguous='infer').tz_convert('UTC').tz_localize(None)
-        #         forcasted_schedule.reset_index(inplace = True)
-        #         forcasted_schedule.rename(columns = {forcasted_schedule.columns[0]:'utc'}, inplace = True)
-        #         df = df.merge(forcasted_schedule, on = 'utc', how = 'left')
-        #         df = df.fillna(0)
-        #         df['forecast_vol'] = df[forcasted_schedule.columns[1]].apply(lambda x: Decimal(str(x)))
-        #     else:
-        #         # remaining_schedule_list_of_dict = g.pop('remaining_schedule_list_of_dict', None)
-        #         # if remaining_schedule_list_of_dict is not None:
-        #         if is_remaining_schedule:
-        #             # generated or updated subcontract is remaning additional and goes to list of dict creation for bulk insert  
-                   
-        #             #print('in generate add sub', file = sys.stdout)  
-        #             remaining_schedule = ItnScheduleTemp.query.all()
-        #             # delete_sch = ItnScheduleTemp.__table__.delete()
-        #             # db.session.execute(delete_sch)
-
-        #             list_of_dict = []
-        #             for schedule in remaining_schedule: 
-                                            
-        #                         list_of_dict.append(dict(itn = schedule.itn, 
-        #                                         utc = schedule.utc,                                                      
-        #                                         forecast_vol = schedule.forecast_vol,
-        #                                         consumption_vol = schedule.consumption_vol,
-        #                                         price = schedule.price))                                               
-        #             return list_of_dict
-        #         else:   
-        #             df['forecast_vol'] = Decimal(str('0'))
-            
-        # df['consumption_vol'] = -1 
-        
-                
-        # list_of_dict = []
-        # for row in list(schedule_df.to_records()): 
-                        
-        #     list_of_dict.append(dict(itn = row['itn'], 
-        #                     utc = dt.datetime.strptime(np.datetime_as_string(row['utc'], unit='s'), '%Y-%m-%dT%H:%M:%S'),                                                      
-        #                     forecast_vol = row['forecast_vol'],
-        #                     consumption_vol = Decimal(str(row['consumption_vol'])),
-        #                     price = Decimal(str(row['price']))))
-                            
-        # return list_of_dict
-
     @classmethod
-    def autoinsert_new(cls, mapper, connection, target):
+    def autoinsert_new(cls, mapper, connection, target):        
         
-        
-        sub_contract = target
-        
+        sub_contract = target        
         schedule_df = pd.read_sql(ItnScheduleTemp.query \
             .filter(ItnScheduleTemp.itn == sub_contract.itn, ItnScheduleTemp.utc >= sub_contract.start_date, ItnScheduleTemp.utc <= sub_contract.end_date)\
             .statement, db.session.bind) 
-        bulk_list = cls.generate_bulk_list(schedule_df)   
-         
-        # update_or_insert(schedule_df, ItnSchedule.__table__.name)
-          
-        # bulk_list = cls.generate_bulk_list(itn = sub_contract.itn, start_date = sub_contract.start_date,
-        #          end_date = sub_contract.end_date, price=sub_contract.price, 
-        #          measuring_type_id = sub_contract.measuring_type_id )
-                 
+        bulk_list = cls.generate_bulk_list(schedule_df)          
         db.session.bulk_insert_mappings(ItnSchedule, bulk_list)
 
     @classmethod
@@ -477,34 +402,6 @@ class ItnSchedule(BaseModel):
         delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc >= target.start_date) & (ItnSchedule.utc < target.end_date) & (ItnSchedule.itn == target.itn))
         connection.execute(delete_sch)
 
-
-    # @classmethod
-    # def autoupdate_prices(cls, mapper, connection, target):
-        
-    #     ibex_data = target
-    #     print(f'target \n{ibex_data}')
-    #     valid_ibex_last_date = (db.session.query(ibex_data.utc, ibex_data.price).filter(ibex_data.price == 0).order_by(ibex_data.utc).first()[0])
-    #     spot_itns = (
-    #         db.session
-    #             .query(SubContract.itn.label('sub_itn'))                                 
-    #             .filter(SubContract.start_date <= valid_ibex_last_date, SubContract.end_date > valid_ibex_last_date) 
-    #             .filter(SubContract.has_spot_price) #!!!!!!!!!!!!!!!!!!!!!!                           
-    #             .distinct(SubContract.itn) 
-    #             .subquery())
-
-    #     records = (
-    #         db.session
-    #             .query(ItnSchedule.itn, ItnSchedule.utc, ItnSchedule.tariff_id, ItnSchedule.price.label('schedule_price'), ibex_data.price.label('ibex_price'))
-    #             .join(spot_itns, spot_itns.c.sub_itn == ItnSchedule.itn)                    
-    #             .join(ibex_data, ibex_data.utc == ItnSchedule.utc)                
-    #             .filter(ItnSchedule.utc >= valid_ibex_last_date - dt.timedelta(days = 60), ItnSchedule.utc <= valid_ibex_last_date)
-    #             .all()
-    #         )
-    #     df = pd.DataFrame.from_records(records, columns = records[0].keys()) 
-    #     df['price'] = df.apply(lambda x: Decimal(str(x['schedule_price'])) + (Decimal(str(x['ibex_price'])) / Decimal('1000')), axis = 1)
-    #     df.drop(columms = ['ibex_price','schedule_price'], inplace = True)
-    #     print(f'FROM listener \n{df}')
-         
 class LeavingItn(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     date = db.Column(db.DateTime, primary_key = True)   
@@ -518,6 +415,8 @@ class LeavingItn(BaseModel):
 
 class IncomingItn(BaseModel):
     itn = db.Column(db.String(33), primary_key = True)
+    as_settelment = db.Column(db.Boolean, nullable = False, default = 0)
+    as_grid = db.Column(db.Boolean, nullable = False, default = 0)
     date = db.Column(db.DateTime, primary_key = True)
 
     def __repr__(self):
