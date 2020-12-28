@@ -3,6 +3,15 @@
     /* border-color: #1d1c1c; */
 }
 
+.navbar-test {
+    background-color: #4c2ae2;
+    
+    /* border-color: #1d1c1c; */
+}
+/* .dropdown-menu.li:hover{ background-color: #f1f1f1 } */
+
+
+
 /* .navbar-right a,.navbar-nav a,a.navbar-brand{
     color:whitesmoke;
 }  */
@@ -20,9 +29,6 @@
     background-color: #ecf011fc;
 }
 
-/* .alert {
-    padding-right: 15px;
-    padding-left: 15px;
-    margin-right: auto;
-    margin-left: auto;
-} */
+ 
+
+

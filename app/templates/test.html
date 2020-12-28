@@ -4,9 +4,91 @@
 
 {% block app_content %} 
     <!-- <div class='col-md-2'></div>              -->
-    <div class='col-md-12'>                      
-        <h1>TEST</h1> 
-        {{ wtf.quick_form(form) }} 
+    <div class='col-md-12'>        
+        
+        {{ wtf.quick_form(form,button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='ask_confirm_form') }} 
+        <!-- <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="test()"> -->
     </div> 
     <!-- <div class='col-md-2'> </div>     -->
+    <!-- <script>
+        let contract_tk = document.getElementById('contract_tk');
+        let contracts = document.getElementById('contracts');
+        let invoice_groups = document.getElementById('invoice_groups'); 
+        let itns = document.getElementById('itns');        
+        
+        contract_tk.onkeyup = function(){
+            
+            let tk = contract_tk.value            
+            console.log(tk)
+            let contract_id = -1
+            let inv_group_id = -1
+            fetch('/_get_contract/' + tk).then(function(response){
+                response.json().then(function(data){
+                    let optionHTML = '';
+                    for(let contract of data.contracts){                        
+                        contract_id = contract.contract_id;                        
+                        if(contract_id !== undefined){                            
+                            optionHTML += '<option value="' + contract.internal_id + '">' + contract.internal_id + ' - ' + contract.contractor_name + ' - ' + contract.start_date + ' - ' + contract.end_date + ' - ' + contract.contract_id + '</option>';
+                        } 
+                    }
+                    contracts.innerHTML = optionHTML;
+                    updateInvGroups(contract_id);                            
+                });
+            }); 
+        };
+
+        invoice_groups.onchange = function(){
+
+            let invoice_group_name = invoice_groups.value;
+            updateItns(invoice_group_name);
+            
+        };       
+
+        contracts.onchange = function(){
+            updateInvGroups(contracts.value);
+            itns.innerHTML = ""; 
+        };
+
+        function updateInvGroups(contract_id){
+
+            console.log('in updateInvGroups')
+            
+            fetch('/_get_inv_groups/' + contract_id).then(function(response){
+                response.json().then(function(data){
+                    let optionHTML = ''
+                    let count = 0;
+                    for(let group of data.groups){                    
+                        optionHTML += '<option value="' + group.invoice_group + '">' + group.invoice_group + ' - ' + group.invoice_group_description + ' - ' + group.email + '</option>';
+                        count += 1;
+                    }                                  
+                    invoice_groups.size = count;
+                    invoice_groups.innerHTML = optionHTML;                
+                });
+            });
+        };
+
+        function updateItns(invoice_group_name){
+
+            console.log('in updateItns')
+           
+            fetch('/_get_itns/' + invoice_group_name).then(function(response){
+                
+                response.json().then(function(data){
+                    let optionHTML = '';
+                    let count = 0;
+                    for(let itn of data.itns){                                                  
+                        optionHTML += '<option value="' + itn.itn + '">' + itn.itn + ' - ' + itn.invoice_group + '</option>';
+                        count += 1;
+                    }
+                    if(count >30){
+                        count = 30;
+                    }                    
+                    itns.size = count;
+                    itns.innerHTML = optionHTML;                    
+                });
+            }); 
+        };       
+
+        
+    </script> -->
 {% endblock %}

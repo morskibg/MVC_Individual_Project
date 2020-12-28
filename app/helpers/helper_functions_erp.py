@@ -254,6 +254,8 @@ def insert_mrus(raw_df, file_name, erp_name):
         try:
             # have_all_itns_meta(distr_tbl['itn'].values)
             distr_tbl = distr_tbl.replace(np.nan,0)
+            # test_df = distr_tbl[distr_tbl['itn'] == '32Z103002539329D']
+            # print(f'test df \n{test_df}')
             # print(f'distrib_tbl to DB \n{distr_tbl.head()} \n{distr_tbl.columns}')           
             update_or_insert(distr_tbl, Distribution.__table__.name)
         except Exception as e:
@@ -380,8 +382,8 @@ def insert_settlment_cez(zip_obj,separator):
 
                             stp_records_df = pd.DataFrame.from_records(incoming_stp_records, columns=incoming_stp_records[0].keys()) 
                                              
-                            # update_stp_settelment_vol(df, stp_records_df, incoming_stp_records)  #!!!!!!!!!!!!!!!!!!!!!!
-                            # update_stp_consumption_vol(stp_records_df, min_date, max_date)       #!!!!!!!!!!!!!!!!!!!!!!
+                            update_stp_settelment_vol(df, stp_records_df, incoming_stp_records)  #!!!!!!!!!!!!!!!!!!!!!!
+                            update_stp_consumption_vol(stp_records_df, min_date, max_date)       #!!!!!!!!!!!!!!!!!!!!!!
                             # is_settelment = True                            
                             # is_grid = False
                             upload_to_incoming_itns(stp_records_df, max_date)
@@ -392,7 +394,7 @@ def insert_settlment_cez(zip_obj,separator):
                             # get_missing_points(incoming_non_stp_records, db_non_stp_records)
                             # get_extra_points(incoming_non_stp_records, db_non_stp_records)
                             
-                            # update_non_stp_consumption_settelment_vol(df, min_date, max_date) #!!!!!!!!!!!!!!!!!!!!!
+                            update_non_stp_consumption_settelment_vol(df, min_date, max_date) #!!!!!!!!!!!!!!!!!!!!!
                             # is_settelment = False
                             # is_grid = False
                             upload_to_incoming_itns(df, max_date)

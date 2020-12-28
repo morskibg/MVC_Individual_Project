@@ -194,6 +194,7 @@ def has_overlaping_subcontracts(itn, date):
 
 def generate_forecast_schedule(measuring_type, itn, forecast_vol, weekly_forecast_df, activation_date_utc, curr_contract, tariff, has_spot_price, subcontract_end_date = None): 
     """ generate time schedule with tariff prices and forecast volumes and insert to ItnScheduleTemp"""
+    # generate_forecast_schedule(form.measuring_type.data, form.itn.data, form_forecasted_vol, forecast_df, form_start_date_utc, curr_contract, curr_tariff, form_end_date_utc)
                                 # curr_measuring_type, itn, row['forecast_montly_consumption'], forecast_df, activation_date_utc, curr_contract, curr_tariff, sub_end_date_utc
 
     # generate_forecast_schedule(curr_measuring_type, itn, row['forecast_montly_consumption'], forecast_df, activation_date_utc, curr_contract, tariffs, sub_end_date_utc)   
@@ -595,19 +596,19 @@ def apply_collision_function(new_subcontract, old_subcontract, measuring_type_co
         upload_remaining_forecat_schedule(new_subcontract.itn, new_subcontract.end_date, old_subcontract.end_date)
         # #print(f'ADD_start_date = {new_subcontract.end_date + dt.timedelta(hours = 1)} ----- ADD_end_date = {old_subcontract.end_date}', file = sys.stdout)  
         #           
-        additional_sub_contract = SubContract(itn = old_subcontract.itn,
-                            contract_id = old_subcontract.contract_id, \
-                            object_name = old_subcontract.object_name,\
-                            # price = old_subcontract.price , \
-                            invoice_group_id = old_subcontract.invoice_group_id, \
-                            measuring_type_id = old_subcontract.measuring_type_id, \
-                            start_date = new_subcontract.end_date + dt.timedelta(hours = 1) ,\
-                            end_date =  old_subcontract.end_date, \
-                            zko = old_subcontract.zko , \
-                            akciz = old_subcontract.akciz, \
-                            has_grid_services = old_subcontract.has_grid_services, \
-                            has_spot_price = old_subcontract.has_spot_price, \
-                            has_balancing = old_subcontract.has_balancing)
+        additional_sub_contract = (SubContract(itn = old_subcontract.itn,
+                            contract_id = old_subcontract.contract_id, 
+                            object_name = old_subcontract.object_name,                            
+                            invoice_group_id = old_subcontract.invoice_group_id, 
+                            measuring_type_id = old_subcontract.measuring_type_id, 
+                            start_date = new_subcontract.end_date + dt.timedelta(hours = 1) ,
+                            end_date =  old_subcontract.end_date, 
+                            zko = old_subcontract.zko , 
+                            akciz = old_subcontract.akciz, 
+                            has_grid_services = old_subcontract.has_grid_services, 
+                            has_spot_price = old_subcontract.has_spot_price, 
+                            has_balancing = old_subcontract.has_balancing,
+                            make_invoice = old_subcontract.make_invoice))
                             
         #print(additional_sub_contract, file = sys.stdout)
           
@@ -654,6 +655,7 @@ def apply_linked_collision_function(parent_contract, linked_contract, invoice_gr
                                 .filter(~((SubContract.start_date > linked_contract.end_date) | (SubContract.end_date < linked_contract.start_date)))
                                 .all()
     )
+    # print(f'collision_subcontracts --- {collision_subcontracts}\n{linked_contract.end_date} ---- {linked_contract.start_date}')
     if len(collision_subcontracts) < 1:
         last_subcontracts = (SubContract
                                 .query
@@ -685,20 +687,24 @@ def apply_linked_collision_function(parent_contract, linked_contract, invoice_gr
             print(f'currr subbbb saved --- > \n{curr_sub_contract}')
         # print(f'last_subcontracts {len(last_subcontracts)} --- {parent_contract.end_date}')
     else:
-        print(f'collision_subcontracts {len(collision_subcontracts)} --- {parent_contract.end_date}')
+        print(f'collision_subcontracts {len(collision_subcontracts)} --- {parent_contract.end_date} Nothing is saved !')
 
 def create_forecast_algo(measuring_type_id, curr_tariff, itn, old_subcontract_last_date_utc, linked_contract):
 
     time_zone = TimeZone.query.filter(TimeZone.id == linked_contract.time_zone_id).first().code
 
     forecast_period_local_end_date = convert_date_from_utc(time_zone, old_subcontract_last_date_utc, False)
+    print(f'forecast_period_local_end_date -- > {forecast_period_local_end_date}')
     forecast_period_local_start_date = forecast_period_local_end_date.replace(day = 1, hour = 0)
     forecast_period_utc_start_date = old_subcontract_last_date_utc.replace(day = 1)
     forecast_period_utc_start_date =  convert_date_to_utc(time_zone, forecast_period_utc_start_date)
+    print(f'forecast_period_utc_start_date -- > {forecast_period_utc_start_date}')
     
-
-    time_series = pd.date_range(start = linked_contract.start_date, end = linked_contract.end_date , freq='h', tz = time_zone)
-    
+    time_series_local_start_date = convert_date_from_utc(time_zone, linked_contract.start_date, False)
+    time_series_local_end_date = convert_date_from_utc(time_zone, linked_contract.end_date, False)
+    print(f'time_series -- > {time_series_local_start_date} --- {time_series_local_end_date}')
+    time_series = pd.date_range(start = time_series_local_start_date, end = time_series_local_end_date , freq='h', tz = time_zone)
+    # print(f'time_series -- > {linked_contract.start_date} --- {linked_contract.end_date}')
     forecast_df = pd.DataFrame(time_series, columns = ['utc'])
     forecast_df['weekday'] = forecast_df['utc'].apply(lambda x: x.strftime('%A'))
     forecast_df['hour'] = forecast_df['utc'].apply(lambda x: x.hour)
@@ -752,6 +758,7 @@ def create_forecast_algo(measuring_type_id, curr_tariff, itn, old_subcontract_la
             else:                 
                 forecast_df['forecast_vol'] = Decimal(str(forecast_vol))
             print(f'in NON direct {forecast_df.head()}')
+            print(f'in NON direct {forecast_df.tail()}')
 
         forecast_df.set_index('utc', inplace = True)
         forecast_df.index = forecast_df.index.tz_convert('UTC').tz_localize(None)
@@ -769,7 +776,7 @@ def create_forecast_algo(measuring_type_id, curr_tariff, itn, old_subcontract_la
         forecast_df.reset_index(inplace = True)
 
         forecast_df.rename(columns={'index':'utc'}, inplace = True)  
-        print(f'last\n {forecast_df.head()}')
+        print(f'last\n {forecast_df.head()} \n{forecast_df.tail()}')
         forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]    
         update_or_insert(forecast_df, ItnScheduleTemp.__table__.name)
         # print(f'from create_forcast_algo \n{forecast_df}')
@@ -786,6 +793,7 @@ def validate_input_df(df):
     # print(f'Start valid idx --> {start_idx}\n End valid idx ---> {end_idx}')
     df = df[start_idx:end_idx+1].copy()
     df = df.rename(columns=lambda x: x.strip())
+    df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
     
     return df
 
@@ -864,6 +872,7 @@ def create_df_from_integra_csv(csv_file):
     dtype_dic= {'BULSTAT': str, 'TaxNum' : str, 'DocNumber' : str}
     # raw_df = pd.read_csv(csv_file, sep = '|', converters={'BULSTAT': lambda x: str(x),'TaxNum': lambda x: str(x)}) 
     raw_df = pd.read_csv(csv_file, sep = '|', dtype = dtype_dic) 
+    print(f'{raw_df}')
     appl_numbers = sorted(list(set(raw_df[raw_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ']['DocNumber'])))
     
     df = raw_df[raw_df['DocNumber'].isin(appl_numbers)]    

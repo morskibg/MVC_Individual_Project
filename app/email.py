@@ -20,7 +20,7 @@ def send_email(recipients, file_data, subject = "From GED automated invoice send
     msg.html = html_body
 
     for curr_file in file_data:
-
+        print(f'curr_file --- {curr_file}')
         path = curr_file[0]
         ###### modifying inv reference file name to remove cyrillic letters 
         try:
@@ -39,8 +39,7 @@ def send_email(recipients, file_data, subject = "From GED automated invoice send
             return
         
 
-    Thread(target=send_async_email,
-        args=(current_app._get_current_object(), msg)).start()
+    Thread(target=send_async_email,args=(current_app._get_current_object(), msg)).start()
 
     if len(file_data) > 1:
         flash(f'Invoice {file_data[0][1]} and {file_data[1][1]} were sent to: {recipients} has been sent ', 'success')

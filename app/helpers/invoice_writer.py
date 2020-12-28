@@ -715,7 +715,7 @@ def ref_num_injector(raw_df):
         ws['A4'].alignment = Alignment(wrap_text=True,horizontal='center')
         wb.save(filename)
         
-def create_invoices(raw_df):
+def create_invoices(raw_df, is_modify = False):
 
 
     fonts_init()
@@ -742,6 +742,7 @@ def create_invoices(raw_df):
         invoice.create_notes()
         invoice.save()
         # invoice.upload_to_db()
-        ref_num_injector(df)
-        invoice.upload_to_db()
+        if not is_modify:
+            ref_num_injector(df)
+            invoice.upload_to_db()
 

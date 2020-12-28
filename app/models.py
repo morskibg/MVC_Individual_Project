@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import login
+from app import app
 
 
 
@@ -20,6 +21,7 @@ class BaseModel(db.Model):
         if self not in db.session:
             db.session.add(self)
         db.session.commit()
+        print(f'commited to db')
 
     def update(self, data: dict):
         for field, value in data.items():
@@ -109,8 +111,9 @@ class Contract(BaseModel):
     
     def __str__(self):
         from app.helpers.helper_functions import convert_date_from_utc
-        date_eet = convert_date_from_utc('EET',self.signing_date)
-        return f'{self.internal_id} - {self.contractor.name} - {date_eet}'
+        start_date_eet = convert_date_from_utc('EET',self.start_date)
+        end_date_eet = convert_date_from_utc('EET',self.end_date)
+        return f'{self.internal_id} - {self.contractor.name} - {start_date_eet} - {end_date_eet}'
 
     def __repr__(self):
         return '<Contract :internal_id - {},  contractor_id - {}, {}, {}, {}, {}, {}, {}, {}, {}, {}>'\
@@ -262,6 +265,18 @@ class InvoiceGroup(BaseModel):
     contractor = db.relationship('Contractor', back_populates = 'invoice_groups')
     sub_contracts = db.relationship("SubContract", back_populates="invoice_group", lazy="dynamic")
 
+    def __rep_for_mails__(self):
+
+        from app.helpers.helper_function_excel_writer import generate_num_and_name
+        email = Mail.query.filter(Mail.id == self.email_id).first().name
+        first_digit = app.config['EPAY_NUM_FIRST_DIGIT']
+        curr_contractor = Contractor.query.filter(Contractor.id == self.contractor_id).first()
+        acc_411 = curr_contractor.acc_411
+        name = curr_contractor.name
+        epay_num, epay_name = generate_num_and_name(first_digit, acc_411, self.name, name)
+        return f'{epay_num} - {epay_name} - {self.name} - {email}'
+
+
     def __str__(self):
 
         email = Mail.query.filter(Mail.id == self.email_id).first().name
@@ -345,7 +360,7 @@ class ItnSchedule(BaseModel):
     
     
     def __repr__(self):
-        return '<itn: {}, utc: {}, forecast_vol: {}, consumption_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.consumption_vol, self.price)
+        return '<itn: {}, utc: {}, forecast_vol: {}, consumption_vol: {}, price: {}, tariff_id: {}>'.format(self.itn, self.utc, self.forecast_vol, self.consumption_vol, self.price, self.tariff_id)
 
     @staticmethod
     def generate_bulk_list(schedule_df):
@@ -356,7 +371,7 @@ class ItnSchedule(BaseModel):
 
     @classmethod
     def autoinsert_new(cls, mapper, connection, target):        
-        
+        print(f'in autoinsert_new')
         sub_contract = target        
         schedule_df = pd.read_sql(ItnScheduleTemp.query \
             .filter(ItnScheduleTemp.itn == sub_contract.itn, ItnScheduleTemp.utc >= sub_contract.start_date, ItnScheduleTemp.utc <= sub_contract.end_date)\
@@ -376,25 +391,49 @@ class ItnSchedule(BaseModel):
                 continue
             changes[attr.key] = hist.added
 
-        # print('from update callback', file = sys.stdout)
-        # print(changes, file = sys.stdout)
+        print(f'from update callback \n{changes}')
+        
         if changes.get('start_date') is not None:
-
             hist = sa.inspect(target).attrs.start_date.history            
-            # print(f'from update start_date {target.start_date} <----> {target.end_date}', file = sys.stdout)
-            # print(f'hist_deleted ---> {hist.deleted}')
+            print(f'from update start_date {target.start_date} <----> {target.end_date}')
+            print(f'hist_deleted ---> {hist.deleted}')
             delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc >= hist.deleted) & (ItnSchedule.utc < target.start_date) & (ItnSchedule.itn == target.itn))
             connection.execute(delete_sch)
-        elif changes.get('end_date') is not None:
 
+        elif changes.get('end_date') is not None:
             hist = sa.inspect(target).attrs.end_date.history
-            # print('from update end_date', file = sys.stdout)
-            # print(f'hist_deleted ---> {hist.deleted}')
-            # print(f'from update end_date {target.start_date} <----> {target.end_date}', file = sys.stdout)
+            print(f'from update end_date')
+            print(f'hist_deleted ---> {hist.deleted}')
+            print(f'from update end_date {target.start_date} <----> {target.end_date}')
             delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.utc <= hist.deleted) & (ItnSchedule.utc > target.end_date) & (ItnSchedule.itn == target.itn))
             connection.execute(delete_sch)
         
         # print('deleted in shedule successiful', file = sys.stdout)
+    
+    # @classmethod
+    # def autoupdate_from_contract(cls, mapper, connection, target):
+
+    #     state = db.inspect(target)
+    #     changes = {}
+
+    #     for attr in state.attrs:
+    #         hist = attr.load_history()
+    #         if not hist.has_changes():
+    #             continue
+    #         changes[attr.key] = hist.added
+        
+    #     if changes.get('end_date') is not None:
+    #         print(f'from autoupdate_from_contract callback \n{changes}')
+    #         hist = sa.inspect(target).attrs.end_date.history
+    #         date_before_update = hist.deleted[0]
+
+    #         contract = target
+    #         if contract.end_date < date_before_update:
+    #             subs = SubContract.query.filter(SubContract.contract_id == contract.id).all()    
+    #             for sub in subs:
+    #                 sub.update({'end_date':contract.end_date})
+
+
 
     @classmethod
     def before_delete(cls, mapper, connection, target):
@@ -522,6 +561,7 @@ class Invoice(BaseModel):
 db.event.listen(SubContract, 'after_insert', ItnSchedule.autoinsert_new)
 db.event.listen(SubContract, 'after_update', ItnSchedule.autoupdate_existing)
 db.event.listen(SubContract, 'before_delete', ItnSchedule.before_delete)
+# db.event.listen(Contract, 'after_update', ItnSchedule.autoupdate_from_contract)
 # db.event.listen(IbexData, 'after_update', ItnSchedule.autoupdate_prices)
 # db.event.listen(Contract, 'after_delete', ItnSchedule.after_delete)
 

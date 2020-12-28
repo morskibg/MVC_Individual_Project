@@ -26,3 +26,4 @@ class Config(object):
 	ERP_IMPORT_MISSING_NAME = 'erp_upload_log.xlsx'
 	BGPOSHTI_FOR_UPLOAD_PATH = 'static/bg_post_for_upload'
 	E_PRO_STP_SETTELMENT = '021CIN03.xlsx'
+	EPAY_NUM_FIRST_DIGIT = 1

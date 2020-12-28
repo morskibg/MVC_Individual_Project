@@ -19,7 +19,7 @@ from app.helpers.helper_functions_queries import (
                                         get_itn_with_grid_services_sub,
                                         get_grid_services_sub,
                                         get_summary_records,
-                                        # get_summary_records_non_stp,
+                                        is_spot_inv_group,
                                         get_summary_records_spot,
                                         get_contractors_names_and_411,
                                         get_stp_itn_by_inv_group_for_period_spot_sub,
@@ -181,8 +181,8 @@ def appned_df(df, temp_df):
         df = df.append(temp_df, ignore_index=True)
     return df
 
-def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price = None):
-    
+# def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path = None, inetgra_src_path, weighted_price = None):
+def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date,  weighted_price = None):    
     df = pd.DataFrame()
     inv_group_str = None
     if len(summary_stp) != 0:
@@ -316,3 +316,38 @@ def log_writer(path, df, unique_columns):
             else:
                 print(f'Columns mismatch ! \nPointed file has: {curr_file.columns}. Data to add has: {df.columns} columns !\nAborting !')
 
+def create_inv_refs_by_inv_groups(inv_groups, start_date, end_date, weighted_price):
+    counter = 0
+    result_df = None
+    # invoice_ref_path = inetgra_src_path = None
+    for inv_group_name in inv_groups:
+                
+        # print(f'{inv_group_name}')
+        start_date_utc, end_date_utc, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, start_date, end_date)
+        print(f'{inv_group_name}-{end_date_utc}-{invoice_start_date}-{invoice_end_date}')
+
+        ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
+
+        if ibex_last_valid_date < dt.datetime.strptime(end_date, '%Y-%m-%d'):
+            update_ibex_data(start_date, end_date)
+            update_schedule_prices(start_date, end_date)
+
+        if start_date_utc is None:
+            print(f'There is not data for {inv_group_name}, for period {start_date} - {end_date}')
+            continue
+
+        is_spot = is_spot_inv_group([inv_group_name], start_date_utc, end_date_utc)
+        
+        if is_spot:
+            counter += 1
+            
+            summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, weighted_price)
+            create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, weighted_price)
+            
+        else:
+            counter += 1
+            
+            summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
+            create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
+
+    return counter

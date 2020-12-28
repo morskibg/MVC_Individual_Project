@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+<div class='col-md-1'></div>             
+<div class='col-md-10'>                      
+    <h1>{{header|safe}}</h1> 
+   
+    {{ wtf.quick_form(form, button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='ask_confirm_form') }}
+    <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="ask_confirm('ask_confirm_form')">
+
+</div> 
+<div class='col-md-1'> </div> 
+ 
+{% endblock %}
+
+{% block form_scripts %}
+
+    <script type="text/javascript">
+        // const contract_tk = document.getElementById('contract_tk');
+        
+        const search_field = document.getElementById('email_search');
+        const values = document.querySelectorAll('option') 
+        const inv_goups_mails = document.getElementById('inv_goups_mails');
+        const new_mail = document.getElementById('new_mail');
+        const msg_button = document.getElementById('msg_close'); 
+        
+
+        search_field.onkeyup = () =>{  
+            
+            if(msg_button !== null){
+                msg_button.click()
+            }           
+            new_mail.value=''
+            let counter = 0;
+            const key_word = search_field.value.toLowerCase()                   
+            values.forEach(value => {
+                counter++;
+                if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                    value.style = 'display:none'
+                    counter--;            
+                }else{
+                    value.style = 'block'                
+                }                
+            });
+            if(counter === 1){
+                
+                inv_goups_mails.value = ''
+            };
+            inv_goups_mails.size = counter;            
+        };
+        
+        inv_goups_mails.ondblclick = () =>{  
+
+            if(msg_button !== null){
+                msg_button.click()
+            } 
+                        
+            const selected = inv_goups_mails.value
+            
+            values.forEach(value => {
+                if(value.value === selected){
+                    tokens = value.firstChild.textContent.split(' - ')                    
+                    new_mail.value = tokens[tokens.length - 1]
+                };
+            });                                            
+        }
+
+    </script>
+{% endblock %}

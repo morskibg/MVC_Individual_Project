@@ -6,22 +6,25 @@ import time,re
 import sys, pytz, datetime as dt
 import pandas as pd
 from zipfile import ZipFile
-from flask import render_template, flash, redirect, url_for, request, send_file,send_from_directory
+from flask import render_template, flash, redirect, url_for, request, send_file,send_from_directory, jsonify
 from sqlalchemy import extract, or_
+from sqlalchemy.orm import aliased
 from app import app
 from app.forms import (
-    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm, AdditionalReports, RedactEmailForm,
-    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm, MonthlyReportErpForm, PostForm,
-    UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm,MonthlyReportOptionsForm)
+    LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm, AdditionalReports, RedactEmailForm, EmailsOptionsForm,
+    UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm, MonthlyReportErpForm, PostForm, RedactContractForm,
+    UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm,MonthlyReportOptionsForm, ContarctDataForm,
+    ItnCosumptionDeletion, ModifyInvoiceForm, RedactContractorForm, ContarctorDataForm, ModifyForm, ModifyInvGroupForm, ModifyItn)
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import *
 
 from werkzeug.urls import url_parse
 
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename 
+from werkzeug.datastructures import MultiDict
 import calendar
 
-
+from app.helpers.helper_function_excel_writer import generate_num_and_name
 
 from app.helpers.helper_functions import (get_contract_by_internal_id,
                                  convert_date_to_utc,
@@ -90,7 +93,7 @@ from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,ins
                                       get_missing_extra_points_by_erp_for_period, create_report_by_itn,                     
                                       
 )
-from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot,
+from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot, create_inv_refs_by_inv_groups,
                                          get_summary_spot_df, get_weighted_price, create_utc_dates,
                                          get_weighted_price, create_excel_files, appned_df, create_full_ref_for_all_itn)
 
@@ -105,7 +108,15 @@ MEASURE_MAP_DICT = {
             }
 MONEY_ROUND = 9
 
+@app.context_processor
+def inject_is_test_base():
 
+    base_name = app.config['SQLALCHEMY_DATABASE_URI']
+    # base_name = base_name.split('/')[3]
+    # base_name = base_name.split('?')[0]
+    is_test_base = False if base_name.find('Ged_EU_v1') != -1 else True
+
+    return dict(is_test_base = is_test_base)
 
 @app.route('/additional_reports', methods=['GET', 'POST'])
 def add_reports():
@@ -142,28 +153,9 @@ def monthly_erp():
             return redirect(url_for('monthly_report_by_erp', erp = form.erp.data, start_date = form.start_date.data, 
                             end_date = form.end_date.data, contract_type = form.contract_type.data, is_mixed = form.include_all.data,  **request.args))
 
-    return render_template('quick_template.html', title='Monthly reports filter', form=form, header = 'Monthly report filters')
+    return render_template('quick_template.html', title='Monthly reports filter', form=form, header = 'Monthly report filters', need_dt_picker = True)
 
-@app.route('/redact_email', methods=['GET', 'POST'])
-@login_required
-def redact_email():
-    form = RedactEmailForm()
-    
-    if form.validate_on_submit():
-        res = form.inv_goups_mails.data
-        new_mail = form.new_mail.data
-        mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
-        if mail_to_add is None:
-            mail_to_add = Mail(name = new_mail)
-            mail_to_add.save()
-            print(f'adding new mail {mail_to_add}')
-            mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
-        curr_inv_group = form.inv_goups_mails.data
-        curr_inv_group.update({'email_id':mail_to_add.id})
-        print(f'Invoicing group {curr_inv_group.name} will mail to {mail_to_add.name} !')
-        return redirect(url_for('redact_email'))
 
-    return render_template('quick_template_wider.html', title='Readcting Email', form=form, header = 'Redacting EMAILS')
 
 @app.route('/bgpost', methods=['GET', 'POST'])
 @login_required
@@ -184,34 +176,204 @@ def test():
     form = TestForm()
     # summary_df = pd.DataFrame()
     # form = PostForm()
+    need_dt_picker = True
     if form.validate_on_submit():
-
-        metas = ItnMeta.query.all()
-        count = 1
-        for itn in metas:
-            itn.delete()
-            print(f'{count} - {itn} deleted')
-            count+=1
         
+        # metas = ItnMeta.query.all()
+        # count = 1
+        # for itn in metas:
+        #     itn.delete()
+        #     print(f'{count} - {itn} deleted')
+        #     count+=1
+
+        # rec = (
+        #     db.session.query(
+        #         InvoiceGroup.name, InvoiceGroup.description, Mail.name, Contractor.name, Contractor.acc_411
+        #     )
+        #     .join(Mail, Mail.id == InvoiceGroup.email_id)
+        #     .join(Contractor, Contractor.id == InvoiceGroup.contractor_id)
+        #     .all()
+
+        # )
+        # mail_df = pd.DataFrame.from_records(rec, columns=rec[0].keys())
+        # print(f'{mail_df}')
+        # mail_df.to_excel('mails_last.xlsx')
         # erp_invoice_df =  pd.read_sql(ErpInvoice.query.statement, db.session.bind) 
         # df = erp_invoice_df.drop_duplicates(subset=['composite_key'], keep = 'last')
         # print(f'{erp_invoice_df.shape}')
         # print(f'{df.shape}')
-        # erp_name = 'E-PRO'
-        # start_date = convert_date_to_utc('EET',form.start_date.data)   
-        # end_date = convert_date_to_utc('EET',form.end_date.data) 
-        # # start_date = convert_date_to_utc('EET','2020-10-01')   
-        # # end_date = convert_date_to_utc('EET','2020-10-31') 
-        # end_date = end_date + dt.timedelta(hours = 23)
-        # invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
-        # invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
+        erp_name = 'CEZ'
+        start_date = convert_date_to_utc('EET',form.start_date.data)   
+        end_date = convert_date_to_utc('EET',form.end_date.data) 
+        # start_date = convert_date_to_utc('EET','2020-10-01')   
+        # end_date = convert_date_to_utc('EET','2020-10-31') 
+        end_date = end_date + dt.timedelta(hours = 23)
+        invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
+        invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
 
-        
+        inv_name_part = form.contract_tk.data
+
+        pattern = re.compile(r"^411-[\d]{1,3}-[\d]{1,5}_[\d]{1,3}$")
+        result = pattern.match(inv_name_part)
+        if result is None:
+            print(f'no matching') 
+        else:
+            print(f'matching') 
+
+        # inv_groups = (
+        #     db.session.query(
+        #         InvoiceGroup.name
+        #     )
+        #     .filter(InvoiceGroup.name.like("%" + inv_name_part + "%"))
+        #     .order_by(InvoiceGroup.name)
+        #     .all()
+        # )
+        # suffix = inv_groups[-1][0].split('_')[1]
+        # # inv_groups = [x[0] for x in inv_groups]
+        # # contract = Contract.query.filter(Contract.internal_id == 'ТК706').first()
+        # print(f'dddd - {suffix}')
+
+        # contract_id = 550
+       
+        # groups = (
+        #     db.session.query
+        #         (InvoiceGroup.name.label('invoice_group'), InvoiceGroup.description.label('invoice_group_description'), Mail.name.label('email'))
+        #     .join(Mail,Mail.id == InvoiceGroup.email_id)            
+        #     .join(Contract, Contract.contractor_id == InvoiceGroup.contractor_id)
+        #     .filter(Contract.id == contract_id)
+        #     .all()
+        # )    
+        # groups_arr = []
+        # for group in groups:
+        #     group_obj = {}
+        #     group_obj['invoice_group'] =  group[0]  
+        #     group_obj['invoice_group_description'] =  group[1]
+        #     group_obj['email'] =  group[2]
+        #     groups_arr.append(group_obj)
+        # return jsonify({'groups':groups_arr})
+
+        # df1 = pd.DataFrame.from_records(groups, columns = groups[0].keys())
+        # res = df1.to_json(orient='records',force_ascii=False)
+        # print(f'{jsonify(groups_arr)}')
+
+        # print(f'{parent_contractor}')
+        # rec = (
+        #     db.session.query(
+        #          Contract.internal_id, Contractor.name, Contractor.acc_411,Contract.end_date
+        #     )
+        #     .join(Contractor, Contractor.id == Contract.contractor_id)
+        #     .filter(Contract.end_date == end_date)
+        #     .all()
+        # )
+
+        # rec = (
+        #     db.session.query(
+        #         SubContract.itn, MeasuringType.code.label('measuring_type'), Erp.name.label('erp'),
+        #          Contractor.name.label('contractor_name'), Contractor.acc_411, ContractType.name.label('contract_type'),
+        #          InvoiceGroup.name.label('invoice_group_name'), InvoiceGroup.description.label('invoice_group_description'),
+        #          Tariff.price_day, Tariff.price_night
+        #     )
+        #     .join(Contract,Contract.id == SubContract.contract_id)
+        #     .join(Contractor,Contractor.id == Contract.contractor_id)
+        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)
+        #     .join(MeasuringType, MeasuringType.id == SubContract.measuring_type_id)
+        #     .join(ContractType, ContractType.id == Contract.contract_type_id)
+        #     .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
+        #     .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
+        #     .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
+        #     .filter(ItnSchedule.utc == end_date)
+        #     .filter(SubContract.end_date == end_date)
+        #     # .filter(ContractType.name == 'Mass_Market')
+        #     # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #     .all()
+        # )
+        ##############################################################################################
+        # alias_for_parent_contractor = aliased(Contractor)
+        # rec = (
+        #     db.session.query(
+        #         Contractor.id.label('contractor_id'),Contractor.acc_411.label('411-3'),Contract.internal_id.label('internal_id'),Contractor.name.label('contractor'),
+        #         Contract.signing_date, Contract.start_date, Contract.end_date, Contract.duration_in_days.label('duration'),
+        #         Contract.invoicing_interval, Contract.maturity_interval, ContractType.name, Contract.is_work_days.label('is_work_day'),
+        #         Contract.automatic_renewal_interval, Contract.collateral_warranty, Contract.notes, TimeZone.code, alias_for_parent_contractor.acc_411.label('parent_contractor_411'),
+        #         InvoiceGroup.name.label('invoice_group_name'), InvoiceGroup.description.label('invoice_group_description'), SubContract.zko,
+        #         SubContract.akciz, SubContract.has_grid_services, SubContract.has_spot_price, SubContract.has_balancing, Tariff.name.label('tariff_name'),Tariff.price_day, Tariff.price_night,
+        #         SubContract.make_invoice, Tariff.lower_limit, Tariff.upper_limit 
+        #     )
+        #     .join(Contract,Contract.contractor_id == Contractor.id)
+        #     .outerjoin(alias_for_parent_contractor,alias_for_parent_contractor.id == Contractor.parent_id)
+        #     .join(TimeZone,TimeZone.id == Contract.time_zone_id)
+        #     .join(SubContract,SubContract.contract_id == Contract.id)
+        #     # .join(ItnMeta, ItnMeta.itn == SubContract.itn)
+        #     # .join(Erp, Erp.id == ItnMeta.erp_id)
+        #     # .join(MeasuringType, MeasuringType.id == SubContract.measuring_type_id)
+        #     .join(ContractType, ContractType.id == Contract.contract_type_id)
+        #     .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
+        #     .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
+        #     .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
+        #     .filter(ItnSchedule.utc == end_date)
+        #     .filter(SubContract.end_date == end_date)
+        #     .distinct(InvoiceGroup.name)
+        #     .order_by(Contractor.id)
+        #     # .filter(ContractType.name == 'Mass_Market')
+        #     # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #     .all()
+        # )
+        # temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
+        # temp_df.to_excel('temp/linked_template_12_2020.xlsx')
+        # print(f'{temp_df}')
+        ########################################################################################################
+        # inv_groups = db.session.query(InvoiceGroup.name).all()
+        # inv_groups = [x[0] for x in inv_groups]
+        # a = '411-3-441_1' in inv_groups
+        # print(f'{a}')
+        # s =  SubContract.query.filter(SubContract.contract_id == 749).all()
+        # a = [x.itn for x in s]
+        # print(f'{a}')
+        # all_itns = (
+        #     db.session.query(
+        #         SubContract.itn
+        #     )            
+        #     .join(ItnSchedule, ItnSchedule.itn == SubContract.itn)
+        #     .filter(SubContract.start_date < "2020-11-30 22:00:00",SubContract.end_date >= "2020-11-30 22:00:00")            
+        #     .distinct(SubContract.itn)
+        #     .all()
+        # )
+        # all_itns = [x[0] for x in all_itns]
+
+        # rec = (
+        #     db.session.query(
+        #         SubContract.itn
+        #     )            
+        #     .join(ItnSchedule, ItnSchedule.itn == SubContract.itn)
+        #     .filter(SubContract.start_date < "2020-11-30 22:00:00",SubContract.end_date >= "2020-11-30 22:00:00")
+        #     .filter(ItnSchedule.utc == SubContract.end_date)
+        #     .distinct(SubContract.itn)
+        #     .all()
+        # )
+        # correct_itns = [x[0] for x in rec]
+        # diff = list(set(all_itns) - set(correct_itns))
+        # # sched = (
+        # #     db.session.query(
+        # #         ItnSchedule.itn
+        # #     )
+        # #     .filter(ItnSchedule.itn.in_(itns))
+        # #     .filter(ItnSchedule.utc >= "2020-11-30 22:00:00")
+        # #     .distinct(ItnSchedule.itn)
+        # #     .all()
+        # # )
+        # # correct = [x[0] for x in sched]
+        # print(f'total {diff}')
+        # print(f'correct {len(correct)}')
         # get_missing_extra_points_by_erp_for_period(erp_name, start_date, end_date)
 
         # grid_db_itns = get_grid_itns_by_erp_for_period(erp_name, start_date, end_date)
-        # non_grid_db_itns = get_non_grid_itns_by_erp_for_period(erp_name, start_date, end_date)
+        # # non_grid_db_itns = get_non_grid_itns_by_erp_for_period(erp_name, start_date, end_date)
         # incomming_grid_itns = get_incomming_grid_itns(erp_name, start_date, end_date)
+        # a = list(set(grid_db_itns) - set(incomming_grid_itns))
+        # print(f'{a}')
+
+
         # incomming_non_grid_itns = get_incomming_non_grid_itns(erp_name, start_date, end_date)
         # a = "32Z470001214089K" in non_grid_db_itns
         # print(a)
@@ -597,33 +759,12 @@ def test():
             
        
 
-    return render_template('test.html', title='TEST', form=form)
+    return render_template('test.html', title='TEST', form=form, need_dt_picker=need_dt_picker)
 
 @app.route('/mailing', methods=['GET', 'POST'])
 @login_required
 def mailing():
-    form = MailForm()
-    # # form.attachment_files.choices = sorted([(x[0],x[1]) for x in create_list_of_tuples(INV_REFS_PATH, PDF_INVOICES_PATH)])
-    # if form.validate_on_submit():
-    #     if form.submit.data:
-    #         selected_invoices = form.attachment_files.data
-    #         for inv in selected_invoices:
-    #             contractor =  Contractor.query.filter(Contractor.id == inv.contractor_id).first()
-    #             mails = contractor.email.split(';')
-    #             mails = [x for x in mails]
-    #             mails.append('t.kalaidjieva@grandenergy.net')
-    #             ref_file_name = inv.ref_file_name 
-    #             inv_file_name = str(inv.id)+ '.pdf'
-    #             # file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
-    #             if form.send_excel.data:
-    #                 file_data = [(os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
-    #             elif form.send_pdf.data:
-    #                 file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name)]
-    #             else:
-    #                 file_data = [(os.path.join(app.root_path, app.config['PDF_INVOICES_PATH']), inv_file_name), (os.path.join(app.root_path, app.config['INV_REFS_PATH']), ref_file_name, inv_file_name)]
-                
-    #             send_email(mails, file_data, form.subject.data)   
-    # 
+    form = MailForm()    
     if form.validate_on_submit():
         if form.submit.data:
             selected_invoices = form.attachment_files.data
@@ -635,7 +776,10 @@ def mailing():
                 
                 mails =[x for x in raw_mails.split(';')]
                 print(f'{mails}')
-                mails.append('openmarket@grandenergy.net')
+                if form.include_open_market.data:
+                    mails.append('openmarket@grandenergy.net')
+                else:
+                    print(f'openmarket not included')
                 ref_file_name = inv.ref_file_name 
                 inv_file_name = str(inv.id)+ '.pdf'
                 # file_data = [(PDF_INVOICES_PATH, inv_file_name), (INV_REFS_PATH, ref_file_name, inv_file_name)]
@@ -650,12 +794,18 @@ def mailing():
     
 
     return render_template('mail.html', title='TEST', form=form)
+    # return render_template('test_redacting_emails.html', title='TEST', form=form)
 
 @app.route('/create_invoice', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
     
     form = InvoiceForm()
+
+    if form.modify_invoice.data:
+        # print(f'{form.invoicing_list.data[0]}')
+        
+        return redirect(url_for('modify_invoice', invoice_num = form.invoicing_list.data[0], **request.args))
     
     if form.create_invoice.data:
 
@@ -668,13 +818,15 @@ def create_invoice():
             create_invoices(redacted_df)            
             return redirect(url_for('create_invoice'))   
 
-    if form.validate_on_submit():         
+    if form.validate_on_submit(): 
+               
         if form.upload_csv.data:
             try:
                 invoice_df = create_df_from_integra_csv(request.files.get('file_integra_csv'))
                 
             except:
                 flash(f'Wrong or no csv file is choosen. Abort !','danger')
+               
             else:
                 full_path = os.path.join(os.path.join(app.root_path, app.config['TEMP_INVOICE_PATH']),app.config['TEMP_INVOICE_NAME'])
                 # delete_files(os.path.join(app.root_path, app.config['TEMP_INVOICE_PATH']), app.config['TEMP_INVOICE_NAME'], 'xlsx', True)
@@ -682,7 +834,8 @@ def create_invoice():
                             
                 form.invoicing_list.choices = parse_integra_csv(invoice_df)      
 
-    return render_template('create_invoice.html', title='Invoice Creation', form=form)
+    # return render_template('create_invoice.html', title='Invoice Creation', form=form)
+    return render_template('quick_template_wider.html', title='Invoice Creation', form=form)
 
 
 @app.route('/erp', methods=['GET', 'POST'])
@@ -745,76 +898,40 @@ def erp():
 @app.route('/monthly_report', methods=['GET', 'POST'])
 @login_required
 def monthly_report():
+    # need_dt_picker = True
     form = MonthlyReportForm()
     form.ref_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']),'xlsx')])
-    if form.validate_on_submit():
-        
-        # contractors = (db.session
-        #     .query(Contract.id, Contractor.name, Contractor.vat_number, Contractor.address, Contractor.acc_411)
-        #         .join(Contractor,Contractor.id == Contract.contractor_id)
-        #         .join(ContractType,ContractType.id == Contract.contract_type_id)
-        #         .filter(ContractType.name == "Mass_Market")
-        #         .distinct(Contractor.name)
-        #         .all())
-        # temp_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())  
-        # temp_df.to_excel('temp/contractors.xlsx')   
-
-    
-
-        start = time.time()
-
+    if form.validate_on_submit(): 
         if form.submit_delete.data:
+
             delete_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']), form.ref_files.data, form.delete_all.data)
-            return redirect(url_for('monthly_report'))
-           
-
+            return redirect(url_for('monthly_report')) 
+            
         elif form.submit.data:
+            counter = 0
             weighted_price = None
+            if len(form.contracts.data) >0:
+                for curr_contract in form.contracts.data: 
+                    print(f'CURR CONTRACT - {curr_contract.internal_id}')         
+                    time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == curr_contract.internal_id).first().code
+                    start_date = convert_date_to_utc(time_zone, form.start_date.data)
+                    end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+                    inv_groups = get_list_inv_groups_by_contract(curr_contract.internal_id, start_date, end_date)
+                    weighted_price = get_weighted_price(inv_groups, start_date, end_date)
+                    print(f'weighted_price -- {weighted_price}')
+                    counter += create_inv_refs_by_inv_groups(inv_groups, form.start_date.data, form.end_date.data, weighted_price)
+                flash(f'{counter} invoice references was created !','info')    
+            else:                
+                inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]                 
+                counter = create_inv_refs_by_inv_groups(inv_groups, form.start_date.data, form.end_date.data, weighted_price)   
+                flash(f'{counter} invoice references was created !','info')
 
-            if form.by_contract.data:            
-                time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data.internal_id).first().code
-                start_date = convert_date_to_utc(time_zone, form.start_date.data)
-                end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-                inv_groups = get_list_inv_groups_by_contract(form.contracts.data.internal_id, start_date, end_date)
-                weighted_price = get_weighted_price(inv_groups, start_date, end_date)
-                # print(f'weighted_price -- {weighted_price}')
-            else:            
-                inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]   
-
-            result_df = None
-
-            invoice_ref_path = inetgra_src_path = None
-
-            for inv_group_name in inv_groups:
-                # print(f'{inv_group_name}')
-                start_date, end_date, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, form.start_date.data, form.end_date.data)
-
-                ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
-
-                if ibex_last_valid_date < end_date:
-                    update_ibex_data(form.start_date.data, form.end_date.data)
-                    update_schedule_prices(start_date, end_date)
-
-                if start_date is None:
-                    print(f'There is not data for {inv_group_name}, for period {form.start_date.data} - {form.end_date.data}')
-                    continue
-
-                is_spot = is_spot_inv_group([inv_group_name], start_date, end_date)
-                
-                if is_spot:
-                    # print(f'in spot {weighted_price}')
-                    summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date, weighted_price)
-                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
-                    
-                else:
-                    summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date, end_date, invoice_start_date, invoice_end_date)
-                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
             return redirect(url_for('monthly_report'))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
-    return render_template('monthly_report.html', title='Monthly Report', form=form)
+    return render_template('monthly_report.html', title='Monthly Report', form=form, need_dt_picker = True)
 
 @app.route('/create_excel_for_integra', methods=['GET', 'POST'])
 @login_required
@@ -888,6 +1005,8 @@ def upload_initial_data():
             raw_contractor_df.rename(columns = {'Name':'name', 'EIC':'eic','Address':'address','Vat_Number':'vat_number','E_Mail':'email','Acc_411':'acc_411'}, inplace = True)
             raw_contractor_df = raw_contractor_df.replace( ':','-', regex=True)
             raw_contractor_df = raw_contractor_df.replace( ',',';', regex=True)
+            raw_contractor_df = raw_contractor_df.replace( '"','', regex=True)
+            raw_contractor_df = raw_contractor_df.replace( "'",'', regex=True)
            
             update_or_insert(raw_contractor_df, Contractor.__table__.name)
 
@@ -1286,8 +1405,19 @@ def add_invoicing_group():
         if curr_inv_group is not None:
             flash('Such invoicing group already exist','error')
         else:
-            curr_contractor_id = curr_contract.contractor.id                               
-            curr_inv_group = InvoiceGroup(name = form.invoice_group_name.data, contractor_id = curr_contractor_id)
+            acc_411 = form.invoice_group_name.data
+            acc_411 = acc_411.split('_')[0]
+            curr_contractor_id = Contractor.query.filter(Contractor.acc_411 == acc_411).first().id    
+            # mails = form.invoice_group_emails.data 
+            new_mail = form.invoice_group_emails.data
+            mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
+            if mail_to_add is None:
+                mail_to_add = Mail(name = new_mail)
+                mail_to_add.save()
+                print(f'adding new mail {mail_to_add}')
+                mail_to_add = Mail.query.filter(Mail.name == new_mail).first()                         
+            curr_inv_group = InvoiceGroup(name = form.invoice_group_name.data, contractor_id = curr_contractor_id, description = form.invoice_group_description.data, email_id = mail_to_add.id)
+            print(f'{curr_inv_group}')
             curr_inv_group.save()
             return redirect(url_for('add_invoicing_group'))
 
@@ -1601,13 +1731,17 @@ def upload_linked_contracts():
                 akciz = round(Decimal(str(row['akciz'])) / Decimal('1000'), MONEY_ROUND)                
                 start_date = convert_date_to_utc(row['time_zone'].code, row['start_date'].strftime(t_format),t_format) 
                 end_date = convert_date_to_utc(row['time_zone'].code, row['end_date'].strftime(t_format),t_format)
+                parent_contract = get_contract_by_internal_id(row['linked_contract_internal_id'])
+
                 if curr_contract is not None :
                     internal_id = row['internal_id']
-                    flash(f'There is a contract with this internal id {internal_id} ! Skipping !','danger')
-                    print(f'There is a contract with this internal id {internal_id} ! Skipping !')
-                    continue
+                    # flash(f'There is a contract with this internal id {internal_id} ! Skipping !','danger')
+                    print(f'There is a contract with this internal id {internal_id} ! Proceeding itn !')
+                    # continue
+                    apply_linked_collision_function(parent_contract, curr_contract, row['invoice_group_name'], row['invoice_group_description'], zko, akciz, row['has_grid_services'], row['has_spot_price'],
+                                                                                row['has_balancing'], row['tariff_name'], row['price_day'],	row['price_night'], row['make_invoice'], row['lower_limit'], row['upper_limit'])
                 else:
-                    parent_contract = get_contract_by_internal_id(row['linked_contract_internal_id'])
+                    
                     # a = row['linked_contract_internal_id']
                     # print(f'parent_linked_contract \n{parent_linked_contract.internal_id} -- {a}')
 
@@ -1689,15 +1823,16 @@ def create_subcontract():
         form_forecasted_vol = form.forecast_vol.data
         df = pd.read_excel(request.files.get('file_'),sheet_name=None) if request.files.get('file_').filename != '' else None
         
-        forecast_df = validate_forecasting_df(df, form.itn.data.itn) if df is not None else None        
-        
-        applicable_sub_contracts = get_subcontracts_by_itn_and_utc_dates(form.itn.data.itn, form_start_date_utc, form_end_date_utc)
-       
-        if has_overlaping_subcontracts(form.itn.data.itn, form_start_date_utc) and has_overlaping_subcontracts(form.itn.data.itn, form_end_date_utc):
+        forecast_df = validate_forecasting_df(df, form.itn.data) if df is not None else None        
+        # curr_meta = ItnMeta.query.filter(ItnMeta.itn == )
+        applicable_sub_contracts = get_subcontracts_by_itn_and_utc_dates(form.itn.data, form_start_date_utc, form_end_date_utc)
+        print(f'applicable_sub_contracts {applicable_sub_contracts}')
+        print(f'has_spot_price {form.has_spot_price.data}')
+        if has_overlaping_subcontracts(form.itn.data, form_start_date_utc) and has_overlaping_subcontracts(form.itn.data, form_end_date_utc):
             flash('overlaping', 'danger')
 
         else:               
-            new_sub_contract = (SubContract(itn = form.itn.data.itn,
+            new_sub_contract = (SubContract(itn = form.itn.data,
                                     contract_id = form.contract_data.data.id, 
                                     object_name = form.object_name.data,                                    
                                     invoice_group_id = form.invoice_group.data.id, 
@@ -1708,17 +1843,18 @@ def create_subcontract():
                                     akciz = form_akciz, 
                                     has_grid_services = form.has_grid_services.data, 
                                     has_spot_price = form.has_spot_price.data, 
-                                    has_balancing = form.has_balancing.data))                                    
+                                    has_balancing = form.has_balancing.data,
+                                    make_invoice = form.make_invoice.data) )                                   
             
             for curr_subcontract in applicable_sub_contracts:                                  
-                apply_collision_function(new_sub_contract, curr_subcontract, form.measuring_type.data.code, form.itn.data.itn, \
+                apply_collision_function(new_sub_contract, curr_subcontract, form.measuring_type.data.code, form.itn.data, \
                                         form.forecast_vol.data, form_forecast_df, form.start_date.data, curr_contract)
 
             form_day_price = form.single_tariff_price.data if form.day_tariff_price.data == 0 else form.day_tariff_price.data
 
             curr_tariff =  create_tariff(form.tariff_name.data, form_day_price, form.night_tariff_price.data, form.peak_tariff_price.data)
 
-            generate_forecast_schedule(form.measuring_type.data, form.itn.data.itn, form_forecasted_vol, forecast_df, form_start_date_utc, curr_contract, curr_tariff, form_end_date_utc)
+            generate_forecast_schedule(form.measuring_type.data, form.itn.data, form_forecasted_vol, forecast_df, form_start_date_utc, curr_contract, curr_tariff, form.has_spot_price.data, form_end_date_utc)
            
             new_sub_contract.save() 
             
@@ -1815,43 +1951,225 @@ def create_subcontract():
 
     return render_template('create_subcontract.html', title='Create SubContract', form = form)
 
+# @app.route('/modify_contract', methods=['GET', 'POST'])
+# @login_required
+# def modify_contract():
+    
+#     form = RedactContractForm()
+#     if form.validate_on_submit():
+#         contract_id = form.contracts.data.id
+#         return redirect(url_for('modify_selected_contract', contract_id = contract_id, **request.args)) 
 
+#     return render_template('quick_template_wider.html', title='Modify Contract', form=form, header = 'Modifying CONTRACT')
 
+@app.route('/modify_contractor', methods=['GET', 'POST'])
+@login_required
+def modify_contractor():
+    
+    form = RedactContractorForm()
+    if form.validate_on_submit():
+        contractor_id = form.contractors.data[0].id
+        return redirect(url_for('modify_selected_contractor', contractor_id = contractor_id, **request.args)) 
 
-
+    return render_template('modify_contractor.html', title='Modify Contractor', form=form, header = 'Modifying CONTRACTOR')
 
 @app.route('/table', methods=['GET', 'POST'])
 @login_required
 def table():
     return render_template('table.html', title='Table')
 
+@app.route('/modify_contract/<contract_id>', methods=['GET', 'POST'])
+@login_required
+def modify_selected_contract(contract_id):
 
 
+    curr_contract = Contract.query.filter(Contract.id == contract_id).first()           
+    print(f'load current contract -- {curr_contract} - {curr_contract.contract_type_id}')
+    if curr_contract is None:
+            flash(f'There isn\'t an contract with id: {contract_id} ! Aborting !','danger')
+            return redirect(url_for('modify_contract'))
+
+    curr_contractor = Contractor.query.join(Contract, Contract.contractor_id == Contractor.id).filter(Contract.id == contract_id).first()
+
+    # if curr_contract.parent_id != 0:
+    parent_contract = Contract.query.filter(Contract.id == curr_contract.parent_id).first() if curr_contract.parent_id != 0 else None
+
+    if request.method == "GET":
+        print(f'in get')
+        # curr_contractor = Contractor.query.join(Contract, Contract.contractor_id == Contractor.id).filter(Contract.id == contract_id).first()
+        contr_names = [(x.id, x.name) for x in Contractor.query.all()]  
+        # contr_names = sorted(contr_names, key = lambda x: x[1])
+             
+        contr_names.remove((curr_contractor.id, curr_contractor.name))
+        contr_names.insert(0,(curr_contractor.id, curr_contractor.name))
+
+        contracts = Contract.query.filter(Contract.id != contract_id).all()
+        # 
+        parent_contracts = sorted([(x.internal_id, f'{x.internal_id} - {Contractor.query.join(Contract,Contract.contractor_id == Contractor.id).filter(Contract.id == x.id).first().name}') 
+                                                                                                                    for x in contracts], key = lambda x: x[1].split(' - ')[1]) 
+        # sorted(parent_contracts, key = lambda y: y[1].split(' - ')[1])  
+        parent_contracts.insert(0,('none','none - none'))
+        if curr_contract.parent_id != 0:
+            # parent_contract = Contract.query.filter(Contract.id == curr_contract.parent_id).first()
+            parent_contractor = Contractor.query.join(Contract,Contract.contractor_id == Contractor.id).filter(Contract.internal_id == parent_contract.internal_id).first()
+            parent_contracts.remove((parent_contract.internal_id, f'{parent_contract.internal_id} - {parent_contractor.name}'))
+            parent_contracts.insert(0,(parent_contract.internal_id, f'{parent_contract.internal_id} - {parent_contractor.name}'))
+
+        curr_contract_type = ContractType.query.join(Contract, Contract.contract_type_id == ContractType.id).filter(Contract.id == curr_contract.id).first()
+        contract_types = [(x.name, x.name) for x in ContractType.query.all()]
+        contract_types.remove((curr_contract_type.name, curr_contract_type.name))
+        
+        contract_types.insert(0,(curr_contract_type.name, curr_contract_type.name))
+
+        form_dict = {}
+        form_dict['internal_id'] = curr_contract.internal_id
+        form_dict['subject'] = curr_contract.subject
+        form_dict['end_date'] = curr_contract.end_date
+
+        form = ContarctDataForm(formdata=MultiDict(form_dict))
+        form.contractor.choices = contr_names  
+        form.parent_contract.choices = parent_contracts        #  sorted(parent_contracts, key = lambda y: y[1].split(' - ')[1])     
+        form.contract_type.choices = contract_types
+        # par_names.insert(0,('none', 'none'))
+        # names_tup =  [x for x in par_names if x[0] == curr_contractor.name][0]   
+
+        subcontracts = SubContract.query.filter(SubContract.contract_id == contract_id).all()
+        subcontracts = [x for x in subcontracts]
+        form.subs.choices = [(x.itn,f'{x.itn} - {x.start_date} - {x.end_date}') for x in subcontracts]
+    else:   
+        print(f'in post')
+        form = ContarctDataForm()
+        form.contractor.choices = [(form.contractor.data, form.contractor.data)]
+        
+        form.parent_contract.choices = [(form.parent_contract.data, form.parent_contract.data)]
+        form.contract_type.choices = [(form.contract_type.data, form.contract_type.data)]
+
+        subcontracts = SubContract.query.filter(SubContract.itn.in_(form.subs.data)).all()
+        subcontracts = [x for x in subcontracts]
+        form.subs.choices = [(x.itn,f'{x.itn} - {x.start_date} - {x.end_date}') for x in subcontracts]
+        print(f'form.parent_contract {form.parent_contract.data}')
+        if form.validate_on_submit():            
+            print(f'in submit')
+            if form.delete_subs.data or form.delete_contract.data:
+                selected = form.subs.data if not form.delete_contract.data else [x.itn for x in SubContract.query.filter(SubContract.contract_id == contract_id).all()]
+                print(f'selected {selected}')
+                for s in selected:
+                    curr_sub = SubContract.query.filter(SubContract.itn == s, SubContract.contract_id == contract_id).first()
+                    delete_sch = ItnSchedule.__table__.delete().where((ItnSchedule.itn == curr_sub.itn) & (ItnSchedule.utc >= curr_sub.start_date) & (ItnSchedule.utc <= curr_sub.end_date))
+                    db.session.execute(delete_sch)
+                    print(f'Schedule with itn: {curr_sub.itn}, from {curr_sub.start_date} to {curr_sub.end_date} is deleted.')                   
+                    print(f'Subcontract {curr_sub} will be deleted ')
+                    curr_sub.delete()
+
+                if form.delete_contract.data:                
+                    print(f'Contract {curr_contract} will be deleted ')
+                    curr_contract.delete()
+            else:
+                update_dict = {}
+                end_date = convert_date_to_utc('EET',form.end_date.data)
+                end_date = end_date + dt.timedelta(hours = 23) 
+                
+                if end_date < curr_contract.end_date:
+                    print(f'terminating to {end_date}')
+                    curr_contract.update({'end_date':end_date})
+                    subs = SubContract.query.filter(SubContract.contract_id == contract_id).all()    
+                    for sub in subs:
+                        sub.update({'end_date':end_date})
+
+                curr_contract_type = ContractType.query.filter(ContractType.id == curr_contract.contract_type_id).first()
+                
+                if form.contract_type.data != curr_contract_type.name:
+                    print(f'Update contract type from: {curr_contract_type.name} to {form.contract_type.data}')
+                    new_type_id = ContractType.query.filter(ContractType.name == form.contract_type.data).first().id
+                    update_dict['contract_type_id'] = new_type_id
+                    # curr_contract.update({'contract_type_id':new_type_id})                    
+
+                if form.subject.data != 'none': 
+                    update_dict['subject'] = form.subject.data        
+                    
+                if form.contractor.data != curr_contractor.id:
+                    update_dict['contractor_id'] = form.contractor.data
+
+                curr_parent_contract_internal_id = parent_contract.internal_id if parent_contract is not None else None
+                
+                if form.parent_contract.data != curr_parent_contract_internal_id:
+                    update_dict['parent_id'] = Contract.query.filter(Contract.internal_id == form.parent_contract.data).first().id 
+                    # print(f'{form.parent_contract.data}')
+                print(f'{update_dict}')
+                curr_contract.update(update_dict)      
+        else:
+            # print(f'{form.errors}')
+            # print(f'{form.subs.choices}')
+            return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}')
+        return redirect(url_for('modify_contract'))
 
 
+    return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}')
+
+@app.route('/modify_contractor/<contractor_id>', methods=['GET', 'POST'])
+@login_required
+def modify_selected_contractor(contractor_id):
+
+    curr_contractor = Contractor.query.filter(Contractor.id == contractor_id).first()
+    if curr_contractor is None:
+        flash(f'There isn\'t contractor with id: {contractor_id} ! Aborting !','danger')
+        return redirect(url_for('modify_contractor'))
+    
+    if request.method == "GET":   
+
+        form_dict = {}
+        form_dict['name'] = curr_contractor.name
+        form_dict['eic'] = curr_contractor.eic
+        form_dict['address'] = curr_contractor.address
+        form_dict['vat_number'] = curr_contractor.vat_number
+        form_dict['email'] = curr_contractor.email
+        form_dict['acc_411'] = curr_contractor.acc_411
+        form = ContarctorDataForm(formdata=MultiDict(form_dict))
+
+        par_names = [(x.name, x.name) for x in Contractor.query.all()]          
+        par_names.insert(0,('none', 'none'))
+        names_tup =  [x for x in par_names if x[0] == curr_contractor.name][0]    
+        parent_contractor_id = curr_contractor.parent_id
+        
+        if parent_contractor_id is not None:
+        
+            parent_contractor_name = Contractor.query.filter(Contractor.id == parent_contractor_id).first().name        
+            par_names.remove((parent_contractor_name, parent_contractor_name))
+            par_names.insert(0,(parent_contractor_name, parent_contractor_name))
+
+        form.parent_contractor.choices = par_names 
 
 
-# def __get_contract_by_nternal_id__(internal_id):
-#     return Contract.query.filter(Contract.internal_id == internal_id).first()
-
-
+    else:
+        form = ContarctorDataForm()
+        form.parent_contractor.choices = [(form.parent_contractor.data,form.parent_contractor.data)]
+        
+        if form.validate_on_submit(): 
+            
+            for_modificaion_contractor = Contractor.query.filter(Contractor.id == form.acc_411.data).first()
+            if for_modificaion_contractor is None:
+                flash(f'There isn\'t contractor with acc_411: {form.acc_411.data}! Aborting !','danger')
+                return redirect(url_for('modify_contractor'))
+            parent = Contractor.query.filter(Contractor.name == form.parent_contractor.data).first()
+            parent_id = parent.id if parent is not None else parent
+            for_modificaion_contractor.update({'parent_id':parent_id,'name':form.name.data, 'eic':form.eic.data,
+                                                'address':form.address.data, 'vat_number':form.vat_number.data,'email': form.email.data})         
+            
+        return redirect(url_for('modify_contractor'))
+    
+    contr_name = curr_contractor.name if curr_contractor is not None else 'None'
+    return render_template('ask_confirm.html', title=f'Modify Contractor', form=form, header = f'Modify Contractor {contr_name}')
+    
+    
 @app.route('/monthly_report/<erp>/<contract_type>/<start_date>/<end_date>/<is_mixed>', methods=['GET', 'POST'])
 @login_required
 def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
     form = MonthlyReportErpForm()
     form.ref_files.choices = sorted([(x,x) for x in get_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']))])
     filtered_records = get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed)
-    # form.invoicing_group.choices = [ (x[0],f'{x[0]} - {x[1]} ') for x in db.session.query(InvoiceGroup.name, InvoiceGroup.description).join(Contractor).join(SubContract).join(Contract)
-    #                     .join(ItnMeta, ItnMeta.itn == SubContract.itn).join(Erp).join(ContractType, ContractType.id == Contract.contract_type_id)
-    #                     .filter(Erp.name == erp)
-    #                     .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)
-    #                     .filter(ContractType.name == contract_type).order_by(Contractor.name)
-    #                     .all()]
 
     form.invoicing_group.choices = sorted(list(set([ (x[0],f'{x[0]} - {x[1]} ') for x in filtered_records])),key = lambda y: y[1].split(' - ')[1])
-    # form.contractor.choices = 
-                 
-    # form.contracts.choices =  [ (x,x) for x in Contract.query.join(Contractor).order_by(Contractor.name).all() ]   
+
     
     form.contracts.choices = sorted(list(set([(x[3],f'{x[2]}') for x in filtered_records] )) ,key = lambda y: y[1].split(' - ')[1]) 
 
@@ -1866,58 +2184,463 @@ def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
         elif form.submit.data:
             counter = 0
             weighted_price = None
-
-            if form.by_contract.data:   
-                print(f'{form.contracts.data}')         
-                time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == form.contracts.data).first().code
-                start_date_ = convert_date_to_utc(time_zone, start_date)
-                end_date_ = convert_date_to_utc(time_zone, end_date) + dt.timedelta(hours = 23)
-                inv_groups = get_list_inv_groups_by_contract(form.contracts.data, start_date_, end_date_)
-                weighted_price = get_weighted_price(inv_groups, start_date_, end_date_)
-                # print(f'weighted_price -- {weighted_price}')
+ 
+            if len(form.contracts.data) >0:
+                for curr_contract in form.contracts.data: 
+                    print(f'CURR CONTRACT - {curr_contract}')         
+                    time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == curr_contract).first().code
+                    start_date_utc = convert_date_to_utc(time_zone, start_date)
+                    end_date_utc = convert_date_to_utc(time_zone, end_date) + dt.timedelta(hours = 23)
+                    inv_groups = get_list_inv_groups_by_contract(curr_contract, start_date_utc, end_date_utc)
+                    weighted_price = get_weighted_price(inv_groups, start_date_utc, end_date_utc)
+                    print(f'weighted_price -- {weighted_price}')
+                    counter += create_inv_refs_by_inv_groups(inv_groups, start_date, end_date, weighted_price)
+                flash(f'{counter} invoice references was created !','info')    
             else:            
-                inv_groups = [x[0] for x in form.invoicing_group.choices]  if form.bulk_creation.data else [x for x in form.invoicing_group.data]   
-                
-            result_df = None
-
-            invoice_ref_path = inetgra_src_path = None
-
-            for inv_group_name in inv_groups:
-                
-                # print(f'{inv_group_name}')
-                start_date_utc, end_date_utc, invoice_start_date, invoice_end_date = create_utc_dates(inv_group_name, start_date, end_date)
-                print(f'{inv_group_name}-{end_date_utc}-{invoice_start_date}-{invoice_end_date}')
-
-                ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
-
-                if ibex_last_valid_date < dt.datetime.strptime(end_date, '%Y-%m-%d'):
-                    update_ibex_data(start_date, end_date)
-                    update_schedule_prices(start_date, end_date)
-
-                if start_date_utc is None:
-                    print(f'There is not data for {inv_group_name}, for period {start_date} - {end_date}')
-                    continue
-
-                is_spot = is_spot_inv_group([inv_group_name], start_date_utc, end_date_utc)
-                
-                if is_spot:
-                    counter += 1
-                    
-                    summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, weighted_price)
-                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path, weighted_price)
-                    
-                else:
-                    counter += 1
-                   
-                    summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
-                    create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, invoice_ref_path, inetgra_src_path)
-
-            flash(f'{counter} invoice references was created !','info')
+                inv_groups = [x[0] for x in form.invoicing_group.choices]  if form.bulk_creation.data else [x for x in form.invoicing_group.data]
+                counter = create_inv_refs_by_inv_groups(inv_groups, start_date, end_date, weighted_price)   
+                flash(f'{counter} invoice references was created !','info')
+            
             return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, is_mixed = is_mixed, **request.args))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
     return render_template('quick_template_wider.html', title=f'Monthly Report {erp}', form=form, header = f'Monthly Report {erp} - {contract_type} <br> Period: {start_date} / {end_date}<br> Included mixed groups - {is_mixed}')
+
+@app.route('/delete_itn_consumptions', methods=['GET', 'POST'])
+@login_required
+def delete_itn_consumptions():
+
+    form = ItnCosumptionDeletion()
+    if form.validate_on_submit(): 
+        curr_date_utc = convert_date_to_utc('EET',form.start_date.data)
+        schedule_df = pd.read_sql(ItnSchedule.query.filter(ItnSchedule.itn == form.itn.data, ItnSchedule.utc >= curr_date_utc).statement, db.session.bind) 
+        schedule_df['consumption_vol'] = 0
+        schedule_df['settelment_vol'] = 0
+        stringifyer(schedule_df)
+        bulk_update_list = schedule_df.to_dict(orient='records')    
+        db.session.bulk_update_mappings(ItnSchedule, bulk_update_list)
+        db.session.commit()
+
+    return render_template('quick_template.html', title='Deleting ITN consumption', form=form, header = 'Deleting ITN consumption')   
+
+
+@app.route('/modify_email', methods=['GET', 'POST'])
+@login_required
+def modify_email():
+    form = RedactEmailForm()
+    
+    if form.validate_on_submit():
+        res = form.inv_goups_mails.data[0]
+        new_mail = form.new_mail.data
+        mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
+        if mail_to_add is None:
+            mail_to_add = Mail(name = new_mail)
+            mail_to_add.save()
+            print(f'adding new mail {mail_to_add}')
+            mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
+        curr_inv_group = form.inv_goups_mails.data[0]
+        curr_inv_group.update({'email_id':mail_to_add.id})
+        print(f'Invoicing group {curr_inv_group.name} will mail to {mail_to_add.name} !')
+        flash(f'Invoicing group {curr_inv_group.name} will mail to {mail_to_add.name} !','success')
+        return redirect(url_for('modify_email'))
+
+    return render_template('modify_email.html', title='Readcting Email', form=form, header = 'Redacting EMAILS')
+
+@app.route('/modify_invoice/<invoice_num>', methods=['GET', 'POST'])
+@login_required
+def modify_invoice(invoice_num):
+
+    full_path = os.path.join(os.path.join(app.root_path, app.config['TEMP_INVOICE_PATH']),app.config['TEMP_INVOICE_NAME'])
+    dtype_dict= {'BULSTAT': str, 'TaxNum' : str, 'DocNumber' : str}    
+    raw_df = pd.read_excel(full_path, dtype = dtype_dict)    
+    selected_df = raw_df[raw_df['DocNumber'] == invoice_num].copy()  
+    if selected_df.empty:
+        print(f'No invoice with num {invoice_num}.') 
+        flash(f'No invoice with num {invoice_num}! Abort !','danger')
+        return redirect(url_for('create_invoice'))     
+    
+    if request.method == "GET":
+        invoice_number  = selected_df.iloc[0]['DocNumber']
+
+        curr_contractor = Contractor.query.filter(Contractor.acc_411 == selected_df.iloc[0]['fullcode']).first()
+        if curr_contractor is None:
+            name = selected_df.iloc[0]['FirmName']
+            acc = selected_df.iloc[0]['fullcode']
+            print(f'Warning! There isn\'t such a contractor: {name} with acc_411 :{acc} in the database !')
+            flash(f'Warning! There isn\'t such a contractor: {name} with acc_411 :{acc} in the database ! Abort !','danger')
+            return redirect(url_for('create_invoice')) 
+
+        db_invoice = Invoice.query.filter(Invoice.id == invoice_number).first()
+        if db_invoice is None:        
+            print(f'Warning! There isn\'t such an invoice with number: {invoice_number} in the database !')
+
+        inv_dict = {}
+
+        inv_dict['invoice_num'] = invoice_number
+        inv_dict['contractor_name'] = selected_df.iloc[0]['FirmName']
+        inv_dict['bulstat'] = curr_contractor.eic if curr_contractor is not None else selected_df.iloc[0]['BULSTAT']
+        inv_dict['vat_number'] = curr_contractor.vat_number if curr_contractor is not None else selected_df.iloc[0]['TaxNum']
+        inv_dict['address'] = curr_contractor.address if curr_contractor is not None else selected_df.iloc[0]['Address']
+
+        inv_dict['electricity_qty']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['Quantity'].values[0]
+        inv_dict['electricity_price']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['PriceLev'].values[0]
+        inv_dict['electricity_sum']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['ItemSuma'].values[0]
+        inv_dict['zko_price']  = selected_df[selected_df['StockName'] == 'ЦЕНА ЗАДЪЛЖЕНИЕ КЪМ ОБЩЕСТВОТО СЪГЛАСНО ЧЛ.100 АЛ.4 ОТ ЗЕ И ЧЛ.31 ОТ']['PriceLev'].values[0]
+        inv_dict['zko_sum']  = selected_df[selected_df['StockName'] == 'ЦЕНА ЗАДЪЛЖЕНИЕ КЪМ ОБЩЕСТВОТО СЪГЛАСНО ЧЛ.100 АЛ.4 ОТ ЗЕ И ЧЛ.31 ОТ']['ItemSuma'].values[0]
+        inv_dict['akciz_price']  = selected_df[selected_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ']['PriceLev'].values[0]
+        inv_dict['akciz_sum']  = selected_df[selected_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ']['ItemSuma'].values[0]
+        inv_dict['grid_sum']  = selected_df[selected_df['StockName'] == 'ПРЕНОС И ДОСТЪП ДО ЕЛ.МРЕЖАТА']['ItemSuma'].values[0]
+        inv_dict['sum_neto']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['DocSuma'].values[0]
+        inv_dict['sum_vat']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['DocVatSuma'].values[0]
+        inv_dict['sum_total']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['DocAllSuma'].values[0]
+        inv_dict['pay_date']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['PayDate'].values[0]
+        inv_dict['excel_ref_name']  = selected_df[selected_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)']['RepFileName'].values[0]   
+
+        form = ModifyInvoiceForm(formdata=MultiDict(inv_dict))
+    else:
+        form = ModifyInvoiceForm()
+
+    if form.validate_on_submit():
+        
+        to_modify_df = raw_df[raw_df['DocNumber'] == form.invoice_num.data].copy()
+
+        to_modify_df['FirmName'] = form.contractor_name.data
+        to_modify_df['bulstat'] = form.bulstat.data
+        to_modify_df['vat_number'] = form.vat_number.data
+        to_modify_df['address'] = form.address.data
+
+        to_modify_df.loc[to_modify_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)','Quantity']= form.electricity_qty.data
+        to_modify_df.loc[to_modify_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)','PriceLev']= form.electricity_price.data
+        to_modify_df.loc[to_modify_df['StockName'] == 'ELECTRICITY - (ЕЛЕКТРИЧЕСКА ЕНЕРГИЯ)','ItemSuma']= form.electricity_sum.data
+        to_modify_df.loc[to_modify_df['StockName'] == 'ЦЕНА ЗАДЪЛЖЕНИЕ КЪМ ОБЩЕСТВОТО СЪГЛАСНО ЧЛ.100 АЛ.4 ОТ ЗЕ И ЧЛ.31 ОТ','PriceLev']= form.zko_price.data
+        to_modify_df.loc[to_modify_df['StockName'] == 'ЦЕНА ЗАДЪЛЖЕНИЕ КЪМ ОБЩЕСТВОТО СЪГЛАСНО ЧЛ.100 АЛ.4 ОТ ЗЕ И ЧЛ.31 ОТ','ItemSuma']= form.zko_sum.data
+        to_modify_df.loc[to_modify_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ','PriceLev']= form.akciz_price.data
+        to_modify_df.loc[to_modify_df['StockName'] == 'НАЧИСЛЕН АКЦИЗ','ItemSuma']= form.akciz_sum.data
+        to_modify_df.loc[to_modify_df['StockName'] == 'ПРЕНОС И ДОСТЪП ДО ЕЛ.МРЕЖАТА','ItemSuma']= form.grid_sum.data
+        to_modify_df['DocSuma']= form.sum_neto.data
+        to_modify_df['DocVatSuma']= form.sum_vat.data
+        to_modify_df['DocAllSuma']= form.sum_total.data
+        to_modify_df['PayDate']= form.pay_date.data
+        to_modify_df['RepFileName']= form.excel_ref_name.data
+
+        create_invoices(to_modify_df, is_modify = True)            
+        return redirect(url_for('create_invoice'))
+
+    return render_template('quick_template_wider.html', title='Readcting Invoice', form=form, header = 'Redacting INVOICES')
+
+
+@app.route('/modify', methods=['GET', 'POST'])
+@login_required
+def modify():
+
+    form = ModifyForm()
+    # form.invoice_groups.choices = form.invoice_groups.data
+    
+    if form.validate_on_submit():
+        if form.modify_contract.data:
+            contract_id = form.contracts.data[0].id
+            return redirect(url_for('modify_selected_contract', contract_id = contract_id, **request.args))
+
+        # elif form.modify_inv_group.data:
+        #     print(f'form.modify_inv_group.data {form.invoice_groups.data}')
+    else:
+        print(f'{form.errors}')
+        
+
+    return render_template('modify.html', title='Readcting', form=form, header = 'Redacting')
+
+@app.route('/modify_inv_group/<inv_name>', methods=['GET', 'POST'])
+@login_required
+def modify_inv_group(inv_name):
+    curr_contractor = Contractor.query.join(InvoiceGroup, InvoiceGroup.contractor_id == Contractor.id).filter(InvoiceGroup.name == inv_name).first()
+    curr_invoice_group = InvoiceGroup.query.filter(InvoiceGroup.name == inv_name).first()
+    mails = Mail.query.filter(Mail.id == curr_invoice_group.email_id).first()
+    if request.method == "GET":
+        print(f'in get')        
+        contr_names = [(x.id, x.name) for x in Contractor.query.join(InvoiceGroup,InvoiceGroup.contractor_id == Contractor.id).all()]  
+        contr_names = sorted(contr_names, key = lambda x: x[1])             
+        contr_names.remove((curr_contractor.id, curr_contractor.name))
+        contr_names.insert(0,(curr_contractor.id, curr_contractor.name))
+        to_inv_names = [(x.id, x.name) for x in InvoiceGroup.query.filter(InvoiceGroup.contractor_id == curr_contractor.id).all()] 
+        to_contracts = [(x.internal_id, f'{x.internal_id} - {x.start_date} - {x.end_date}') for x in Contract.query.join(Contractor,Contractor.id == Contract.contractor_id).filter(Contractor.id == curr_contractor.id).all()]  
+        form_dict = {}
+        form_dict['from_suffix'] = curr_invoice_group.name.split('_')[1]
+        form_dict['from_group'] = curr_invoice_group.name
+        form_dict['from_description'] = curr_invoice_group.description
+        # form_dict['to_description'] = curr_invoice_group.description
+        # form_dict['to_email'] = mails.name
+        # form_dict['end_date'] = curr_contract.end_date
+
+        form = ModifyInvGroupForm(formdata=MultiDict(form_dict))
+        form.from_contractor.choices = contr_names 
+        form.to_contractor.choices = contr_names 
+        form.to_group.choices = to_inv_names
+        form.to_contract.choices = to_contracts
+    else:
+        
+        form = ModifyInvGroupForm()
+        if form.validate_on_submit():
+            for key, val in request.form.items():
+                print(f'{key} --  {val}')
+            print(f'{form.itns.data}')
+
+            from_subcontracts = SubContract.query.join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id).filter(InvoiceGroup.name == form.from_group.data).filter(SubContract.itn.in_(form.itns.data)).all()
+            from_invoicing_group = InvoiceGroup.query.filter(InvoiceGroup.name == form.from_group.data).first()
+            new_mail = form.to_email.data
+            mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
+            if mail_to_add is None:
+                mail_to_add = Mail(name = new_mail)
+                mail_to_add.save()
+                print(f'adding new mail {mail_to_add}')
+                mail_to_add = Mail.query.filter(Mail.name == new_mail).first()
+
+            if(form.new_group.data):               
+                
+                to_contractor = Contractor.query.filter(Contractor.id == form.to_contractor.data).first()                                        
+                to_invoicing_group = InvoiceGroup(name = form.new_group.data, contractor_id = to_contractor.id, description = form.to_description.data, email_id = mail_to_add.id)                
+                to_invoicing_group.save()
+                print(f'New invoicing group: {to_invoicing_group.name} was created !')
+                to_invoicing_group = InvoiceGroup.query.filter(InvoiceGroup.name == form.new_group.data).first()
+
+            else:                
+                to_invoicing_group = InvoiceGroup.query.filter(InvoiceGroup.name == form.to_group.data).first()                 
+                to_invoicing_group.update({'description':form.to_description.data,'email_id':mail_to_add.id})
+                print(f'from_invoicing_group: {from_invoicing_group} to_invoicing_group: {to_invoicing_group}')          
+
+            for sub in from_subcontracts:
+                sub.update({'invoice_group_id':to_invoicing_group.id})
+
+            remaining_subs = SubContract.query.filter(SubContract.invoice_group_id == from_invoicing_group.id).all()
+
+            if len(remaining_subs) == 0:
+                print(f'{from_invoicing_group.name} is orphaned ! Deleting !')
+                from_invoicing_group.delete()                
+
+            flash('success','info')
+            return redirect(url_for('modify'))
+                
+        else:
+            print(f'{form.errors.items()}')
+
+    return render_template('modify_inv_group.html', title='Readcting Inv Group', form=form, header = 'Redacting Invoicing Group')
+
+@app.route('/modify_itn/<itn>', methods=['GET', 'POST'])
+@login_required
+def modify_itn(itn):
+
+    # print('------ {0}'.format(request.form))
+    if request.method == "GET":
+        data = (
+            db.session.query(
+                ItnMeta.itn, AddressMurs.name, ItnMeta.description, ItnMeta.grid_voltage, Erp.name
+            )
+            .join(AddressMurs,AddressMurs.id == ItnMeta.address_id)
+            .join(Erp,Erp.id == ItnMeta.erp_id)
+            .filter(ItnMeta.itn == itn)
+            .all()
+        )
+        
+        form_dict = {}
+        form_dict['itn'] = itn
+        form_dict['itn_addr'] = data[0][1]
+        form_dict['itn_descr'] = data[0][2]
+        form_dict['grid_voltage'] = data[0][3]
+        form_dict['erp'] = data[0][4]
+        # form_dict['itn'] = itn
+        form = ModifyItn(formdata=MultiDict(form_dict))
+    else:
+        form = ModifyItn()
+
+    if form.validate_on_submit():
+        addr = AddressMurs.query.join(ItnMeta, ItnMeta.address_id == AddressMurs.id).filter(ItnMeta.itn == form.itn.data).first()
+        addr.update({'name':form.itn_addr.data})
+        itn_meta = ItnMeta.query.filter(ItnMeta.itn == itn).first()
+        erp = Erp.query.filter(Erp.name == form.erp.data).first()
+        itn_meta.update({'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
+        # print('------ {0}'.format(request.form))
+        
+    return render_template('ask_confirm.html', title='Redacting Itn', form=form, header = 'Redacting ITN')
+
+@app.route('/modify_subcontracts', methods=['GET', 'POST'])
+@login_required
+def modify_subcontracts():
+
+    return render_template('ask_confirm.html', title='Redacting Subcontracts', form=form, header = 'Redacting SUBCONTRACTS')
+
+@app.route('/_get_inv_groups/<contract_id>', methods=['GET', 'POST'])
+@login_required
+def _get_inv_groups(contract_id):
+    
+    is_id = str(contract_id).find('ТК') == -1 
+      
+    filters = (Contract.id == contract_id,) if is_id else (Contract.internal_id == contract_id,)
+    
+    groups = (
+        db.session.query
+            (InvoiceGroup.name.label('invoice_group'), InvoiceGroup.description.label('invoice_group_description'), Mail.name.label('email'))
+        .join(Mail,Mail.id == InvoiceGroup.email_id)            
+        .join(Contract, Contract.contractor_id == InvoiceGroup.contractor_id)
+        .filter(*filters)
+        .order_by(InvoiceGroup.name)
+        .all()
+    ) 
+    
+    groups_arr = []
+    for group in groups:
+        group_obj = {}
+        group_obj['invoice_group'] =  group[0]  
+        group_obj['invoice_group_description'] =  group[1]
+        group_obj['email'] =  group[2]
+        groups_arr.append(group_obj)
+
+    return jsonify({'groups':groups_arr})
+
+@app.route('/_get_contract/<tk>', methods=['GET', 'POST'])
+@login_required
+def _get_contract(tk = ''):
+    print(f'{tk}')
+    if len(tk) <= 2:
+        print(f'in return')
+        return jsonify({'groups':[]})
+    
+    contract = (
+        db.session.query(
+            Contract.internal_id, Contractor.name, Contract.start_date, Contract.end_date, Contract.id
+        )
+        .join(Contractor, Contractor.id == Contract.contractor_id)
+        .filter(Contract.internal_id == tk)
+        .first()
+    )
+    # print(f'from _get_contract contract --->{contract}')
+    if contract is None:
+        print(f'in second return')
+        return jsonify({'groups':[]})
+    
+    contract_arr = [{'internal_id':contract[0],'contractor_name':contract[1], 'start_date':convert_date_from_utc('EET',contract[2]) , 'end_date':convert_date_from_utc('EET',contract[3]), 'contract_id':contract[4]}]
+    # print(f'contract_arr {contract_arr}')
+    
+    return jsonify({'contracts':contract_arr})
+
+@app.route('/_get_contracts/<contractor_id>', methods=['GET', 'POST'])
+@login_required
+def _get_contracts(contractor_id):
+    
+    contracts = (
+        db.session.query(
+            Contract.internal_id, Contractor.name, Contract.start_date, Contract.end_date, Contract.id
+        )
+        .join(Contractor, Contractor.id == Contract.contractor_id)
+        .filter( Contractor.id == contractor_id)
+        .all()
+    )
+    contract_arr = []
+    for contract in contracts:
+        contract_obj = {}
+        contract_obj['internal_id'] = contract[0]
+        contract_obj['contractor_name'] = contract[1]
+        contract_obj['start_date'] = convert_date_from_utc('EET',contract[2])
+        contract_obj['end_date'] = convert_date_from_utc('EET',contract[3])
+        contract_obj['contract_id'] = contract[4]
+        contract_arr.append(contract_obj)    
+    return jsonify({'contracts':contract_arr})
+
+@app.route('/_get_itns/<name>', methods=['GET', 'POST'])
+@login_required
+def _get_itns(name):
+    itns = (
+        db.session.query(
+            SubContract.itn, InvoiceGroup.name, MeasuringType.code
+        )
+        .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)        
+        .join(MeasuringType,MeasuringType.id == SubContract.measuring_type_id)
+        .filter(InvoiceGroup.name == name)
+        .order_by(MeasuringType.code, SubContract.itn)
+        .all()
+    )
+    itns_arr = []
+    for itn in itns:
+        itn_obj = {}
+        itn_obj['itn'] = itn[0]
+        itn_obj['invoice_group'] = itn[1]
+        itn_obj['type'] = itn[2]
+        itns_arr.append(itn_obj)
+    return jsonify({'itns':itns_arr})
+
+@app.route('/_get_contractor/<contractor_id>', methods=['GET', 'POST'])
+@login_required
+def _get_contractor(contractor_id):
+    contractor = Contractor.query.filter(Contractor.id == contractor_id).first()
+    
+    print(f'contractor {contractor}')
+    contarctor_arr = [{'name':contractor.name, 'acc_411':contractor.acc_411}]
+    return jsonify({'contractor':contarctor_arr})
+
+# @app.route('/_get_first_empty_inv_group/', defaults={'inv_name_part': None}, methods=['GET', 'POST'])
+@app.route('/_get_first_empty_inv_group/<inv_name_part>', methods=['GET', 'POST'])
+@login_required
+def _get_first_empty_inv_group(inv_name_part):
+    try:
+        if inv_name_part.find('_') == -1:
+            return jsonify({'groups':[]})
+    except:
+         return jsonify({'groups':[]})
+    else:
+        inv_groups = (
+            db.session.query(
+                InvoiceGroup.name
+            )
+            .filter(InvoiceGroup.name.like("%" + inv_name_part + "%"))        
+            .all()
+        )    
+        try: 
+            suffix = [int(x[0].split('_')[1]) for x in inv_groups]
+            suffix = str(sorted(suffix)[-1] + 1)        
+            # suffix = str(suffix)            
+            tokens = inv_groups[-1][0].split('_')
+        except:
+            return jsonify({'groups':[]})
+        else:        
+            res = f'{tokens[0]}_{suffix}'        
+            return jsonify({'groups':[{'name':res}]})
+
+@app.route('/_get_inv_group_data/<inv_id>', methods=['GET', 'POST'])
+@login_required
+def _get_inv_group_data(inv_id):
+
+    is_id = str(inv_id).find('-') == -1 
+      
+    filters = (InvoiceGroup.id == inv_id,) if is_id else (InvoiceGroup.name == inv_id,)
+    group = {
+        db.session.query(
+            InvoiceGroup.description, Mail.name.label('email')
+        )
+        .join(Mail,Mail.id == InvoiceGroup.email_id)
+        .filter(*filters)
+        .first()
+    }    
+    group = list(group)    
+    if group[0] is None:        
+        return jsonify({'groups':[]})    
+    else:
+        return jsonify({'groups':[{'description':group[0][0],'email':group[0][1]}]})
+
+@app.route('/_get_itn_data/<itn>', methods=['GET', 'POST'])
+@login_required
+def _get_itn_data(itn):
+    data = (
+        db.session.query(
+            ItnMeta.itn, AddressMurs.name, ItnMeta.description, ItnMeta.grid_voltage, Erp.name
+        )
+        .join(AddressMurs,AddressMurs.id == ItnMeta.address_id)
+        .join(Erp,Erp.id == ItnMeta.erp_id)
+        .filter(ItnMeta.itn == itn)
+        .all()
+    )
+    if len(data) == 0:
+        return jsonify({'itns':[]})
+    return jsonify({'itns':[{'itn':data[0][0],'address':data[0][1], 'description':data[0][2], 'grid_voltage':data[0][3], 'erp':data[0][4]}]})
+
 
     

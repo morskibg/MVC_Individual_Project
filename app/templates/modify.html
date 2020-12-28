@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+    <!-- <div class='col-md-2'></div>              -->
+    <div class='col-md-12'>        
+        
+        {{ wtf.quick_form(form,button_map={'modify_contract': 'primary','modify_inv_group':'primary','modify_itn':'primary'},id='modify_form') }} 
+        <!-- <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="test()"> -->
+    </div> 
+    <!-- <div class='col-md-2'> </div>     -->
+    
+    
+{% endblock %}
+
+{% block form_scripts %}
+
+    <script type="text/javascript">
+        // const contract_tk = document.getElementById('contract_tk');
+        
+        const search_field = document.getElementById('contract_search');
+        search_field.value = 'ТК'
+        const contracts = document.getElementById('contracts');
+        
+        const invoice_groups = document.getElementById('invoice_groups');
+        const itns = document.getElementById('itns'); 
+
+        const mod_contract_button = document.getElementById('modify_contract');
+        const mod_inv_group_button = document.getElementById('modify_inv_group'); 
+        const mod_itn_button = document.getElementById('modify_itn'); 
+        
+        mod_contract_button.disabled = true;
+        mod_inv_group_button.disabled = true;
+        mod_itn_button.disabled = true;
+
+        const values = document.querySelectorAll('option') 
+        // const contracts = document.getElementById('contracts')
+
+        search_field.onkeyup = () =>{
+            mod_contract_button.disabled = true;
+            console.log(search_field.value)
+            let counter = 0;
+            const key_word = search_field.value.toLowerCase()
+            // values.forEach(value => value.style = 'block')        
+            values.forEach(value => {
+                counter++;
+                if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                    value.style = 'display:none'
+                    counter--;
+                    // if(counter === 0){
+                    //     contracts.value = ''
+                    // }
+                }else{
+                    value.style = 'block'                
+                }
+                
+            });
+            if(counter === 1){
+                console.log('brrrrr',contracts)
+                contracts.value = ''
+            };
+            contracts.size = counter;
+            console.log(contracts.size)
+        };
+        
+        // contract_tk.onkeyup = function(){
+            
+        //     let tk = contract_tk.value  
+        //     if(tk !== ''){                     
+        //         console.log(tk)
+        //         let contract_id = -1
+        //         let inv_group_id = -1
+        //         fetch('/_get_contract/' + tk).then(function(response){
+        //             response.json().then(function(data){
+        //                 // console.log('data',data.contracts)
+        //                 let optionHTML = '';
+        //                 if(data.contracts !== undefined){
+        //                     for(let contract of data.contracts){                        
+        //                     contract_id = contract.contract_id;                        
+        //                     if(contract_id !== undefined){                            
+        //                         optionHTML += '<option value="' + contract.internal_id + '">' + contract.internal_id + ' - ' + contract.contractor_name + ' - ' + contract.start_date + ' - ' + contract.end_date + ' - ' + contract.contract_id + '</option>';
+        //                     }                     
+        //                     contracts.innerHTML = optionHTML;
+        //                     updateInvGroups(contract_id);
+        //                     }
+        //                 }
+                                                    
+        //             });
+        //         }); 
+        //     }
+        // };
+
+        invoice_groups.onchange = function(){
+
+            const invoice_group_name = invoice_groups.value;
+            updateItns(invoice_group_name);
+            
+            mod_inv_group_button.disabled = false;
+            
+        };       
+
+        contracts.onclick = function(){
+            updateInvGroups(contracts.value);
+            
+            itns.innerHTML = ""; 
+            mod_contract_button.disabled = false;
+        };
+
+        itns.onchange = function(){
+            
+            mod_itn_button.disabled = false;
+        };
+
+        itns.onblur = function(){
+            
+            mod_itn_button.disabled = false;
+        };
+
+
+        function updateInvGroups(contract_id){
+
+            console.log('in updateInvGroups')
+            
+            fetch('/_get_inv_groups/' + contract_id).then(function(response){
+                response.json().then(function(data){
+                    let optionHTML = ''
+                    let count = 0;
+                    for(let group of data.groups){                    
+                        optionHTML += '<option value="' + group.invoice_group + '">' + group.invoice_group + ' - ' + group.invoice_group_description + ' - ' + group.email + '</option>';
+                        count += 1;
+                    }                                  
+                    invoice_groups.size = count;
+                    invoice_groups.innerHTML = optionHTML; 
+                    initBackground()               
+                });
+                
+            });
+            
+        };
+
+        function updateItns(invoice_group_name){
+
+            console.log('in updateItns')
+        
+            fetch('/_get_itns/' + invoice_group_name).then(function(response){
+                
+                response.json().then(function(data){
+                    let optionHTML = '';
+                    let count = 0;
+                    for(let itn of data.itns){                                                  
+                        optionHTML += '<option value="' + itn.itn + '">' + itn.itn + ' - ' + itn.invoice_group + ' - ' + itn.type + '</option>';
+                        count += 1;
+                    }
+                    if(count >30){
+                        count = 30;
+                    }                    
+                    itns.size = count;
+                    itns.innerHTML = optionHTML; 
+                    initBackground()                  
+                });
+            }); 
+        }; 
+
+        function modifyInvGroup(){
+            console.log('in modifyInvGroup')            
+            window.location.href = '/modify_inv_group/' + invoice_groups.value            
+        }
+
+        function modifyItn(){
+            console.log('in modifyItn',itns.value)            
+            window.location.href = '/modify_itn/' + itns.value            
+        }
+
+        contracts.ondblclick = () =>{             
+            document.getElementById('modify_contract').click()                       
+        }
+        invoice_groups.ondblclick = () =>{             
+            document.getElementById('modify_inv_group').click()                       
+        }
+        itns.ondblclick = () =>{             
+            document.getElementById('modify_itn').click()                       
+        }
+        
+    </script>
+
+
+{% endblock %}
+

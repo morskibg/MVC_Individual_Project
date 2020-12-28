@@ -366,8 +366,8 @@ def generate_integra_file(df, start_date, end_date, ref_file_name):
     for_invoice_df['Падеж'] = maturity_date
     reason_date_str = last_month_date.strftime('%m.%Y') 
     for_invoice_df['Основание'] = f' за м.{reason_date_str}г.'
-    
-    epay_code, epay_name =  generate_num_and_name(1, for_invoice_df.iloc[0]['сметка 411'], for_invoice_df.iloc[0]['inv_group'],for_invoice_df.iloc[0]['Получател'])
+    first_digit = app.config['EPAY_NUM_FIRST_DIGIT']
+    epay_code, epay_name =  generate_num_and_name(first_digit, for_invoice_df.iloc[0]['сметка 411'], for_invoice_df.iloc[0]['inv_group'],for_invoice_df.iloc[0]['Получател'])
     for_invoice_df['easy_pay_num'] = epay_code
     for_invoice_df['easy_pay_name'] = epay_name
     for_invoice_df = pd.melt(for_invoice_df, id_vars=['Потребление (kWh)', 'inv_group','Получател','сметка 411','Дата на издаване','Падеж','Основание','easy_pay_num','easy_pay_name'],var_name = 'Код на стоката',value_name = 'Стойност без ДДС')

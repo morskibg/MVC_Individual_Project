@@ -1,20 +1,29 @@
 from flask_wtf import FlaskForm
 from wtforms import (
-    StringField, PasswordField, BooleanField, SubmitField, DateField,
+    StringField, PasswordField, BooleanField, SubmitField, DateField, TextAreaField,IntegerField,
     SelectField, TextField, IntegerField, DecimalField, FileField, SelectMultipleField)
 # from wtforms.fields.html5 import DateField
 # from wtforms.fields import DateField
 from wtforms.ext.sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional,NumberRange
-from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice,SubContract, Mail
+from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice,SubContract, Mail, ContractType
 import re
 import sys
 import datetime as dt
 import pandas as pd
 import calendar
 
+from app.helpers.helper_functions import convert_date_to_utc
 
+class NonValidatingSelectMultipleField(SelectMultipleField):
 
+    def pre_validate(self, form):
+        pass
+
+class NonValidatingSelectField(SelectField):
+
+    def pre_validate(self, form):
+        pass
 
 class UploadItnsForm(FlaskForm):
 
@@ -34,8 +43,12 @@ class UploadInvGroupsForm(FlaskForm):
 
 class AddInvGroupForm(FlaskForm):
 
+    # date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+
     internal_id = SelectField('Contract Internal Number, Contractor, Signing Date', validators=[DataRequired()])
-    invoice_group_name =   StringField('Invoicing Group Name', validators=[DataRequired()]) 
+    invoice_group_name = StringField('Invoicing Group Name', validators=[DataRequired()]) 
+    invoice_group_description = StringField('Invoicing Group Description', validators=[DataRequired()]) 
+    invoice_group_emails = StringField('Invoicing Group Emails', validators=[DataRequired()])
     submit = SubmitField('Add New Invoice Group')
     
 
@@ -176,8 +189,9 @@ class StpCoeffsForm(FlaskForm):
 
 class CreateSubForm(FlaskForm):
 
-    itn = QuerySelectField(query_factory = lambda: ItnMeta.query, allow_blank = False,get_label='itn', validators=[DataRequired()])
-    contract_data = QuerySelectField(query_factory = lambda: Contract.query, allow_blank = False,get_label=Contract.__str__  , validators=[DataRequired()])
+    # itn = QuerySelectField(query_factory = lambda: ItnMeta.query, allow_blank = False,get_label='itn', validators=[DataRequired()])
+    itn = StringField(id='itn', validators = [DataRequired()])
+    contract_data = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor, Contractor.id == Contract.contractor_id).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__  , validators=[DataRequired()])
     start_date = StringField(id='start_datepicker', validators = [DataRequired()])
     end_date = StringField(id='end_datepicker', validators = [DataRequired()])
     invoice_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[DataRequired()])
@@ -197,6 +211,7 @@ class CreateSubForm(FlaskForm):
     has_grid_services = BooleanField('Include Grid Services', default = True)
     has_spot_price = BooleanField('Has Spot Price', default = False)
     has_balancing = BooleanField('Include Balancing Services', default = True)
+    make_invoice = BooleanField('Make Invoice', default = True)
 
     submit = SubmitField('Create SubContract')
 
@@ -249,10 +264,10 @@ class MonthlyReportForm(FlaskForm):
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
     bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
     invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
-    
-    by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
-    contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
-    by_contract = BooleanField('Create invoice reference by Contract', default = False)
+    # invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.join(Contractor).order_by(InvoiceGroup.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
+    ##by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
+    contracts = QuerySelectMultipleField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
+    ##by_contract = BooleanField('Create invoice reference by Contract', default = False)
 
     def validate_end_date(self, end_date):
 
@@ -317,16 +332,21 @@ class InvoiceForm(FlaskForm):
     file_integra_csv = FileField('Browse for Integra CSV File')
     upload_csv = SubmitField('Upload CSV')
 
-    invoicing_list = SelectMultipleField('Select records for invoice creation',coerce=int, choices=[],  render_kw={'size':25})
+    invoicing_list = SelectMultipleField('Select records for invoice creation',coerce=int, choices=[],  render_kw={'size':65})
     # invoicing_list = StringField('Select records for invoice creation',  validators=[Optional()], render_kw={'size':25})
+    modify_invoice = SubmitField('Modify invoice')
     create_invoice = SubmitField('Create invoices')
 
 class MailForm(FlaskForm):
+    search = StringField(id='search', validators = [Optional()])
+    from_number = StringField(id='from_number', validators = [Optional()])
+    to_number = StringField(id='to_number', validators = [Optional()])
     send_all = BooleanField('Send all mails', default = False)
     subject = StringField(id='Subject', validators = [DataRequired()], default = 'From GED automated invoice sender')
-    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':65})  
-    send_excel = BooleanField('Send only excel file', default = False)
-    send_pdf = BooleanField('Send only pdf file', default = False)
+    attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':45})  
+    send_excel = BooleanField('Attach only excel file', default = False)
+    send_pdf = BooleanField('Attach only pdf file', default = False)
+    include_open_market = BooleanField('Include open market mail', default = True)
     submit = SubmitField('Send selected')
 
 class TestForm(FlaskForm):
@@ -334,10 +354,73 @@ class TestForm(FlaskForm):
     end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
                                                                             default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
                                                                             if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
-    # contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
-    # send_all = BooleanField('Send all mails', default = False)
-    # attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
+
+
+    contract_tk =  StringField(id='contract_tk', validators=[Optional()])                                                                  
+    # contracts = QuerySelectField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[DataRequired()], render_kw={'size':15})
+    # modify_contract = SubmitField('Modify Contract')
+    # # contracts = SelectField(id = 'contracts',choices = [], validators=[DataRequired()], render_kw={'size':15})
+    # # send_all = BooleanField('Send all mails', default = False)
+    # # attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
+    # # input_f = StringField(id='input', validators = [Optional()], render_kw={"onchange": "test_proba()"})
+    # invoice_groups = SelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})
+    # modify_inv_group = SubmitField('Modify Invoicing Group')
+    # itns = SelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
     submit = SubmitField('Test')
+
+class ModifyForm(FlaskForm):
+    # contract_tk =  StringField(id='contract_tk', validators=[Optional()], default = 'ТК') 
+    contract_search = StringField(id='contract_search', validators=[Optional()], default = 'ТК') 
+    contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
+    modify_contract = SubmitField('Modify Contract',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px'})
+    invoice_groups = NonValidatingSelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})    
+    modify_inv_group = SubmitField('Modify Invoicing Group',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px', 'type':'button', 'onclick':'modifyInvGroup()'})
+    itns = NonValidatingSelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
+    modify_itn = SubmitField('Modify ITN',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'button', 'onclick':'modifyItn()'})
+
+class ModifyInvGroupForm(FlaskForm):
+    from_contractor = NonValidatingSelectField(id = 'from_contractor',choices = [],validators=[Optional()])
+    from_suffix = IntegerField(id = 'from_suffix',validators=[NumberRange(min = 1, max = 999)])
+    from_group = StringField(id = 'from_group')
+    from_description = StringField(id = 'from_description')
+    itns = NonValidatingSelectMultipleField(id = 'itns',choices = [],validators=[DataRequired()])
+    to_contractor = NonValidatingSelectField(id = 'to_contractor',choices = [],validators=[Optional()])
+    to_contract = NonValidatingSelectField(id = 'to_contract',choices = [],validators=[Optional()])
+    # to_suffix = StringField(id = 'to_suffix',validators=[NumberRange(min = 1, max = 999)], default = 1)
+    to_group = NonValidatingSelectField(id = 'to_group',choices = [])
+    new_group = StringField(id = 'new_group',render_kw={'style':'display:none'},validators=[Optional()])
+    to_description = StringField(id = 'to_description',validators=[Length(min = 1, max = 128, message='Select to_group first!')])
+    to_email = StringField(id = 'to_email')
+
+    def validate_new_group(self, new_group):        
+        pattern = re.compile(r"^411-[\d]{1,3}-[\d]{1,5}_[\d]{1,3}$")
+        result = pattern.match(new_group.data)
+        print(f'new_group{new_group.data}')
+        if result is None:
+            raise ValidationError('Wrong invoicing group')
+        to_contractor_ = Contractor.query.filter(Contractor.id == self.to_contractor.data).first()
+        acc_411 = new_group.data.split('_')[0] 
+        if to_contractor_.acc_411 != acc_411:
+            raise ValidationError(f'Invoicing group:{new_group.data} does\'t belong to contractor: {to_contractor_.name} ! Гледай, бе шебек ! ')
+
+    # def validate_to_description(self, to_description):
+
+    #     if len(to_description.data) == 0:
+    #         raise ValidationError('Select invoicing group!')    
+
+class ModifyItn(FlaskForm):
+    itn = StringField(id='Itn', validators = [Optional()], render_kw={'readonly': True})
+    itn_addr = StringField('Address', validators=[Optional()])
+    itn_descr = StringField('Description', validators=[Optional()])
+    grid_voltage = SelectField(choices = ['HV','MV','LV'], validators = [DataRequired()])
+    erp = SelectField(choices = ['CEZ','E-PRO','EVN'], validators = [DataRequired()])
+
+class ModifySubcontract(FlaskForm):
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+
 
 class MonthlyReportErpForm(FlaskForm):
     
@@ -346,7 +429,7 @@ class MonthlyReportErpForm(FlaskForm):
     invoicing_group = SelectMultipleField(choices = [], validators=[Optional()], render_kw={'size':15})
     
     by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
-    contracts = SelectField(choices = [],validators=[Optional()], render_kw={'size':15})
+    contracts = SelectMultipleField(choices = [],validators=[Optional()], render_kw={'size':15})
     # contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     by_contract = BooleanField('Create invoice reference by Contract', default = False)
 
@@ -400,14 +483,131 @@ class PostForm(FlaskForm):
     # # invoicing_list = StringField('Select records for invoice creation',  validators=[Optional()], render_kw={'size':25})
     # create_invoice = SubmitField('Create invoices')
 
+# class RedactEmailForm(FlaskForm):   
+
+#     # def __init__(self, *args, **kwargs):
+#     #     super().__init__(*args, **kwargs)
+#     #     self.contract_type_id = contract_type_id
+        
+
+#     # inv_goups_mails = QuerySelectField(query_factory = lambda: InvoiceGroup.query.join(Mail, Mail.id == InvoiceGroup.email_id).order_by(InvoiceGroup.description).all(), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':65})
+#     # inv_goups_mails = QuerySelectField(query_factory = lambda: InvoiceGroup.query
+#     #                                         .join(Mail, Mail.id == InvoiceGroup.email_id)
+#     #                                         .join(Contractor,Contractor.id == InvoiceGroup.contractor_id)
+#     #                                         .join(Contract,Contract.contractor_id == Contractor.id)
+#     #                                         .join(ContractType, ContractType.id == Contract.contract_type_id)
+#     #                                         .filter(ContractType.id == self.contract_type_id)
+#     #                                         .order_by(InvoiceGroup.description)
+#     #                                         .all(), allow_blank = False,get_label=InvoiceGroup.__rep_for_mails__, validators=[Optional()], render_kw={'size':65})
+#     # inv_goups_mails = SelectField( 'Available contractors/emails',validators=[DataRequired()])
+#     # inv_goups_mails = QuerySelectField('trans_id', validators=[DataRequired()], get_label='name')
+#     new_mail = StringField(id='New Email', validators = [DataRequired()], default = '')
+
+#     submit = SubmitField('Apply changes')
+
+class RedactContractForm(FlaskForm):
+
+    
+    contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':25})
+    submit = SubmitField('Select contract')
+
+class RedactContractorForm(FlaskForm):
+
+    search = StringField(id='search', validators = [Optional()])
+    contractors = QuerySelectMultipleField(query_factory = lambda: Contractor.query.order_by(Contractor.name), allow_blank = False,get_label=Contractor.__str__, validators=[Optional()], render_kw={'size':25})
+    submit_btn = SubmitField('Select contractor')
+
+class ContarctDataForm(FlaskForm):
+
+    internal_id = StringField(id='internal_id', validators = [DataRequired()], render_kw={'readonly': True})
+    contractor = SelectField(choices = [], coerce=int, validators = [Optional()])
+    subject = TextAreaField(id='subject', validators = [Optional()])
+    parent_contract = SelectField(choices = [], coerce=str, validators = [Optional()])
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()])
+    contract_type = SelectField(choices = [], coerce=str, validators = [DataRequired()])
+    delete_subs = BooleanField('Delete selected subcontracts', default = False)
+    subs = SelectMultipleField(choices = [], coerce=str, validators=[Optional()], render_kw={'size':25})
+    delete_contract = BooleanField('Delete contract', default = False)
+
+    def validate_end_date(self, end_date):
+        
+        # dt_end_obj = dt.datetime.strptime(end_date.data, '%Y-%m-%d')
+        curr_contract = Contract.query.filter(Contract.internal_id == self.internal_id.data).first()
+        end_date = convert_date_to_utc('EET',end_date.data)
+        end_date = end_date + dt.timedelta(hours = 23)
+        print(f'validate_end_date {end_date} -- {curr_contract.end_date}')
+        if end_date > curr_contract.end_date:
+            print(f'in validation')
+            raise ValidationError('Modified end date MUST be before current end date !')
+    
+    # submit_sub_del = SubmitField('Delete subcontracts')
+
+class ContarctorDataForm(FlaskForm):
+
+    parent_contractor = SelectField(choices = [], coerce=str, validators = [Optional()])
+    # names = SelectField(choices = [], coerce=str, validators = [DataRequired()])
+    name = StringField(id='name', validators = [DataRequired()])
+    eic = StringField(id='eic', validators = [DataRequired()])
+    address = StringField(id='address', validators = [DataRequired()])
+    vat_number = StringField(id='vat_number', validators = [DataRequired()])
+    email = StringField(id='email', validators = [DataRequired()])
+    acc_411 = StringField(id='acc_411', render_kw={'readonly': True})
+    
+    # submit = SubmitField('Apply changes', render_kw={"onclick": "modify_contractor_on_click()"})
+    # submit = SubmitField('Apply changes')
+
+class EmailsOptionsForm(FlaskForm):
+    
+    contract_type = SelectField(choices = ['Mass_Market','End_User','Procurement','All'], validators = [DataRequired()])
+    
+    submit = SubmitField('Apply filters')
+
+class ItnCosumptionDeletion(FlaskForm):
+
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    itn = StringField('ITN', validators=[DataRequired()])
+    submit = SubmitField('Apply changes')
+
+
+
 class RedactEmailForm(FlaskForm):   
 
-    inv_goups_mails = QuerySelectField(query_factory = lambda: InvoiceGroup.query.join(Mail, Mail.id == InvoiceGroup.email_id).order_by(InvoiceGroup.description).all(), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':65})
-    new_mail = StringField(id='New Email', validators = [DataRequired()], default = '')
+    search = StringField(id='email_search', validators = [Optional()])
+    inv_goups_mails = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.join(Mail, Mail.id == InvoiceGroup.email_id).order_by(InvoiceGroup.description).all(), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':25})
+    new_mail = StringField(id='new_mail', validators = [DataRequired()], default = '')
+
+    # submit = SubmitField('Apply changes')   
+
+class ModifyInvoiceForm(FlaskForm):
+
+    invoice_num = StringField(id='invoice_num', validators = [DataRequired()])
+    contractor_name = StringField(id='contractor_name', validators = [DataRequired()])
+    bulstat = StringField(id='bulstat', validators = [DataRequired()])
+    vat_number = StringField(id='vat_number', validators = [DataRequired()])
+    address = StringField(id='address', validators = [DataRequired()])
+
+    electricity_qty = DecimalField('electricity_qty',validators=[DataRequired()])
+    electricity_price = DecimalField('electricity_price',validators=[DataRequired()])
+    electricity_sum = DecimalField('electricity_sum',validators=[DataRequired()])
+    zko_price = DecimalField('zko_price',validators=[DataRequired()])
+    zko_sum = DecimalField('zko_sum',validators=[DataRequired()])
+    akciz_price = DecimalField('akciz_price',validators=[DataRequired()])
+    akciz_sum = DecimalField('akciz_sum',validators=[DataRequired()])
+    grid_sum = DecimalField('grid_sum',validators=[Optional()])
+
+    sum_neto = DecimalField('sum_neto',validators=[DataRequired()])
+    vat_percentage = DecimalField('vat_percentage',validators=[DataRequired()], default = 20)
+    sum_vat = DecimalField('sum_vat',validators=[DataRequired()])
+    sum_total = DecimalField('sum_total',validators=[DataRequired()])
+
+    pay_date = StringField(id='pay_date', validators = [DataRequired()])
+    excel_ref_name = StringField(id='excel_ref_name', validators = [DataRequired()])
 
     submit = SubmitField('Apply changes')
 
-            
+
+
+
     
 
     

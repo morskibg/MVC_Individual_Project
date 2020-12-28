@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+    <!-- <div class='col-md-2'></div>              -->
+    <div class='col-md-12'>        
+        
+        {{ wtf.quick_form(form,button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='ask_confirm_form') }} 
+        <!-- <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="test()"> -->
+    </div> 
+    <!-- <div class='col-md-2'> </div>     -->
+    <script>
+        let contract_tk = document.getElementById('contract_tk');
+        let contracts = document.getElementById('contracts');
+        let invoice_groups = document.getElementById('invoice_groups'); 
+        let itns = document.getElementById('itns');        
+        
+        contract_tk.onkeyup = function(){
+            
+            let tk = contract_tk.value            
+            console.log(tk)
+            let contract_id = -1
+            let inv_group_id = -1
+            fetch('/_get_contract/' + tk).then(function(response){
+                response.json().then(function(data){
+                    let optionHTML = '';
+                    for(let contract of data.contracts){                        
+                        contract_id = contract.contract_id; 
+                        // console.log(contract_id) ;
+
+                        if(contract_id !== undefined){                            
+                            optionHTML += '<option value="' + contract.internal_id + '">' + contract.internal_id + ' - ' + contract.contractor_name + ' - ' + contract.start_date + ' - ' + contract.end_date + ' - ' + contract.contract_id + '</option>';
+                        } 
+                    }
+                    contracts.innerHTML = optionHTML;
+                    updateInvGroups(contract_id);
+                    // fetch('/_get_inv_groups/' + contract_id).then(function(response){
+                
+                    //     response.json().then(function(data){
+                    //         let optionHTML = '';
+                    //         for(let group of data.groups){                                
+                    //             optionHTML += '<option value="' + group.invoice_group + '">' + group.invoice_group + ' - ' + group.invoice_group_description + ' - ' + group.email + '</option>';
+                    //         }
+                    //         invoice_groups.innerHTML = optionHTML;
+                    //         // console.log(data);
+                            
+                            
+                    //     });
+                    // });                    
+                });
+            }); 
+        };
+
+        invoice_groups.onchange = function(){
+            let name = invoice_groups.value
+            
+            fetch('/_get_itns/' + name).then(function(response){
+                
+                response.json().then(function(data){
+                    let optionHTML = '';
+                    let count = 0;
+                    for(let itn of data.itns){  
+                        // console.log(itn);                              
+                        optionHTML += '<option value="' + itn.itn + '">' + itn.itn + '</option>';
+                        count += 1;
+                    }
+                    if(count >30){
+                        count = 30;
+                    }
+                    console.log(count)
+                    itns.size = count;
+                    itns.innerHTML = optionHTML;                    
+                    
+                });
+            });     
+
+        };       
+
+        contracts.onchange = function(){
+            updateInvGroups(contracts.value);
+
+            // let id = contracts.value
+            // console.log('in contracts on change')
+            // console.log(id)
+            // fetch('/_get_inv_groups/' + id).then(function(response){
+            //     response.json().then(function(data){
+            //         let optionHTML = ''
+            //         for(let group of data.groups){
+            //             // console.log(group);
+            //             optionHTML += '<option value="' + group.invoice_group + '">' + group.invoice_group + ' - ' + group.invoice_group_description + ' - ' + group.email + '</option>';
+
+            //         }
+            //         invoice_groups.innerHTML = optionHTML;
+                    
+            //     });
+            // });
+        };
+        function updateInvGroups(contract_id){
+
+        // let id = contracts.value
+        console.log('in updateInvGroups')
+        // console.log(id)
+        fetch('/_get_inv_groups/' + contract_id).then(function(response){
+            response.json().then(function(data){
+                let optionHTML = ''
+                for(let group of data.groups){
+                    // console.log(group);
+                    optionHTML += '<option value="' + group.invoice_group + '">' + group.invoice_group + ' - ' + group.invoice_group_description + ' - ' + group.email + '</option>';
+                }
+                invoice_groups.innerHTML = optionHTML;                
+            });
+        });
+};
+
+        
+    </script>
+{% endblock %}
