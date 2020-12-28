@@ -254,6 +254,6 @@ dist
 .pnp.*
 
 # pdf, excel, csv
-.pdf
-.xlsx
-.csv
+*.pdf
+*.xlsx
+*.csv
