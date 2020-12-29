@@ -2491,6 +2491,14 @@ def modify_itn(itn):
 @login_required
 def modify_subcontracts():
     form = ModifySubcontractEntryForm()
+    if form.validate_on_submit():
+        # print(f'{form.subcontracts.data[0]}')
+        tokens = form.subcontracts.data[0].split(' - ')
+        print(f'{tokens}')
+        subcontract = SubContract.query.filter(SubContract.itn == tokens[0], SubContract.start_date == tokens[1]).first()        
+        subcontract.update({'has_grid_services': form.has_grid.data})
+        
+        print(f'{form.has_grid.data}')
 
     return render_template('modify_subcontracts.html', title='Redacting Subcontracts', form=form, header = 'Redacting SUBCONTRACTS', need_dt_picker = True)
 
@@ -2576,10 +2584,12 @@ def _get_contracts(contractor_id):
 def _get_itns(name):
     itns = (
         db.session.query(
-            SubContract.itn, InvoiceGroup.name, MeasuringType.code
+            SubContract.itn, InvoiceGroup.name, MeasuringType.code, AddressMurs.name
         )
         .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)        
         .join(MeasuringType,MeasuringType.id == SubContract.measuring_type_id)
+        .join(ItnMeta,ItnMeta.itn == SubContract.itn)
+        .join(AddressMurs,AddressMurs.id == ItnMeta.address_id)
         .filter(InvoiceGroup.name == name)
         .order_by(MeasuringType.code, SubContract.itn)
         .all()
@@ -2590,6 +2600,7 @@ def _get_itns(name):
         itn_obj['itn'] = itn[0]
         itn_obj['invoice_group'] = itn[1]
         itn_obj['type'] = itn[2]
+        itn_obj['address'] = itn[3]
         itns_arr.append(itn_obj)
     return jsonify({'itns':itns_arr})
 

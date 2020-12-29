@@ -425,7 +425,7 @@ class ModifySubcontractEntryForm(FlaskForm):
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     subcontracts = NonValidatingSelectMultipleField(id = 'subcontracts',choices = [],validators=[DataRequired()])
     has_grid = BooleanField('Has Grid')
-    modify_subcontract = SubmitField('Modify Sub',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'button', 'onclick':'modifySub()'})
+    modify_subcontract = SubmitField('Modify Sub',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'submit'})
     
 
 class MonthlyReportErpForm(FlaskForm):

@@ -19,19 +19,37 @@ import simplejson
 class BaseModel(db.Model):
     __abstract__ = True
     def save(self):
-        if self not in db.session:
-            db.session.add(self)
-        db.session.commit()
-        print(f'commited to db')
+        try:
+            if self not in db.session:
+                db.session.add(self)
+            db.session.commit()
+        except:
+            flash(f'Error on saving {self} in database. Aborting !','danger')
+            print(f'Error on saving {self} in database. Aborting !')
+        else: 
+            print(f'{self} commited to db')
 
     def update(self, data: dict):
         for field, value in data.items():
             setattr(self, field, value)
-        self.save()
+        try:
+            self.save()
+        except:
+            flash(f'Error on updating {self} . Aborting !','danger')
+            print(f'Error on updating {self} . Aborting !')
+        else:
+            print(f'updated successifuly')
 
     def delete(self):
-        db.session.delete(self)
-        db.session.commit()
+        try:
+            db.session.delete(self)
+            db.session.commit()
+        except:
+            flash(f'Error on deleting {self} . Aborting !','danger')
+            print(f'Error on deleting {self} . Aborting !')
+        else:
+            print(f'{self} delete successifuly')
+
 
 
 class User(UserMixin,BaseModel):
