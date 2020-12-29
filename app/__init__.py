@@ -7,6 +7,7 @@ from flask_moment import Moment
 from flask_bootstrap import Bootstrap
 from flask_mail import Mail
 from sqlalchemy.exc import ProgrammingError
+from flask_marshmallow import Marshmallow
 
 
 
@@ -20,6 +21,7 @@ moment = Moment(app)
 bootstrap = Bootstrap(app)
 app.static_folder = 'static'
 mail = Mail(app)
+ma = Marshmallow(app)   
 
 
 from app import routes, models

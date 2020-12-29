@@ -14,8 +14,9 @@ from app.forms import (
     LoginForm, RegistrationForm, NewContractForm, AddItnForm, AddInvGroupForm, ErpForm, AdditionalReports, RedactEmailForm, EmailsOptionsForm,
     UploadInvGroupsForm, UploadContractsForm, UploadItnsForm, CreateSubForm, TestForm, MonthlyReportErpForm, PostForm, RedactContractForm,
     UploadInitialForm, IntegraForm, InvoiceForm, MonthlyReportForm, MailForm, MonthlyReportErpForm,MonthlyReportOptionsForm, ContarctDataForm,
-    ItnCosumptionDeletion, ModifyInvoiceForm, RedactContractorForm, ContarctorDataForm, ModifyForm, ModifyInvGroupForm, ModifyItn)
+    ItnCosumptionDeletion, ModifyInvoiceForm, RedactContractorForm, ContarctorDataForm, ModifyForm, ModifyInvGroupForm, ModifyItn, ModifySubcontractEntryForm)
 from flask_login import current_user, login_user, logout_user, login_required
+
 from app.models import *
 
 from werkzeug.urls import url_parse
@@ -211,14 +212,37 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
 
-        inv_name_part = form.contract_tk.data
 
-        pattern = re.compile(r"^411-[\d]{1,3}-[\d]{1,5}_[\d]{1,3}$")
-        result = pattern.match(inv_name_part)
-        if result is None:
-            print(f'no matching') 
-        else:
-            print(f'matching') 
+        subs = SubContract.query.join(Contract,Contract.id == SubContract.contract_id).filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))).filter(Contract.id == form.contracts.data[0].id).all()
+        print(f' printing \n{subs}')
+        sub_schema = SubContractSchema()
+        print(f' printing \n{sub_schema.dump(subs, many = True)}')
+        # print(f'{subs}')
+
+        # contract_id = 550
+       
+        # contr = Contract.query.get(contract_id)
+        # # print(f'{contr}')
+        
+
+        # varlist = ['id','start_date','internal_id','sub_contracts']
+        # contract_schema = ContractSchema()
+        # # output = contract_schema.dump(contr)
+        # print(f' printing \n{contract_schema.dump(contr)}')
+
+
+        
+
+
+
+        # inv_name_part = form.contract_tk.data
+
+        # pattern = re.compile(r"^411-[\d]{1,3}-[\d]{1,5}_[\d]{1,3}$")
+        # result = pattern.match(inv_name_part)
+        # if result is None:
+        #     print(f'no matching') 
+        # else:
+        #     print(f'matching') 
 
         # inv_groups = (
         #     db.session.query(
@@ -2466,8 +2490,9 @@ def modify_itn(itn):
 @app.route('/modify_subcontracts', methods=['GET', 'POST'])
 @login_required
 def modify_subcontracts():
+    form = ModifySubcontractEntryForm()
 
-    return render_template('ask_confirm.html', title='Redacting Subcontracts', form=form, header = 'Redacting SUBCONTRACTS')
+    return render_template('modify_subcontracts.html', title='Redacting Subcontracts', form=form, header = 'Redacting SUBCONTRACTS', need_dt_picker = True)
 
 @app.route('/_get_inv_groups/<contract_id>', methods=['GET', 'POST'])
 @login_required
@@ -2643,4 +2668,15 @@ def _get_itn_data(itn):
     return jsonify({'itns':[{'itn':data[0][0],'address':data[0][1], 'description':data[0][2], 'grid_voltage':data[0][3], 'erp':data[0][4]}]})
 
 
+@app.route('/_get_subcontracts/<start_date>/<end_date>/<contract_id>', methods=['GET', 'POST'])
+@login_required
+def _get_subcontracts(start_date, end_date, contract_id):
+
+    start_date = convert_date_to_utc('EET',start_date)   
+    end_date = convert_date_to_utc('EET',end_date)
+    end_date = end_date + dt.timedelta(hours = 23)
+    subs = SubContract.query.join(Contract,Contract.id == SubContract.contract_id).filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))).filter(Contract.id == contract_id).all()    
+    sub_schema = SubContractSchema()
     
+    return jsonify(sub_schema.dump(subs, many = True))
+

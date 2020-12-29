@@ -45,6 +45,8 @@
                                     <ul class="dropdown-menu">
                                         <li><a class="dropdown-item" href="{{ url_for('modify_contractor') }}"> Contractor </a></li>
                                         <li><a class="dropdown-item"  href="{{ url_for('modify') }}">Contract / Inv Group / Itn</a></li> 
+                                        <li><a class="dropdown-item"  href="{{ url_for('modify_subcontracts') }}">SubContract</a></li> 
+                                        
                                         {% if current_user.username == 'dpetkov' %}                                   
                                             <li><a class="dropdown-item"  href="{{ url_for('test') }}">Test</a></li>
                                         {% endif %}

@@ -356,7 +356,7 @@ class TestForm(FlaskForm):
                                                                             if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
 
 
-    contract_tk =  StringField(id='contract_tk', validators=[Optional()])                                                                  
+    contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})                                                                  
     # contracts = QuerySelectField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[DataRequired()], render_kw={'size':15})
     # modify_contract = SubmitField('Modify Contract')
     # # contracts = SelectField(id = 'contracts',choices = [], validators=[DataRequired()], render_kw={'size':15})
@@ -415,12 +415,18 @@ class ModifyItn(FlaskForm):
     grid_voltage = SelectField(choices = ['HV','MV','LV'], validators = [DataRequired()])
     erp = SelectField(choices = ['CEZ','E-PRO','EVN'], validators = [DataRequired()])
 
-class ModifySubcontract(FlaskForm):
+class ModifySubcontractEntryForm(FlaskForm):
+    search = StringField(id='search', validators = [Optional()])
+    search_by_itn = StringField(id='search_by_itn', validators = [Optional()])
     start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
                                                                             default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
                                                                             if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
-
+    contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
+    subcontracts = NonValidatingSelectMultipleField(id = 'subcontracts',choices = [],validators=[DataRequired()])
+    has_grid = BooleanField('Has Grid')
+    modify_subcontract = SubmitField('Modify Sub',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'button', 'onclick':'modifySub()'})
+    
 
 class MonthlyReportErpForm(FlaskForm):
     

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+<!-- <div class='col-md-1'></div>              -->
+<div class='col-md-12'>                      
+    <h1>{{header|safe}}</h1> 
+   
+    {{ wtf.quick_form(form, button_map={'modify_subcontract': 'primary'},id='mod_sub_form') }}
+    
+
+</div> 
+<!-- <div class='col-md-1'> </div>  -->
+ 
+{% endblock %}
+
+{% block form_scripts %}
+    <script>
+        const search_field = document.getElementById('search')
+        const search_by_itn = document.getElementById('search_by_itn');
+        const start_date = document.getElementById('start_datepicker');
+        const end_date = document.getElementById('end_datepicker');
+        const contracts = document.getElementById('contracts');
+        const subcontracts = document.getElementById('subcontracts');
+        const itns = document.getElementById('itns');
+        const values = document.querySelectorAll('option');
+        const button = document.getElementById('modify_subcontract');
+        const has_grid = document.getElementById('has_grid');
+        const labels = document.querySelectorAll('.control-label')
+
+        init()
+        // let matched_start_date = ''
+        
+        // start_date.onblur = () => {
+        //     console.log('in start date',start_date.value)
+        //     const regex = new RegExp(/^[\d]{4}-[\d]{1,2}-[\d]{1,2}$/);
+        //     if(regex.test(start_date.value)){
+        //         console.log('regex matched')
+        //         matched_start_date = start_date.value
+        //     }else{
+        //         console.log('regex not matched')
+        //     }
+        //     console.log(matched_start_date)
+
+        // };
+        
+        
+        contracts.ondblclick = () => {
+            button.disabled = true;
+            has_grid.disabled = true;
+             
+            if(start_date.value !== null && end_date.value !== null ){
+                fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${contracts.value}`).then(function(response){
+                
+                    response.json().then(function(data){
+                        
+                        let optionHTML = '';
+                        let count = 0;
+                        // console.log(data)
+                        for(let sub of data){                               
+                            optionHTML += `<option value="${sub.itn} - ${sub.start_date} - ${sub.has_grid_services ? 'GRID':'NO GRID'}">${sub.itn} - ${sub.invoice_group.name} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.start_date} - ${sub.end_date} - ${sub.invoice_group.description}</option>`;                                              
+                            count += 1;
+                        }
+                        if(count >30){
+                            count = 30;
+                        }                    
+                        subcontracts.size = count;
+                        subcontracts.innerHTML = optionHTML;     
+                        initBackground()  
+                            
+                    });
+                }); 
+            };            
+        };
+
+        subcontracts.onclick = () => {
+            button.disabled = false; 
+            has_grid.disabled = false;
+            // console.log(subcontracts.value.includes('NO GRID'))            
+            has_grid.checked = !subcontracts.value.includes('NO GRID') 
+        }
+        has_grid.onclick = () =>{
+            console.log(has_grid.value)
+        }
+
+        function init(){
+            console.log(labels)
+            button.disabled = true;
+            has_grid.disabled = true;
+           
+
+
+        };
+
+        
+        // console.log(values)
+
+        // values.onkeyup = () =>{
+        //     to_num.value = ''
+        //     const parsed_from_num = parseInt(from_num.value.toLowerCase());
+        //     if(!isNaN(parsed_from_num)){                
+        //         values.forEach(value => {                  
+        //             if(!value.firstChild.textContent.toLowerCase().includes(from_num.value) 
+        //                 && parseInt(value.firstChild.textContent) < parsed_from_num){                
+                        
+        //                 value.style = 'display:none'                                               
+        //             }else{
+        //                 value.style = 'block'                                     
+        //             }
+        //         });                
+        //     };           
+        // };
+
+        // to_num.onkeyup = () =>{
+        //     const parsed_to_num = parseInt(to_num.value.toLowerCase());
+        //     if(!isNaN(parsed_to_num)){                
+        //         values.forEach(value => { 
+        //             const curr_value = parseInt(value.firstChild.textContent); 
+        //             const from_value = parseInt(from_num.value);                
+        //             if(curr_value > parsed_to_num || curr_value < from_value){                         
+        //                 value.style = 'display:none';
+
+        //             }else if(from_value <= curr_value && curr_value <= parsed_to_num){
+        //                 value.style = 'block';
+                                                           
+        //             };
+        //         });                
+        //     }; 
+        //     initBackground()           
+        // };
+ 
+        // search_field.onkeyup = () =>{
+        //     from_num.value = ''
+        //     to_num.value = ''
+        //     values.forEach(value => {
+        //         if(!value.firstChild.textContent.toLowerCase().includes(search_field.value.toLowerCase())){               
+        //             value.style = 'display:none'   
+
+        //         }else{
+        //             value.style = 'block'                                     
+        //         }
+        //     });
+        //     initBackground()
+        // };
+
+    </script>
+{% endblock %}

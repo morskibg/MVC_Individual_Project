@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from decimal import Decimal 
 from flask import g, flash
-from app import db
+from app import db, ma
 from sqlalchemy.sql import func
 import sqlalchemy as sa
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -12,7 +12,8 @@ from flask_login import UserMixin
 from app import login
 from app import app
 
-
+from marshmallow_sqlalchemy import SQLAlchemyAutoSchema, auto_field, fields
+import simplejson
 
 
 class BaseModel(db.Model):
@@ -72,6 +73,7 @@ class Contractor(BaseModel):
 
     def __str__(self):
         return f'{self.name} - {self.acc_411}'
+    
 
 class TimeZone(BaseModel):
     id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
@@ -119,7 +121,9 @@ class Contract(BaseModel):
         return '<Contract :internal_id - {},  contractor_id - {}, {}, {}, {}, {}, {}, {}, {}, {}, {}>'\
         .format(self.internal_id, self.contractor_id, self.subject, self.parent_id, self.signing_date, 
         self.start_date, self.end_date, self.invoicing_interval, self.maturity_interval, 
-        self.contract_type_id, self.is_work_days)    
+        self.contract_type_id, self.is_work_days)   
+
+
 
 class ContractType(BaseModel):
     id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
@@ -149,6 +153,7 @@ class ItnMeta(BaseModel):
 
     def __repr__(self):
         return '<ItnMeta : {}, {}, {}, {}, {}, {}, {}>'.format(self.itn,self.description,  self.grid_voltage,self.address_id,self.erp_id,self.is_virtual,self.virtual_parent_itn)
+
 
 
 class AddressMurs(BaseModel):
@@ -276,7 +281,6 @@ class InvoiceGroup(BaseModel):
         epay_num, epay_name = generate_num_and_name(first_digit, acc_411, self.name, name)
         return f'{epay_num} - {epay_name} - {self.name} - {email}'
 
-
     def __str__(self):
 
         email = Mail.query.filter(Mail.id == self.email_id).first().name
@@ -310,8 +314,6 @@ class SubContract(BaseModel):
     invoice_group = db.relationship('InvoiceGroup', back_populates = 'sub_contracts')
     measuring_type = db.relationship('MeasuringType', back_populates = 'sub_contracts')
     meta = db.relationship('ItnMeta', back_populates = 'sub_contracts')
-    
-    
 
     def __repr__(self):
         return (f'<{self.itn}, {self.contract_id}, {self.object_name}, \
@@ -567,4 +569,100 @@ db.event.listen(SubContract, 'before_delete', ItnSchedule.before_delete)
 
 # db.event.listen(SubContract, 'before_update', ItnSchedule.autoupdate_existing)
 # db.event.listen(SubContract, 'before_update', ItnSchedule.test)
+
+class MeasuringTypeSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = MeasuringType
+        include_relationships = True
+        load_instance = True
+    id = auto_field()
+    code = auto_field()
+    
+
+class ContractorSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = Contractor
+        include_relationships = True
+        load_instance = True
+    id = auto_field()
+    parent_id = auto_field()
+    name = auto_field()
+    eic = auto_field()
+    address = auto_field()
+    vat_number = auto_field()
+    email = auto_field()
+    acc_411 = auto_field()
+    last_updated = ma.DateTime('%Y-%m-%d %H:%M:%S')
+
+    # contracts = auto_field()
+    # invoice_groups = auto_field()
+
+class ContractSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = Contract
+        include_relationships = True
+        load_instance = True
+
+    id = auto_field()
+    internal_id = auto_field()
+    # contractor_id = auto_field()
+    subject = auto_field()
+    parent_id = auto_field()
+    time_zone_id = auto_field()
+    signing_date = ma.DateTime('%Y-%m-%d %H:%M:%S')
+    start_date = ma.DateTime('%Y-%m-%d %H:%M:%S')
+    end_date = ma.DateTime('%Y-%m-%d %H:%M:%S')  
+    contractor = ma.Nested(ContractorSchema) 
+
+class InvoiceGroupSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = InvoiceGroup
+        include_relationships = True
+        load_instance = True 
+    id = auto_field()
+    name = auto_field()
+    # contractor_id = db.Column(db.Integer, db.ForeignKey('contractor.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
+    description = auto_field()
+    email_id = auto_field()
+
+    contractor = ma.Nested(ContractorSchema)
+    sub_contracts = db.relationship("SubContract", back_populates="invoice_group", lazy="dynamic")  
+
+class SubContractSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = SubContract
+        json_module = simplejson
+        include_relationships = True
+        load_instance = True
+    itn = auto_field()
+    # contract_id = auto_field()
+    object_name = auto_field()    
+    # invoice_group_id = auto_field()
+    # measuring_type_id = auto_field()
+    start_date = ma.DateTime('%Y-%m-%d %H:%M:%S')
+    end_date = ma.DateTime('%Y-%m-%d %H:%M:%S')   
+    zko = auto_field()
+    akciz = auto_field()
+    has_grid_services = auto_field()
+    has_spot_price = auto_field()
+    has_balancing = auto_field()    
+    make_invoice = auto_field()    
+    last_updated = ma.DateTime('%Y-%m-%d %H:%M:%S')
+    contract = ma.Nested(ContractSchema)   
+    invoice_group = ma.Nested(InvoiceGroupSchema)
+    measuring_type = ma.Nested(MeasuringTypeSchema)
+    # meta = auto_field()
+
+
+
+class ItnMetaSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = ItnMeta
+        include_relationships = True
+        load_instance = True
+
+
+
+
+    
 
