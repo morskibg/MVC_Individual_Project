@@ -6,6 +6,7 @@ import os.path
 import xlrd
 import time,re
 from decimal import Decimal,ROUND_HALF_UP
+import calendar
 
 from sqlalchemy.exc import ProgrammingError
 from flask import g, flash
@@ -683,17 +684,55 @@ def apply_linked_collision_function(parent_contract, linked_contract, invoice_gr
                                     has_spot_price = has_spot_price,
                                     has_balancing = has_balancing,
                                     make_invoice = make_invoice))  
-            curr_sub_contract.save()   #!!!!!!                       
+            curr_sub_contract.save()   #!!!!!!   
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                    
             print(f'currr subbbb saved --- > \n{curr_sub_contract}')
         # print(f'last_subcontracts {len(last_subcontracts)} --- {parent_contract.end_date}')
     else:
         print(f'collision_subcontracts {len(collision_subcontracts)} --- {parent_contract.end_date} Nothing is saved !')
 
+def get_valid_forecast_end_date(old_subcontract_last_date_utc, itn):
+
+    try:
+        counter = 12
+        while(counter > 0): 
+
+            print(f'in while -- {old_subcontract_last_date_utc}')         
+            schedule = (
+                db.session.query(ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
+                .filter(ItnSchedule.itn == itn, ItnSchedule.utc == old_subcontract_last_date_utc)
+                .first()
+            )            
+            if schedule is not None and schedule[0] != -1:                 
+                break
+            else:   
+                month = old_subcontract_last_date_utc.month
+                prev_month = month - 1 if month != 1 else 12                
+                old_subcontract_last_date_utc = old_subcontract_last_date_utc.replace(day = calendar.monthrange(old_subcontract_last_date_utc.year, prev_month)[1], month = prev_month)
+            counter -= 1
+                
+    except:
+        old_subcontract_last_date_utc = None
+        
+    finally:
+        
+        return old_subcontract_last_date_utc
+
+
 def create_forecast_algo(measuring_type_id, curr_tariff, itn, old_subcontract_last_date_utc, linked_contract):
 
+    
+    print(f'in create forecast algo')
     time_zone = TimeZone.query.filter(TimeZone.id == linked_contract.time_zone_id).first().code
+    old_subcontract_last_date_utc = get_valid_forecast_end_date(old_subcontract_last_date_utc, itn)
 
     forecast_period_local_end_date = convert_date_from_utc(time_zone, old_subcontract_last_date_utc, False)
+
+    if forecast_period_local_end_date is None:
+        
+        print(f'get_valid_forecast_end_date returnen NONE')
+        return pd.DataFrame()
+
     print(f'forecast_period_local_end_date -- > {forecast_period_local_end_date}')
     forecast_period_local_start_date = forecast_period_local_end_date.replace(day = 1, hour = 0)
     forecast_period_utc_start_date = old_subcontract_last_date_utc.replace(day = 1)
@@ -777,11 +816,12 @@ def create_forecast_algo(measuring_type_id, curr_tariff, itn, old_subcontract_la
 
         forecast_df.rename(columns={'index':'utc'}, inplace = True)  
         print(f'last\n {forecast_df.head()} \n{forecast_df.tail()}')
-        forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]    
-        update_or_insert(forecast_df, ItnScheduleTemp.__table__.name)
+        forecast_df = forecast_df[['itn', 'utc', 'forecast_vol', 'consumption_vol', 'price', 'settelment_vol', 'tariff_id']]  
+        if forecast_df['forecast_vol'].sum() < 0:
+            forecast_df['forecast_vol'] = Decimal('0')
+
+        update_or_insert(forecast_df, ItnScheduleTemp.__table__.name) #!!!!!!!!!!!!!!!!!!!!
         # print(f'from create_forcast_algo \n{forecast_df}')
-
-
 
 
 

@@ -158,15 +158,30 @@
         };
         
         function initBackground(){
-            console.log('in background')
-            document.querySelectorAll('option')
-            .forEach((control, idx) => {
+            // console.log('in background')
+            const control = document.querySelectorAll('option')
+            
+            let j = 1;
+            for (let i = 0; i < control.length; i += 1) {               
                 
-                if(idx % 2 != 0){
-                    
-                    control.style.backgroundColor = '#e6e6e6'
+                if(control[i].style.display !== ''){                    
+                    continue;
                 }
-                });
+                else{
+                    j += 1;
+                    if(j % 2 !== 0){                        
+                        control[i].style.backgroundColor = '#e6e6e6';
+                    }    
+                    
+                };
+            };
+            // .forEach((control, idx) => {
+                
+            //     if(idx % 2 != 0){
+                    
+            //         control.style.backgroundColor = '#e6e6e6'
+            //     }
+            //     });
         }
     </script>
     {% block form_scripts %}{% endblock %}

@@ -3,15 +3,14 @@
 
 
 {% block app_content %} 
-<!-- <div class='col-md-1'></div>              -->
+
 <div class='col-md-12'>                      
     <h1>{{header|safe}}</h1> 
    
-    {{ wtf.quick_form(form, button_map={'modify_subcontract': 'primary'},id='mod_sub_form') }}
-    
+    {{ wtf.quick_form(form, button_map={'modify_subcontract': 'primary'},id='mod_sub_form') }}    
 
 </div> 
-<!-- <div class='col-md-1'> </div>  -->
+
  
 {% endblock %}
 
@@ -30,119 +29,116 @@
         const labels = document.querySelectorAll('.control-label')
 
         init()
-        // let matched_start_date = ''
         
-        // start_date.onblur = () => {
-        //     console.log('in start date',start_date.value)
-        //     const regex = new RegExp(/^[\d]{4}-[\d]{1,2}-[\d]{1,2}$/);
-        //     if(regex.test(start_date.value)){
-        //         console.log('regex matched')
-        //         matched_start_date = start_date.value
-        //     }else{
-        //         console.log('regex not matched')
-        //     }
-        //     console.log(matched_start_date)
+        search_field.onkeyup = () =>{
+            searching()            
+        };
 
-        // };
-        
-        
+        search_field.onblur = () =>{
+            searching()            
+        };       
+
         contracts.ondblclick = () => {
+            search_by_itn.value = ''
             button.disabled = true;
-            has_grid.disabled = true;
-             
+            has_grid.disabled = true;  
+            const is_id = 1           
             if(start_date.value !== null && end_date.value !== null ){
-                fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${contracts.value}`).then(function(response){
-                
-                    response.json().then(function(data){
-                        
+                fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${contracts.value}/${is_id}`).then(function(response){                
+                    response.json().then(function(data){                        
                         let optionHTML = '';
                         let count = 0;
                         // console.log(data)
                         for(let sub of data){                               
-                            optionHTML += `<option value="${sub.itn} - ${sub.start_date} - ${sub.has_grid_services ? 'GRID':'NO GRID'}">${sub.itn} - ${sub.invoice_group.name} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.start_date} - ${sub.end_date} - ${sub.invoice_group.description}</option>`;                                              
+                            optionHTML += `<option value="${sub.itn} - ${sub.start_date} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.invoice_group.name}">${sub.itn} - 
+                                ${sub.invoice_group.name} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.start_date} - 
+                                ${sub.end_date} - ${sub.invoice_group.description} - ${sub.measuring_type.code}</option>`;                                              
                             count += 1;
                         }
                         if(count >30){
                             count = 30;
                         }                    
                         subcontracts.size = count;
-                        subcontracts.innerHTML = optionHTML;     
-                        initBackground()  
-                            
+                        subcontracts.innerHTML = optionHTML;  
+                         
+                        initBackground()                              
+                    });                    
+                })
+                .catch(error => console.log(error) );
+            };            
+        };
+
+        search_by_itn.onchange = () => {
+            
+            button.disabled = true;
+            has_grid.disabled = true; 
+            const is_id = 0            
+            if(start_date.value !== null && end_date.value !== null ){
+                fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${search_by_itn.value}/${is_id}`).then(function(response){                
+                    response.json().then(function(data){                        
+                        let optionHTML = '';
+                        let count = 0;
+                        
+                        for(let sub of data){                               
+                            optionHTML += `<option value="${sub.itn} - ${sub.start_date} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.invoice_group.name}">${sub.itn} - 
+                                ${sub.invoice_group.name} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.start_date} - 
+                                ${sub.end_date} - ${sub.invoice_group.description} - ${sub.measuring_type.code}</option>`; 
+                            search_field.value = sub.contract.internal_id                                           
+                            count += 1;
+                        }
+                        if(count >30){
+                            count = 30;
+                        }  
+                        searching()                    
+                        subcontracts.size = count;
+                        subcontracts.innerHTML = optionHTML;  
+                           
+                        initBackground()                              
                     });
-                }); 
+                })
+                .catch(error => console.log('in error',error) );
             };            
         };
 
         subcontracts.onclick = () => {
             button.disabled = false; 
             has_grid.disabled = false;
-            // console.log(subcontracts.value.includes('NO GRID'))            
-            has_grid.checked = !subcontracts.value.includes('NO GRID') 
-        }
-        has_grid.onclick = () =>{
-            console.log(has_grid.value)
-        }
+            console.log(subcontracts.value)            
+            has_grid.checked = !subcontracts.value.includes('NO GRID')             
+        }       
 
         function init(){
-            console.log(labels)
+            search_by_itn.value = ''
             button.disabled = true;
             has_grid.disabled = true;
-           
-
-
+            search_field.value = ''
         };
 
-        
-        // console.log(values)
+        function searching(){
+            
+            let counter = 0;
+            const key_word = search_field.value.toLowerCase()
+            console.log('in searching',key_word)
+            // values.forEach(value => value.style = 'block')  
+            const back_ground = 1      
+            values.forEach(value => {
+                counter++;
+                if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                    value.style = 'display:none'
+                    counter--;
+                    
+                }else{
+                    value.style = 'block'                
+                }                
+            });
+            if(counter === 0){
+                contracts.value = ''
+            }
+            contracts.size = counter;     
+            initBackground()                 
+        }
 
-        // values.onkeyup = () =>{
-        //     to_num.value = ''
-        //     const parsed_from_num = parseInt(from_num.value.toLowerCase());
-        //     if(!isNaN(parsed_from_num)){                
-        //         values.forEach(value => {                  
-        //             if(!value.firstChild.textContent.toLowerCase().includes(from_num.value) 
-        //                 && parseInt(value.firstChild.textContent) < parsed_from_num){                
-                        
-        //                 value.style = 'display:none'                                               
-        //             }else{
-        //                 value.style = 'block'                                     
-        //             }
-        //         });                
-        //     };           
-        // };
 
-        // to_num.onkeyup = () =>{
-        //     const parsed_to_num = parseInt(to_num.value.toLowerCase());
-        //     if(!isNaN(parsed_to_num)){                
-        //         values.forEach(value => { 
-        //             const curr_value = parseInt(value.firstChild.textContent); 
-        //             const from_value = parseInt(from_num.value);                
-        //             if(curr_value > parsed_to_num || curr_value < from_value){                         
-        //                 value.style = 'display:none';
-
-        //             }else if(from_value <= curr_value && curr_value <= parsed_to_num){
-        //                 value.style = 'block';
-                                                           
-        //             };
-        //         });                
-        //     }; 
-        //     initBackground()           
-        // };
- 
-        // search_field.onkeyup = () =>{
-        //     from_num.value = ''
-        //     to_num.value = ''
-        //     values.forEach(value => {
-        //         if(!value.firstChild.textContent.toLowerCase().includes(search_field.value.toLowerCase())){               
-        //             value.style = 'display:none'   
-
-        //         }else{
-        //             value.style = 'block'                                     
-        //         }
-        //     });
-        //     initBackground()
-        // };
 
     </script>
 {% endblock %}

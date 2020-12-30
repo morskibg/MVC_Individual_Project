@@ -119,6 +119,53 @@ def inject_is_test_base():
 
     return dict(is_test_base = is_test_base)
 
+@app.route('/')
+@app.route('/index')
+@login_required
+def index():
+    
+    return render_template("index.html", title='Home Page')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+	
+    if current_user.is_authenticated:	   
+        # #print('is_authenticated', file=sys.stdout)
+        return redirect(url_for('index'))
+
+    form = LoginForm()  
+
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        next_page = request.args.get('next')
+        if not next_page or url_parse(next_page).netloc != '':
+            next_page = url_for('index')
+        return redirect(next_page)
+    return render_template('login.html', title='Sign In', form=form)    
+
+@app.route('/register_gyz', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User(username=form.username.data, email=form.email.data)
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash('Congratulations, you are now a registered user!')
+        return redirect(url_for('login'))
+    return render_template('register.html', title='Register', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
 @app.route('/additional_reports', methods=['GET', 'POST'])
 def add_reports():
     form = AdditionalReports()
@@ -155,8 +202,6 @@ def monthly_erp():
                             end_date = form.end_date.data, contract_type = form.contract_type.data, is_mixed = form.include_all.data,  **request.args))
 
     return render_template('quick_template.html', title='Monthly reports filter', form=form, header = 'Monthly report filters', need_dt_picker = True)
-
-
 
 @app.route('/bgpost', methods=['GET', 'POST'])
 @login_required
@@ -212,12 +257,32 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
 
+        
 
-        subs = SubContract.query.join(Contract,Contract.id == SubContract.contract_id).filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))).filter(Contract.id == form.contracts.data[0].id).all()
-        print(f' printing \n{subs}')
-        sub_schema = SubContractSchema()
-        print(f' printing \n{sub_schema.dump(subs, many = True)}')
-        # print(f'{subs}')
+        
+        try:
+            while(1):
+                print(f'{end_date}')
+                schedule = (
+                    db.session.query(ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
+                    .filter(ItnSchedule.itn == '32Z103001108231F', ItnSchedule.utc == end_date)
+                    .first()
+                )
+                print(f'{schedule}')
+                if schedule is not None and schedule[0] != -1:
+                    print(f'breaking - {end_date}')
+                    break
+                else:   
+                    month = end_date.month
+                    prev_month = month - 1 if month != 1 else 12      
+                    # print(f'{prev_month} - {month} ')
+                    end_date = end_date.replace(day = calendar.monthrange(end_date.year, prev_month)[1], month = prev_month)
+        except:
+            print('in exception')
+        # print(f'{prev_month} - {last_prev_month_day} ')
+                                                                  
+        # if schedule is None:
+            
 
         # contract_id = 550
        
@@ -861,7 +926,6 @@ def create_invoice():
     # return render_template('create_invoice.html', title='Invoice Creation', form=form)
     return render_template('quick_template_wider.html', title='Invoice Creation', form=form)
 
-
 @app.route('/erp', methods=['GET', 'POST'])
 @login_required
 def erp():
@@ -1213,67 +1277,8 @@ def upload_initial_data():
                                              if Contractor.query.filter(Contractor.acc_411 == x).first() is not None else 0)
             df = df[['name','contractor_id','description']]
             update_or_insert(df, InvoiceGroup.__table__.name)
-            flash('upload was successiful','info')
-
-
-            
-
-
-
-
-        
+            flash('upload was successiful','info')        
     return render_template('upload_initial_data.html', title='Test', form=form)
-
-
-
-
-@app.route('/')
-@app.route('/index')
-@login_required
-def index():
-    
-    return render_template("index.html", title='Home Page')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-	
-    if current_user.is_authenticated:	   
-        # #print('is_authenticated', file=sys.stdout)
-        return redirect(url_for('index'))
-
-    form = LoginForm()  
-
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user is None or not user.check_password(form.password.data):
-            flash('Invalid username or password')
-            return redirect(url_for('login'))
-        login_user(user, remember=form.remember_me.data)
-        next_page = request.args.get('next')
-        if not next_page or url_parse(next_page).netloc != '':
-            next_page = url_for('index')
-        return redirect(next_page)
-    return render_template('login.html', title='Sign In', form=form)	
-    
-
-@app.route('/register_gyz', methods=['GET', 'POST'])
-def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    form = RegistrationForm()
-    if form.validate_on_submit():
-        user = User(username=form.username.data, email=form.email.data)
-        user.set_password(form.password.data)
-        db.session.add(user)
-        db.session.commit()
-        flash('Congratulations, you are now a registered user!')
-        return redirect(url_for('login'))
-    return render_template('register.html', title='Register', form=form)
-
-@app.route('/logout')
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
 
 @app.route('/add_contract', methods=['GET', 'POST'])
 @login_required
@@ -1446,7 +1451,6 @@ def add_invoicing_group():
             return redirect(url_for('add_invoicing_group'))
 
     return render_template('add_invoicing_group.html', title='Add Invoicing Group', form=form)
-
 
 @app.route('/upload_inv_groups', methods=['GET', 'POST'])
 @login_required
@@ -1747,6 +1751,11 @@ def upload_linked_contracts():
             contracts = []
             # print(f'proceeded df \n{df}')
             for index,row in df.iterrows():
+                if row['internal_id'] == row['linked_contract_internal_id']:
+                    new_c = row['internal_id']                    
+                    flash(f'Linked contracts have same internal id - skipping !: {new_c}','danger')
+                    print(f'Linked contracts have same internal id - skipping !: {new_c}')
+                    continue
                 #print(f'in rows --------------->>{row.internal_id}')
                 curr_contract = get_contract_by_internal_id(row['internal_id'])
                 # a = row['internal_id']
@@ -1779,7 +1788,9 @@ def upload_linked_contracts():
                                 collateral_warranty = row['collateral_warranty'], notes =  row['notes'],time_zone_id = row['time_zone'].id) 
                     )
                     new_linked_contract.save() #!!!!!
+                    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     print(f'saved new linked contract --- > {new_linked_contract}')
+
                     apply_linked_collision_function(parent_contract, new_linked_contract, row['invoice_group_name'], row['invoice_group_description'], zko, akciz, row['has_grid_services'], row['has_spot_price'],
                                                                                 row['has_balancing'], row['tariff_name'], row['price_day'],	row['price_night'], row['make_invoice'], row['lower_limit'], row['upper_limit']) 
                     # subcontracts = get_subcontracts_by_inv_gr_name_and_date(row['invoice_group_name'], start_date, end_date)
@@ -1791,7 +1802,7 @@ def upload_linked_contracts():
             if not nan_df.empty:
                 print(f'THERE IS CONTRACT WITH WRONG DATA ! ABORTING ! \n{nan_df}')
             else:
-                print(f'in save')
+                print(f'Linked {df.linked_contract_internal_id} added !!!!')
                 # db.session.bulk_save_objects(contracts)
                 # db.session.commit()                
                 
@@ -1992,9 +2003,14 @@ def modify_contractor():
     
     form = RedactContractorForm()
     if form.validate_on_submit():
-        contractor_id = form.contractors.data[0].id
-        return redirect(url_for('modify_selected_contractor', contractor_id = contractor_id, **request.args)) 
-
+        try:
+            contractor_id = form.contractors.data[0].id
+        except:
+            flash('Choose contractor first, then pres ENTER or doubleclicked on it or press the button!.','danger')
+        else:
+            return redirect(url_for('modify_selected_contractor', contractor_id = contractor_id, **request.args)) 
+    # else:
+    #     flash('Choose contractor first','danger')
     return render_template('modify_contractor.html', title='Modify Contractor', form=form, header = 'Modifying CONTRACTOR')
 
 @app.route('/table', methods=['GET', 'POST'])
@@ -2124,11 +2140,11 @@ def modify_selected_contract(contract_id):
         else:
             # print(f'{form.errors}')
             # print(f'{form.subs.choices}')
-            return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}')
-        return redirect(url_for('modify_contract'))
+            return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}', need_dt_picker = True)
+        return redirect(url_for('modify'))
 
 
-    return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}')
+    return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}', need_dt_picker = True)
 
 @app.route('/modify_contractor/<contractor_id>', methods=['GET', 'POST'])
 @login_required
@@ -2584,7 +2600,7 @@ def _get_contracts(contractor_id):
 def _get_itns(name):
     itns = (
         db.session.query(
-            SubContract.itn, InvoiceGroup.name, MeasuringType.code, AddressMurs.name
+            SubContract.itn, InvoiceGroup.name, MeasuringType.code, AddressMurs.name, SubContract.has_grid_services
         )
         .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)        
         .join(MeasuringType,MeasuringType.id == SubContract.measuring_type_id)
@@ -2601,6 +2617,7 @@ def _get_itns(name):
         itn_obj['invoice_group'] = itn[1]
         itn_obj['type'] = itn[2]
         itn_obj['address'] = itn[3]
+        itn_obj['has_grid_services'] = itn[4]
         itns_arr.append(itn_obj)
     return jsonify({'itns':itns_arr})
 
@@ -2679,15 +2696,23 @@ def _get_itn_data(itn):
     return jsonify({'itns':[{'itn':data[0][0],'address':data[0][1], 'description':data[0][2], 'grid_voltage':data[0][3], 'erp':data[0][4]}]})
 
 
-@app.route('/_get_subcontracts/<start_date>/<end_date>/<contract_id>', methods=['GET', 'POST'])
+@app.route('/_get_subcontracts/<start_date>/<end_date>/<filter_arg>/<is_id>', methods=['GET', 'POST'])
 @login_required
-def _get_subcontracts(start_date, end_date, contract_id):
+def _get_subcontracts(start_date, end_date, filter_arg, is_id): 
+
+
+    is_id = True if is_id != '0' else False
+    filters = (Contract.id == filter_arg,) if is_id else (SubContract.itn == filter_arg,)
+    print(f'filters\n{is_id}')
 
     start_date = convert_date_to_utc('EET',start_date)   
     end_date = convert_date_to_utc('EET',end_date)
     end_date = end_date + dt.timedelta(hours = 23)
-    subs = SubContract.query.join(Contract,Contract.id == SubContract.contract_id).filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))).filter(Contract.id == contract_id).all()    
-    sub_schema = SubContractSchema()
+    subs = SubContract.query.join(Contract,Contract.id == SubContract.contract_id).filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))).filter(*filters).all()    
     
-    return jsonify(sub_schema.dump(subs, many = True))
+    sub_schema = SubContractSchema()
+    try:
+        return jsonify(sub_schema.dump(subs, many = True))
+    except:
+        return jsonify([])
 

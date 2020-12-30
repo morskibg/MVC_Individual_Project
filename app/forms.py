@@ -424,6 +424,7 @@ class ModifySubcontractEntryForm(FlaskForm):
                                                                             if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     subcontracts = NonValidatingSelectMultipleField(id = 'subcontracts',choices = [],validators=[DataRequired()])
+    # itns = NonValidatingSelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
     has_grid = BooleanField('Has Grid')
     modify_subcontract = SubmitField('Modify Sub',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'submit'})
     
