@@ -2494,11 +2494,25 @@ def modify_itn(itn):
         form = ModifyItn()
 
     if form.validate_on_submit():
-        addr = AddressMurs.query.join(ItnMeta, ItnMeta.address_id == AddressMurs.id).filter(ItnMeta.itn == form.itn.data).first()
-        addr.update({'name':form.itn_addr.data})
-        itn_meta = ItnMeta.query.filter(ItnMeta.itn == itn).first()
+
+        curr_addr = AddressMurs.query.filter(AddressMurs.name == form.itn_addr.data).first()
+        if curr_addr is None:   
+            new_addr = AddressMurs(name = form.itn_addr.data)
+            new_addr.save()
+            curr_addr = AddressMurs.query.filter(AddressMurs.name == form.itn_addr.data).first()
+
+        curr_meta = ItnMeta.query.get(form.itn.data)
         erp = Erp.query.filter(Erp.name == form.erp.data).first()
-        itn_meta.update({'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
+        curr_meta.update({'address_id': curr_addr.id,'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
+        flash('success','info')
+        return redirect(url_for('modify'))
+
+
+        # addr = AddressMurs.query.join(ItnMeta, ItnMeta.address_id == AddressMurs.id).filter(ItnMeta.itn == form.itn.data).first()
+        # addr.update({'name':form.itn_addr.data})
+        # itn_meta = ItnMeta.query.filter(ItnMeta.itn == itn).first()
+        # 
+        # itn_meta.update({'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
         # print('------ {0}'.format(request.form))
         
     return render_template('ask_confirm.html', title='Redacting Itn', form=form, header = 'Redacting ITN')
