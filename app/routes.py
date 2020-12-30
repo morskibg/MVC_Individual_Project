@@ -257,6 +257,12 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
 
+        invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
+        invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
+
+        invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
+        invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
+
         
 
         
