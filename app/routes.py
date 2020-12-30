@@ -253,7 +253,9 @@ def test():
         end_date = convert_date_to_utc('EET',form.end_date.data) 
         # start_date = convert_date_to_utc('EET','2020-10-01')   
         # end_date = convert_date_to_utc('EET','2020-10-31') 
-        
+        end_date = end_date + dt.timedelta(hours = 23)
+        invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
+        invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
 
         
 
