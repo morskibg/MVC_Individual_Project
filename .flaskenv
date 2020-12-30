@@ -1,6 +1,6 @@
 FLASK_APP=ged_end_user.py
 FLASK_ENV=development
-SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://dpetkov:#!L0msk001@10.10.10.31:3306/test_no_backupяя?charset=utf8'
+SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://dpetkov:#!L0msk001@10.10.10.31:3306/test_no_backup?charset=utf8'
 MAIL_SERVER=mail.grandenergy.net
 MAIL_PORT=587
 MAIL_USE_TLS=1
