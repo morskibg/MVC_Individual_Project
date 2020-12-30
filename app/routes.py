@@ -279,9 +279,9 @@ def test():
                     end_date = end_date.replace(day = calendar.monthrange(end_date.year, prev_month)[1], month = prev_month)
         except:
             print('in exception')
-        # print(f'{prev_month} - {last_prev_month_day} ')
+        print(f'{prev_month} - {last_prev_month_day} ')
                                                                   
-        # if schedule is None:
+        if schedule is None:
             
 
         # contract_id = 550
