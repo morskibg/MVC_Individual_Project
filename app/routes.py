@@ -260,25 +260,25 @@ def test():
         
 
         
-        try:
-            while(1):
-                print(f'{end_date}')
-                schedule = (
-                    db.session.query(ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
-                    .filter(ItnSchedule.itn == '32Z103001108231F', ItnSchedule.utc == end_date)
-                    .first()
-                )
-                print(f'{schedule}')
-                if schedule is not None and schedule[0] != -1:
-                    print(f'breaking - {end_date}')
-                    break
-                else:   
-                    month = end_date.month
-                    prev_month = month - 1 if month != 1 else 12      
-                    # print(f'{prev_month} - {month} ')
-                    end_date = end_date.replace(day = calendar.monthrange(end_date.year, prev_month)[1], month = prev_month)
-        except:
-            print('in exception')
+        # try:
+        #     while(1):
+        #         print(f'{end_date}')
+        #         schedule = (
+        #             db.session.query(ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
+        #             .filter(ItnSchedule.itn == '32Z103001108231F', ItnSchedule.utc == end_date)
+        #             .first()
+        #         )
+        #         print(f'{schedule}')
+        #         if schedule is not None and schedule[0] != -1:
+        #             print(f'breaking - {end_date}')
+        #             break
+        #         else:   
+        #             month = end_date.month
+        #             prev_month = month - 1 if month != 1 else 12      
+        #             # print(f'{prev_month} - {month} ')
+        #             end_date = end_date.replace(day = calendar.monthrange(end_date.year, prev_month)[1], month = prev_month)
+        # except:
+        #     print('in exception')
         # print(f'{prev_month} - {last_prev_month_day} ')
                                                                   
         # if schedule is None:
