@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+
+<div class='col-md-12'>                      
+    <h1>{{header|safe}}</h1> 
+   
+    {{ wtf.quick_form(form, button_map={'modify_subcontract': 'primary'},id='mod_sub_form') }}    
+
+</div> 
+
+ 
+{% endblock %}
+
+{% block form_scripts %}
+    <script>
+        const search_field = document.getElementById('search')
+        const search_by_itn = document.getElementById('search_by_itn');
+        const start_date = document.getElementById('start_datepicker');
+        const end_date = document.getElementById('end_datepicker');
+        const contracts = document.getElementById('contracts');
+        const subcontracts = document.getElementById('subcontracts');
+        const itns = document.getElementById('itns');
+        const values = document.querySelectorAll('option');
+        const button = document.getElementById('modify_subcontract');
+        const has_grid = document.getElementById('has_grid');
+        const labels = document.querySelectorAll('.control-label')
+
+        init()
+        
+        search_field.onkeyup = () =>{
+            searching()            
+        };
+
+        search_field.onblur = () =>{
+            searching()            
+        };       
+
+        contracts.ondblclick = () => {
+            search_by_itn.value = ''
+            button.disabled = true;
+            has_grid.disabled = true;  
+            const is_id = 1           
+            if(start_date.value !== null && end_date.value !== null ){
+                fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${contracts.value}/${is_id}`).then(function(response){                
+                    response.json().then(function(data){                        
+                        let optionHTML = '';
+                        let count = 0;
+                        // console.log(data)
+                        for(let sub of data){                               
+                            optionHTML += `<option value="${sub.itn} - ${sub.start_date} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.invoice_group.name}">${sub.itn} - 
+                                ${sub.invoice_group.name} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.start_date} - 
+                                ${sub.end_date} - ${sub.invoice_group.description} - ${sub.measuring_type.code}</option>`;                                              
+                            count += 1;
+                        }
+                        if(count >30){
+                            count = 30;
+                        }                    
+                        subcontracts.size = count;
+                        subcontracts.innerHTML = optionHTML;  
+                         
+                        initBackground()                              
+                    });                    
+                })
+                .catch(error => console.log(error) );
+            };            
+        };
+
+        search_by_itn.onchange = () => {
+            
+            button.disabled = true;
+            has_grid.disabled = true; 
+            const is_id = 0            
+            if(start_date.value !== null && end_date.value !== null ){
+                fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${search_by_itn.value}/${is_id}`).then(function(response){                
+                    response.json().then(function(data){                        
+                        let optionHTML = '';
+                        let count = 0;
+                        
+                        for(let sub of data){                               
+                            optionHTML += `<option value="${sub.itn} - ${sub.start_date} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.invoice_group.name}">${sub.itn} - 
+                                ${sub.invoice_group.name} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.start_date} - 
+                                ${sub.end_date} - ${sub.invoice_group.description} - ${sub.measuring_type.code}</option>`; 
+                            search_field.value = sub.contract.internal_id                                           
+                            count += 1;
+                        }
+                        if(count >30){
+                            count = 30;
+                        }  
+                        searching()                    
+                        subcontracts.size = count;
+                        subcontracts.innerHTML = optionHTML;  
+                           
+                        initBackground()                              
+                    });
+                })
+                .catch(error => console.log('in error',error) );
+            };            
+        };
+
+        subcontracts.onclick = () => {
+            button.disabled = false; 
+            has_grid.disabled = false;
+            console.log(subcontracts.value)            
+            has_grid.checked = !subcontracts.value.includes('NO GRID')             
+        }       
+
+        function init(){
+            search_by_itn.value = ''
+            button.disabled = true;
+            has_grid.disabled = true;
+            search_field.value = ''
+        };
+
+        function searching(){
+            
+            let counter = 0;
+            const key_word = search_field.value.toLowerCase()
+            console.log('in searching',key_word)
+            // values.forEach(value => value.style = 'block')  
+            const back_ground = 1      
+            values.forEach(value => {
+                counter++;
+                if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                    value.style = 'display:none'
+                    counter--;
+                    
+                }else{
+                    value.style = 'block'                
+                }                
+            });
+            if(counter === 0){
+                contracts.value = ''
+            }
+            contracts.size = counter;     
+            initBackground()                 
+        }
+
+
+
+    </script>
+{% endblock %}

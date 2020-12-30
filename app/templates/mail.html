@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+    <!-- <div class='col-md-2'></div>              -->
+    <div class='col-md-12'>                      
+        <h1>Mail</h1> 
+        {{ wtf.quick_form(form, button_map={'submit': 'primary'}) }} 
+    </div> 
+    <!-- <div class='col-md-2'> </div>     -->
+{% endblock %}
+
+{% block form_scripts %}
+    <script>
+        const search_field = document.getElementById('search')
+        const from_num = document.getElementById('from_number');
+        const to_num = document.getElementById('to_number');
+        const attachment_files = document.getElementById('attachment_files');
+        const values = document.querySelectorAll('option');        
+
+        from_num.onkeyup = () =>{
+            to_num.value = ''
+            const parsed_from_num = parseInt(from_num.value.toLowerCase());
+            if(!isNaN(parsed_from_num)){                
+                values.forEach(value => {                  
+                    if(!value.firstChild.textContent.toLowerCase().includes(from_num.value) 
+                        && parseInt(value.firstChild.textContent) < parsed_from_num){                
+                        
+                        value.style = 'display:none'                                               
+                    }else{
+                        value.style = 'block'                                     
+                    }
+                });                
+            };           
+        };
+
+        to_num.onkeyup = () =>{
+            const parsed_to_num = parseInt(to_num.value.toLowerCase());
+            if(!isNaN(parsed_to_num)){                
+                values.forEach(value => { 
+                    const curr_value = parseInt(value.firstChild.textContent); 
+                    const from_value = parseInt(from_num.value);                
+                    if(curr_value > parsed_to_num || curr_value < from_value){                         
+                        value.style = 'display:none';
+
+                    }else if(from_value <= curr_value && curr_value <= parsed_to_num){
+                        value.style = 'block';
+                                                           
+                    };
+                });                
+            }; 
+            initBackground()           
+        };
+ 
+        search_field.onkeyup = () =>{
+            from_num.value = ''
+            to_num.value = ''
+            values.forEach(value => {
+                if(!value.firstChild.textContent.toLowerCase().includes(search_field.value.toLowerCase())){               
+                    value.style = 'display:none'   
+
+                }else{
+                    value.style = 'block'                                     
+                }
+            });
+            initBackground()
+        };
+
+    </script>
+{% endblock %}

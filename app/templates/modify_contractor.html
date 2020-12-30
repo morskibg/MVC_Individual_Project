@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+<div class='col-md-1'></div>             
+<div class='col-md-10'>                      
+    <h1>{{header|safe}}</h1> 
+   
+    {{ wtf.quick_form(form,button_map={'submit_btn': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='modify_contracor_form') }}
+    
+
+</div> 
+<div class='col-md-1'> </div> 
+ 
+{% endblock %}
+
+{% block form_scripts %}
+<script type="text/javascript">
+    const search_field = document.getElementById('search')    
+    const values = document.querySelectorAll('option')
+    const contractors = document.getElementById('contractors')
+
+    init()
+    // search_field.onkeyup = () =>{
+    //     const key_word = search_field.value.toLowerCase()
+    //     if(key_word === ''){
+    //         console.log('read all values')
+    //         values.forEach(value => value.style = 'block')            
+    //     };
+    //     values.forEach(value => {
+    //         if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+    //             value.style = 'display:none'
+    //         }
+    //     });
+    // };
+
+    search_field.onkeyup = () =>{
+        // console.log(search_field.value)
+        let counter = 0;
+        const key_word = search_field.value.toLowerCase()
+        // values.forEach(value => value.style = 'block')        
+        values.forEach(value => {
+            counter++;
+            if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                value.style = 'display:none'
+                counter--;
+                
+            }else{
+                value.style = 'block'                
+            }
+        });
+        if(counter === 0){
+            contractors.value = ''
+        }
+        contractors.size = counter;
+        console.log(contractors.size)
+        console.log(key_word)
+    };
+
+    contractors.ondblclick = () =>{        
+        document.getElementById('submit_btn').click()        
+    }
+
+    function init(){
+        document.getElementById('search').value = ''        
+    }
+
+</script>
+{% endblock %}
+

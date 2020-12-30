@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+{% block content %}
+<div class="container">
+ <h3>Redacting emails</h3>
+<hr>
+<form action="" method="post" class="form" role="form">
+    {{ form.csrf_token() }}
+    <div class="row">
+        <div class="form-group col-md-4">
+            {{ wtf.form_field(form.search, class='form-control', 
+            placeholder='Search') }}
+        </div>
+        <div class="form-group col-md-4">
+            {{ wtf.form_field(form.from_number, class='form-control', 
+            placeholder='From invoice number') }}
+        </div>
+        <div class="form-group col-md-4">
+            {{ wtf.form_field(form.to_number, class='form-control', 
+            placeholder='To invoice number') }}
+        </div>        
+    </div>
+    <div class="row">
+        <div class="form-group col-md-4"> 
+            {{ wtf.form_field(form.send_all, class='form-control', 
+            placeholder='Send all') }}                               
+        </div>
+        <div class="form-group col-md-4"> 
+            {{ wtf.form_field(form.send_excel, class='form-control', 
+            placeholder='Attach only excel file') }}                               
+        </div>
+        <div class="form-group col-md-4"> 
+            {{ wtf.form_field(form.send_pdf, class='form-control') }}                               
+        </div>
+    </div>
+    <div class="row">
+        
+    </div>
+    
+</form>
+<hr>
+
+
+{% endblock %}
+
+{% block form_scripts %}
+    <script type="text/javascript">
+        
+    </script>
+{% endblock %}

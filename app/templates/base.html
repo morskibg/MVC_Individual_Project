@@ -1,94 +1,193 @@
-
 {% extends 'bootstrap/base.html' %}
 {% import "bootstrap/wtf.html" as wtf %}
 {% block styles %}
 {{super()}}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">     
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">  
+    <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+    <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>   
 {% endblock %}
 
 
 
 
 {% block title %}
-    {% if title %}{{ title }} - EndUsersApp{% else %}Welcome to EndUsersApp{% endif %}
-    
+    {% if title %}{{ title }} - EndUsersApp{% else %}Welcome to EndUsersApp{% endif %}    
 {% endblock %}
 
+{% block body_attribs %} body style="background:#f4f4f4 !important;" {% endblock %} 
 
-<div class="container-fluid">
-    {% block navbar %}
-    
-        <nav class="navbar navbar-proba">
-            <div class="container-fluid">
-                <div class="navbar-header">
-                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
-                        <span class="sr-only">Toggle navigation</span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                    </button>
-                    <a class="navbar-brand" href="{{ url_for('upload_initial_data') }}">EndUsersApp</a>
-                </div>
-                <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-                    <ul class="nav navbar-nav">
-                        <li><a class="nav-link"  href="{{ url_for('index') }}">Home</a></li>
-                        <li><a class="nav-link"  href="{{ url_for('upload_itns') }}">Upload ITNs</a></li>
-                        
-                    </ul>
-                    <ul class="nav navbar-nav navbar-right">
-                        {% if current_user.is_anonymous %}
-                        <li><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+{% block navbar %}   
+    <div class = container-fluid>   
+        {% if is_test_base %}
+            <nav class="navbar navbar-test">    
+        {% else %}
+            <nav class="navbar navbar-proba">
+        {% endif %}        
+                <div class="container-fluid">
+                    <div class="navbar-header">
+                        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+                            <span class="sr-only">Toggle navigation</span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                        </button>              
+                        {% if current_user.username == 'dpetkov' %}
+                            <a class="navbar-brand" href="{{ url_for('upload_initial_data') }}">EndUsersApp</a>
                         {% else %}
-                        <li><a class="nav-link" href="{{ url_for('add_contract') }}">Add Contract</a></li>
-                        <li><a class="nav-link" href="{{ url_for('add_invoicing_group') }}">Add Invoicing Group</a></li>
-                        <li><a class="nav-link" href="{{ url_for('add_itn') }}">Add ITN</a></li> 
-                        <li><a class="nav-link" href="{{ url_for('create_subcontract') }}">Create SubContract</a></li>                       
-                        <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+                            <a class="navbar-brand" href="{{ url_for('login') }}">EndUsersApp</a>
                         {% endif %}
-                    </ul>
+                    </div>
+                    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                        <ul class="nav navbar-nav">                        
+                            {% if not current_user.is_anonymous and current_user.username != 'email_redactor' %}
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">  Modify  <span class="caret"></span></a>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="{{ url_for('modify_contractor') }}"> Contractor </a></li>
+                                        <li><a class="dropdown-item"  href="{{ url_for('modify') }}">Contract / Inv Group / Itn</a></li> 
+                                        <li><a class="dropdown-item"  href="{{ url_for('modify_subcontracts') }}">SubContract</a></li> 
+                                        
+                                        {% if current_user.username == 'dpetkov' %}                                   
+                                            <li><a class="dropdown-item"  href="{{ url_for('test') }}">Test</a></li>
+                                        {% endif %}
+                                    </ul>
+                                </li>
+                                {% if current_user.username == 'dpetkov' %}
+                                    <li><a class="nav-link"  href="{{ url_for('monthly_report') }}">Monthly Reports</a></li>
+                                    <li><a class="nav-link"  href="{{ url_for('monthly_erp') }}">Filtered Monthly Reports</a></li>
+                                    <li><a class="nav-link"  href="{{ url_for('add_reports') }}">Additional Reports</a></li>
+                                    <li><a class="nav-link"  href="{{ url_for('create_integra_excel') }}">Integra files</a></li>
+                                    <li><a class="nav-link"  href="{{ url_for('create_invoice') }}">Invoices</a></li>
+                                    <li><a class="nav-link"  href="{{ url_for('mailing') }}">Mails</a></li>
+                                    <li><a class="nav-link"  href="{{ url_for('bgpost') }}">Bg POST</a></li>
+                                {% endif %}
+                            {% endif %}
+                            {% if not current_user.is_anonymous %}
+                                <li><a class="nav-link"  href="{{ url_for('modify_email') }}">Redacting Emails</a></li>
+                            {% endif %}
+                            
+                        </ul>
+                        <ul class="nav navbar-nav navbar-right">
+                            {% if current_user.is_anonymous %}
+                                <li><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                            {% elif  current_user.username == 'dpetkov' %}
+                                <li><a class="nav-link" href="{{ url_for('upload_contracts') }}">Upload Contracts</a></li>
+                                <li><a class="nav-link" href="{{ url_for('upload_linked_contracts') }}">Upload Annex</a></li>
+                                <li><a class="nav-link" href="{{ url_for('upload_itns') }}">Upload ITNs</a></li>
+                                <li><a class="nav-link" href="{{ url_for('erp') }}">Upload ERP</a></li> 
+                                <!-- <li><a class="nav-link" href="{{ url_for('create_subcontract') }}">Create SubContract</a></li>                        -->
+                                <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+                            {% else %}
+                                <li><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
                 </div>
-            </div>
-        </nav>
-    {% endblock %}
-    {% block content %}
-        <div class="container">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                <!-- Categories: success (green), info (blue), warning (yellow), danger (red) -->
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible" role="alert">
-                            <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                            <strong>{{ message }}</strong> 
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-    
-            <div class = 'row'> 
-                {% block app_content %}{% endblock %}
-            </div> 
-        </div>
-    {% endblock %}
+            </nav>
+    </div>  
+{% endblock %}
+
+{% block content %}
+<!-- <div class="jumbotron jumbotron"> -->
+<div class="container" >
+    <div class = 'flash_message'>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            <!-- Categories: success (green), info (blue), warning (yellow), danger (red) -->
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible" role="alert">
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close" id = 'msg_close'><span aria-hidden="true">&times;</span></button>                            
+                        <strong>{{ message }}</strong> 
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+    <div class = 'row'> 
+        {% block app_content %}{% endblock %}
+    </div> 
 </div>
+<!-- </div> -->
+{% endblock %}
+        
+    
 
 {% block scripts %}
     {{ super() }}
     {{ moment.include_moment() }}
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.47/js/bootstrap-datetimepicker.min.js"></script>
+    {% if need_dt_picker %}
+        <script type="text/javascript"
+            src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.47/js/bootstrap-datetimepicker.min.js"></script>
+        <script type="text/javascript">
+            $(function () {
+                $('#sign_datepicker').datetimepicker({
+                    format: 'YYYY-MM-DD'
+                });
+                $('#start_datepicker').datetimepicker({
+                    format: 'YYYY-MM-DD'
+                });
+                $('#end_datepicker').datetimepicker({
+                    format: 'YYYY-MM-DD'
+
+                });
+            }); 
+        </script>
+        
+    {% endif %}
+
     <script type="text/javascript">
-      $(function () {
-        $('#sign_datepicker').datetimepicker({
-            format:'YYYY-MM-DD'
-        });
-        $('#start_datepicker').datetimepicker({
-            format:'YYYY-MM-DD'
-        });
-        $('#end_datepicker').datetimepicker({
-            format:'YYYY-MM-DD'
+        // document.body.style.background = "#f5f5f5"
+        initBackground()
+        
+        
+        
+        function ask_confirm(form_id){
+        
+            var msg_str = `Are You sure ?`;
+            console.log('in base',msg_str);
+            var form = document.getElementById(form_id); 
+            var is_confirmed = confirm(msg_str);
+            if (is_confirmed) {
+                console.log('YES');                           
+                form.submit();          
+            }
+            else{
+                console.log('NO');
+                history.back()
+            }            
+        };
+        
+        function initBackground(){
+            // console.log('in background')
+            const control = document.querySelectorAll('option')
             
-        });
-      });
+            let j = 1;
+            for (let i = 0; i < control.length; i += 1) {               
+                
+                if(control[i].style.display !== ''){                    
+                    continue;
+                }
+                else{
+                    j += 1;
+                    if(j % 2 !== 0){                        
+                        control[i].style.backgroundColor = '#e6e6e6';
+                    }    
+                    
+                };
+            };
+            // .forEach((control, idx) => {
+                
+            //     if(idx % 2 != 0){
+                    
+            //         control.style.backgroundColor = '#e6e6e6'
+            //     }
+            //     });
+        }
     </script>
-   
+    {% block form_scripts %}{% endblock %}
+
+
     
 {% endblock %}
+
+    
