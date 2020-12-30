@@ -258,6 +258,7 @@ def test():
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
         print(f'typoooo')
         print(f'merge from production')
+        print(f'merge from production2')
 
         
 
