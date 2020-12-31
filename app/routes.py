@@ -256,32 +256,32 @@ def test():
         end_date = end_date + dt.timedelta(hours = 23)
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
-        print(f'typoooo')
-        print(f'merge from production')
-        print(f'merge from production2')
+        # print(f'typoooo')
+        # print(f'merge from production')
+        # print(f'merge from production2')
 
         
 
         
-        try:
-            while(1):
-                print(f'{end_date}')
-                schedule = (
-                    db.session.query(ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
-                    .filter(ItnSchedule.itn == '32Z103001108231F', ItnSchedule.utc == end_date)
-                    .first()
-                )
-                print(f'{schedule}')
-                if schedule is not None and schedule[0] != -1:
-                    print(f'breaking - {end_date}')
-                    break
-                else:   
-                    month = end_date.month
-                    prev_month = month - 1 if month != 1 else 12      
-                    # print(f'{prev_month} - {month} ')
-                    end_date = end_date.replace(day = calendar.monthrange(end_date.year, prev_month)[1], month = prev_month)
-        except:
-            print('in exception')
+        # try:
+        #     while(1):
+        #         print(f'{end_date}')
+        #         schedule = (
+        #             db.session.query(ItnSchedule.consumption_vol, ItnSchedule.settelment_vol)
+        #             .filter(ItnSchedule.itn == '32Z103001108231F', ItnSchedule.utc == end_date)
+        #             .first()
+        #         )
+        #         print(f'{schedule}')
+        #         if schedule is not None and schedule[0] != -1:
+        #             print(f'breaking - {end_date}')
+        #             break
+        #         else:   
+        #             month = end_date.month
+        #             prev_month = month - 1 if month != 1 else 12      
+        #             # print(f'{prev_month} - {month} ')
+        #             end_date = end_date.replace(day = calendar.monthrange(end_date.year, prev_month)[1], month = prev_month)
+        # except:
+        #     print('in exception')
         # print(f'{prev_month} - {last_prev_month_day} ')
                                                                   
         # if schedule is None:
@@ -358,12 +358,37 @@ def test():
         #     .all()
         # )
 
+        rec = (
+            db.session.query( 
+                SubContract.itn,               
+                Contractor.name.label('contractor_name'),func.sum(ItnSchedule.consumption_vol).label('total_consumption'),
+                Contractor.acc_411, Contractor.eic.label('bulstat'),
+                Tariff.price_day,Contract.end_date
+            )
+            
+            .join(Contract,Contract.id == SubContract.contract_id)
+            .join(Contractor,Contractor.id == Contract.contractor_id)           
+            .join(ContractType, ContractType.id == Contract.contract_type_id)            
+            .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
+            .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
+            .filter(ItnSchedule.utc >= '2020-09-30 21:00:00', ItnSchedule.utc <= '2020-11-30 21:00:00')
+            .filter(Contract.end_date > '2021-03-31 21:00:00')
+            # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))     
+            .filter(ContractType.name == 'Procurement')
+            .filter(ItnSchedule.consumption_vol > 0)
+            # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+            # .limit(5)
+            .group_by(Contractor.name,Contractor.acc_411,Contractor.eic,Tariff.price_day,Contract.end_date)
+            .all()
+        )
+        temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
+        temp_df.to_excel('temp/zop_after_03_2021_.xlsx')
+        # print(f'{temp_df}')
         # rec = (
         #     db.session.query(
         #         SubContract.itn, MeasuringType.code.label('measuring_type'), Erp.name.label('erp'),
-        #          Contractor.name.label('contractor_name'), Contractor.acc_411, ContractType.name.label('contract_type'),
-        #          InvoiceGroup.name.label('invoice_group_name'), InvoiceGroup.description.label('invoice_group_description'),
-        #          Tariff.price_day, Tariff.price_night
+        #         Contractor.name.label('contractor_name'), Contractor.acc_411, Contractor.eic.label('bulstat'),
+        #         ContractType.name.label('contract_type'),Contract.end_date
         #     )
         #     .join(Contract,Contract.id == SubContract.contract_id)
         #     .join(Contractor,Contractor.id == Contract.contractor_id)
@@ -371,15 +396,14 @@ def test():
         #     .join(Erp, Erp.id == ItnMeta.erp_id)
         #     .join(MeasuringType, MeasuringType.id == SubContract.measuring_type_id)
         #     .join(ContractType, ContractType.id == Contract.contract_type_id)
-        #     .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
-        #     .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
-        #     .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
-        #     .filter(ItnSchedule.utc == end_date)
-        #     .filter(SubContract.end_date == end_date)
-        #     # .filter(ContractType.name == 'Mass_Market')
+        #     .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)           
+        #     .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))     
+        #     .filter(ContractType.name == 'Procurement')
         #     # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #     .limit(5)
         #     .all()
         # )
+        print(f'{len(rec)}')
         ##############################################################################################
         # alias_for_parent_contractor = aliased(Contractor)
         # rec = (
