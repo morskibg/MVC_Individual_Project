@@ -46,7 +46,7 @@
             .filter(ItnSchedule.consumption_vol > 0)
             # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
             # .limit(5)
-            .group_by(Contractor.name,Contractor.acc_411,Contractor.eic,Tariff.price_day,Contract.end_date)
+            .group_by(SubContract.itn,Contractor.name,Contractor.acc_411,Contractor.eic,Tariff.price_day,Contract.end_date)
             .all()
         )
         temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
