@@ -366,7 +366,7 @@ class TestForm(FlaskForm):
     # invoice_groups = SelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})
     # modify_inv_group = SubmitField('Modify Invoicing Group')
     # itns = SelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
-    submit = SubmitField('Test')
+    submit = SubmitField('Test', id='tt')
 
 class ModifyForm(FlaskForm):
     # contract_tk =  StringField(id='contract_tk', validators=[Optional()], default = 'ТК') 
