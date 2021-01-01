@@ -251,14 +251,13 @@ def test():
         erp_name = 'CEZ'
         start_date = convert_date_to_utc('EET',form.start_date.data)   
         end_date = convert_date_to_utc('EET',form.end_date.data) 
+        
         # start_date = convert_date_to_utc('EET','2020-10-01')   
         # end_date = convert_date_to_utc('EET','2020-10-31') 
         end_date = end_date + dt.timedelta(hours = 23)
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
-        # print(f'typoooo')
-        # print(f'merge from production')
-        # print(f'merge from production2')
+
 
         
 
@@ -2520,27 +2519,27 @@ def modify_itn(itn):
     else:
         form = ModifyItn()
 
-    if form.validate_on_submit():
+        if form.validate_on_submit():
 
-        curr_addr = AddressMurs.query.filter(AddressMurs.name == form.itn_addr.data).first()
-        if curr_addr is None:   
-            new_addr = AddressMurs(name = form.itn_addr.data)
-            new_addr.save()
             curr_addr = AddressMurs.query.filter(AddressMurs.name == form.itn_addr.data).first()
+            if curr_addr is None:   
+                new_addr = AddressMurs(name = form.itn_addr.data)
+                new_addr.save()
+                curr_addr = AddressMurs.query.filter(AddressMurs.name == form.itn_addr.data).first()
 
-        curr_meta = ItnMeta.query.get(form.itn.data)
-        erp = Erp.query.filter(Erp.name == form.erp.data).first()
-        curr_meta.update({'address_id': curr_addr.id,'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
-        flash('success','info')
-        return redirect(url_for('modify'))
+            curr_meta = ItnMeta.query.get(form.itn.data)
+            erp = Erp.query.filter(Erp.name == form.erp.data).first()
+            curr_meta.update({'address_id': curr_addr.id,'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
+            flash('success','info')
+            return redirect(url_for('modify'))
 
 
-        # addr = AddressMurs.query.join(ItnMeta, ItnMeta.address_id == AddressMurs.id).filter(ItnMeta.itn == form.itn.data).first()
-        # addr.update({'name':form.itn_addr.data})
-        # itn_meta = ItnMeta.query.filter(ItnMeta.itn == itn).first()
-        # 
-        # itn_meta.update({'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
-        # print('------ {0}'.format(request.form))
+            # addr = AddressMurs.query.join(ItnMeta, ItnMeta.address_id == AddressMurs.id).filter(ItnMeta.itn == form.itn.data).first()
+            # addr.update({'name':form.itn_addr.data})
+            # itn_meta = ItnMeta.query.filter(ItnMeta.itn == itn).first()
+            # 
+            # itn_meta.update({'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
+            # print('------ {0}'.format(request.form))
         
     return render_template('ask_confirm.html', title='Redacting Itn', form=form, header = 'Redacting ITN')
 
