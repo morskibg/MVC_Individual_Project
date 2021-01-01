@@ -255,19 +255,26 @@ class EditSubForm(FlaskForm):
 
 class MonthlyReportForm(FlaskForm):
     
+    search = StringField(id='search', validators = [Optional()])
     start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
                                                                             default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
                                                                             if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
-    
+    contracts = QuerySelectMultipleField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), 
+        allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
-    bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
+    # bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
     invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
     # invoicing_group = QuerySelectMultipleField(query_factory = lambda: InvoiceGroup.query.join(Contractor).order_by(InvoiceGroup.name), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':15})
     ##by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
-    contracts = QuerySelectMultipleField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
-    ##by_contract = BooleanField('Create invoice reference by Contract', default = False)
+    
+    ##by_contract = BooleanField('Create invoice reference by Contract', default = False)    
+    
+    submit = SubmitField('Create')
+    ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
+    delete_all = BooleanField('Delete all source files', default = False)
+    submit_delete = SubmitField('Delete files') 
 
     def validate_end_date(self, end_date):
 
@@ -275,13 +282,6 @@ class MonthlyReportForm(FlaskForm):
         dt_end_obj = dt.datetime.strptime(end_date.data, '%Y-%m-%d')
         if dt_start_obj > dt_end_obj:
                 raise ValidationError('Start Date must be before End Date')
-
-    
-    
-    submit = SubmitField('Create')
-    ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
-    delete_all = BooleanField('Delete all source files', default = False)
-    submit_delete = SubmitField('Delete files') 
 
 class ErpForm(FlaskForm):
     file_cez = FileField('Browse for CEZ Zip File')
@@ -370,7 +370,8 @@ class TestForm(FlaskForm):
 
 class ModifyForm(FlaskForm):
     # contract_tk =  StringField(id='contract_tk', validators=[Optional()], default = 'ТК') 
-    contract_search = StringField(id='contract_search', validators=[Optional()], default = 'ТК') 
+    # contract_search = StringField(id='contract_search', validators=[Optional()]) 
+    search = StringField(id='search', validators = [Optional()])
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     modify_contract = SubmitField('Modify Contract',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px'})
     invoice_groups = NonValidatingSelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})    

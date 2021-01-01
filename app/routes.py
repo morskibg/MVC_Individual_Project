@@ -258,7 +258,6 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
 
-
         
 
         
@@ -1009,43 +1008,64 @@ def erp():
         
     return render_template('erp.html', title='ERP Upload', form=form)
 
-@app.route('/monthly_report', methods=['GET', 'POST'])
+
+
+@app.route('/monthly_report', defaults={'key_word': None}, methods=['GET', 'POST'])
+@app.route('/monthly_report/<key_word>', methods=['GET', 'POST'])
 @login_required
-def monthly_report():
-    # need_dt_picker = True
-    form = MonthlyReportForm()
-    form.ref_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']),'xlsx')])
-    if form.validate_on_submit(): 
-        if form.submit_delete.data:
+def monthly_report(key_word = None):
+    
+    if request.method == "GET":
+        form_dict = {}
+        if key_word is not None:
+            form_dict['search'] = key_word
+        # else:
+        #     form_dict['search'] = key_word = 'ТК'
+        
+        form = MonthlyReportForm(formdata=MultiDict(form_dict))
+        form.ref_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']),'xlsx')])
+        
+        return render_template('monthly_report.html', title='Monthly Report', form=form, need_dt_picker = True)
+        
+    else:
+        form = MonthlyReportForm()
+        form.ref_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']),'xlsx')])
+        key_word = form.search.data
+        if form.validate_on_submit(): 
+            if form.submit_delete.data:
 
-            delete_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']), form.ref_files.data, form.delete_all.data)
-            return redirect(url_for('monthly_report')) 
-            
-        elif form.submit.data:
-            counter = 0
-            weighted_price = None
-            if len(form.contracts.data) >0:
-                for curr_contract in form.contracts.data: 
-                    print(f'CURR CONTRACT - {curr_contract.internal_id}')         
-                    time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == curr_contract.internal_id).first().code
-                    start_date = convert_date_to_utc(time_zone, form.start_date.data)
-                    end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
-                    inv_groups = get_list_inv_groups_by_contract(curr_contract.internal_id, start_date, end_date)
-                    weighted_price = get_weighted_price(inv_groups, start_date, end_date)
-                    print(f'weighted_price -- {weighted_price}')
-                    counter += create_inv_refs_by_inv_groups(inv_groups, form.start_date.data, form.end_date.data, weighted_price)
-                flash(f'{counter} invoice references was created !','info')    
-            else:                
-                inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]                 
-                counter = create_inv_refs_by_inv_groups(inv_groups, form.start_date.data, form.end_date.data, weighted_price)   
-                flash(f'{counter} invoice references was created !','info')
+                delete_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']), form.ref_files.data, form.delete_all.data)
+                return redirect(url_for('monthly_report')) 
+                
+            elif form.submit.data:
+                counter = 0
+                weighted_price = None
+                if len(form.contracts.data) >0:
+                    for curr_contract in form.contracts.data: 
+                        print(f'CURR CONTRACT - {curr_contract.internal_id}')         
+                        time_zone = TimeZone.query.join(Contract, Contract.time_zone_id == TimeZone.id).filter(Contract.internal_id == curr_contract.internal_id).first().code
+                        start_date = convert_date_to_utc(time_zone, form.start_date.data)
+                        end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
+                        inv_groups = get_list_inv_groups_by_contract(curr_contract.internal_id, start_date, end_date)
+                        # print(f'start_date -- {start_date}')
+                        # print(f'end_date -- {end_date}')
+                        # print(f'inv_groups -- {inv_groups}')
+                        weighted_price = get_weighted_price(inv_groups, start_date, end_date)
+                        print(f'weighted_price -- {weighted_price}')
+                        counter += create_inv_refs_by_inv_groups(inv_groups, form.start_date.data, form.end_date.data, weighted_price)
+                    flash(f'{counter} invoice references was created !','info')    
+                else:                
+                    # inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]      
+                    inv_groups = [x.name for x in form.invoicing_group.data]            
+                    counter = create_inv_refs_by_inv_groups(inv_groups, form.start_date.data, form.end_date.data, weighted_price)   
+                    flash(f'{counter} invoice references was created !','info')
 
-            return redirect(url_for('monthly_report'))     
+                return redirect(url_for('monthly_report', key_word = key_word, **request.args))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
-
-    return render_template('monthly_report.html', title='Monthly Report', form=form, need_dt_picker = True)
+        
+        return render_template('monthly_report.html', title='Monthly Report', form=form, need_dt_picker = True, key_word = key_word)
 
 @app.route('/create_excel_for_integra', methods=['GET', 'POST'])
 @login_required
@@ -2012,17 +2032,6 @@ def create_subcontract():
 
     return render_template('create_subcontract.html', title='Create SubContract', form = form)
 
-# @app.route('/modify_contract', methods=['GET', 'POST'])
-# @login_required
-# def modify_contract():
-    
-#     form = RedactContractForm()
-#     if form.validate_on_submit():
-#         contract_id = form.contracts.data.id
-#         return redirect(url_for('modify_selected_contract', contract_id = contract_id, **request.args)) 
-
-#     return render_template('quick_template_wider.html', title='Modify Contract', form=form, header = 'Modifying CONTRACT')
-
 @app.route('/modify_contractor', methods=['GET', 'POST'])
 @login_required
 def modify_contractor():
@@ -2044,10 +2053,9 @@ def modify_contractor():
 def table():
     return render_template('table.html', title='Table')
 
-@app.route('/modify_contract/<contract_id>', methods=['GET', 'POST'])
+@app.route('/modify_contract/<contract_id>/<key_word>', methods=['GET', 'POST'])
 @login_required
-def modify_selected_contract(contract_id):
-
+def modify_selected_contract(contract_id,key_word):
 
     curr_contract = Contract.query.filter(Contract.id == contract_id).first()           
     print(f'load current contract -- {curr_contract} - {curr_contract.contract_type_id}')
@@ -2167,7 +2175,7 @@ def modify_selected_contract(contract_id):
             # print(f'{form.errors}')
             # print(f'{form.subs.choices}')
             return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}', need_dt_picker = True)
-        return redirect(url_for('modify'))
+        return redirect(url_for('modify',key_word = key_word))
 
 
     return render_template('ask_confirm.html', title=f'Modify Contract', form=form, header = f'Modify Contract {curr_contract.internal_id} - {curr_contractor.name}', need_dt_picker = True)
@@ -2397,29 +2405,37 @@ def modify_invoice(invoice_num):
     return render_template('quick_template_wider.html', title='Readcting Invoice', form=form, header = 'Redacting INVOICES')
 
 
-@app.route('/modify', methods=['GET', 'POST'])
+@app.route('/modify/<key_word>', methods=['GET', 'POST'])
+# @app.route('/modify', defaults={'key_word': None}, methods=['GET', 'POST'])
 @login_required
-def modify():
-
-    form = ModifyForm()
-    # form.invoice_groups.choices = form.invoice_groups.data
-    
-    if form.validate_on_submit():
-        if form.modify_contract.data:
-            contract_id = form.contracts.data[0].id
-            return redirect(url_for('modify_selected_contract', contract_id = contract_id, **request.args))
-
-        # elif form.modify_inv_group.data:
-        #     print(f'form.modify_inv_group.data {form.invoice_groups.data}')
-    else:
-        print(f'{form.errors}')
+def modify(key_word):
+    print(f'key_word -- {key_word}')
+    if request.method == "GET":
+        form_dict = {}
+        if key_word != 'none':
+            form_dict['search'] = key_word   
         
+        form = ModifyForm(formdata=MultiDict(form_dict))       
+        return render_template('modify.html', title='Readcting', form=form, header = 'Redacting',key_word = key_word)
+    else:
+        form = ModifyForm()   
+        
+        if form.validate_on_submit():
+            if form.modify_contract.data:
+                contract_id = form.contracts.data[0].id
+                key_word = form.search.data
+                print(f'key_word validate_on_submit -- {key_word}')
+                return redirect(url_for('modify_selected_contract', contract_id = contract_id, key_word = key_word, **request.args))
+        else:
+            print(f'{form.errors}')       
 
-    return render_template('modify.html', title='Readcting', form=form, header = 'Redacting')
+    return render_template('modify.html', title='Readcting', form=form, header = 'Redacting', key_word = key_word)
 
-@app.route('/modify_inv_group/<inv_name>', methods=['GET', 'POST'])
+@app.route('/modify_inv_group/<inv_name>/<key_word>', methods=['GET', 'POST'])
+# @app.route('/modify_inv_group/<inv_name>', defaults={'key_word': None}, methods=['GET', 'POST'])
 @login_required
-def modify_inv_group(inv_name):
+def modify_inv_group(inv_name, key_word):
+    print(f'in modify_inv_group -- {inv_name} - {key_word}')
     curr_contractor = Contractor.query.join(InvoiceGroup, InvoiceGroup.contractor_id == Contractor.id).filter(InvoiceGroup.name == inv_name).first()
     curr_invoice_group = InvoiceGroup.query.filter(InvoiceGroup.name == inv_name).first()
     mails = Mail.query.filter(Mail.id == curr_invoice_group.email_id).first()
@@ -2485,16 +2501,16 @@ def modify_inv_group(inv_name):
                 from_invoicing_group.delete()                
 
             flash('success','info')
-            return redirect(url_for('modify'))
+            return redirect(url_for('modify', key_word = key_word))
                 
         else:
             print(f'{form.errors.items()}')
 
     return render_template('modify_inv_group.html', title='Readcting Inv Group', form=form, header = 'Redacting Invoicing Group')
 
-@app.route('/modify_itn/<itn>', methods=['GET', 'POST'])
+@app.route('/modify_itn/<itn>/<key_word>', methods=['GET', 'POST'])
 @login_required
-def modify_itn(itn):
+def modify_itn(itn,key_word):
 
     # print('------ {0}'.format(request.form))
     if request.method == "GET":
@@ -2531,7 +2547,7 @@ def modify_itn(itn):
             erp = Erp.query.filter(Erp.name == form.erp.data).first()
             curr_meta.update({'address_id': curr_addr.id,'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
             flash('success','info')
-            return redirect(url_for('modify'))
+            return redirect(url_for('modify', key_word = key_word))
 
 
             # addr = AddressMurs.query.join(ItnMeta, ItnMeta.address_id == AddressMurs.id).filter(ItnMeta.itn == form.itn.data).first()

@@ -44,7 +44,7 @@
                                     <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">  Modify  <span class="caret"></span></a>
                                     <ul class="dropdown-menu">
                                         <li><a class="dropdown-item" href="{{ url_for('modify_contractor') }}"> Contractor </a></li>
-                                        <li><a class="dropdown-item"  href="{{ url_for('modify') }}">Contract / Inv Group / Itn</a></li> 
+                                        <li><a class="dropdown-item"  href="{{ url_for('modify', key_word = 'none') }}">Contract / Inv Group / Itn</a></li> 
                                         <li><a class="dropdown-item"  href="{{ url_for('modify_subcontracts') }}">SubContract</a></li> 
                                         
                                         {% if current_user.username == 'dpetkov' %}                                   
@@ -150,9 +150,9 @@
             
         });
         
-        document.addEventListener('readystatechange', function(ev) {
-            console.log(document.readyState)
-        });        
+        // document.addEventListener('readystatechange', function(ev) {
+        //     console.log(document.readyState)
+        // });        
         function ask_confirm(form_id){
             
             document.getElementById('showme').style.display = "block";
