@@ -1,4 +1,59 @@
 
+############################## finishing contracts ####################################
+
+# rec = (
+        #     db.session.query(
+        #         SubContract.itn, MeasuringType.code.label('measuring_type'), Erp.name.label('erp'),
+        #          Contractor.name.label('contractor_name'), Contractor.acc_411, ContractType.name.label('contract_type'),
+        #          InvoiceGroup.name.label('invoice_group_name'), InvoiceGroup.description.label('invoice_group_description'),
+        #          Tariff.price_day, Tariff.price_night
+        #     )
+        #     .join(Contract,Contract.id == SubContract.contract_id)
+        #     .join(Contractor,Contractor.id == Contract.contractor_id)
+        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)
+        #     .join(Erp, Erp.id == ItnMeta.erp_id)
+        #     .join(MeasuringType, MeasuringType.id == SubContract.measuring_type_id)
+        #     .join(ContractType, ContractType.id == Contract.contract_type_id)
+        #     .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
+        #     .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
+        #     .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
+        #     .filter(ItnSchedule.utc == end_date)
+        #     .filter(SubContract.end_date == end_date)
+        #     # .filter(ContractType.name == 'Mass_Market')
+        #     # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #     .all()
+        # )
+########################################################################################
+
+################### zop consumption ###################################################
+ rec = (
+            db.session.query( 
+                SubContract.itn,               
+                Contractor.name.label('contractor_name'),func.sum(ItnSchedule.consumption_vol).label('total_consumption'),
+                Contractor.acc_411, Contractor.eic.label('bulstat'),
+                Tariff.price_day,Contract.end_date
+            )
+            
+            .join(Contract,Contract.id == SubContract.contract_id)
+            .join(Contractor,Contractor.id == Contract.contractor_id)           
+            .join(ContractType, ContractType.id == Contract.contract_type_id)            
+            .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
+            .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
+            .filter(ItnSchedule.utc >= '2020-09-30 21:00:00', ItnSchedule.utc <= '2020-11-30 21:00:00')
+            .filter(Contract.end_date > '2021-03-31 21:00:00')
+            # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))     
+            .filter(ContractType.name == 'Procurement')
+            .filter(ItnSchedule.consumption_vol > 0)
+            # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+            # .limit(5)
+            .group_by(SubContract.itn,Contractor.name,Contractor.acc_411,Contractor.eic,Tariff.price_day,Contract.end_date)
+            .all()
+        )
+        temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
+        temp_df.to_excel('temp/zop_after_03_2021_.xlsx')
+
+###########################################################################################
+
 ## update invoice group with mails ############################################
 contracts_mails = (db.session
                         .query(InvoiceGroup.id,InvoiceGroup.name, InvoiceGroup.description, Contractor.acc_411)                                               
