@@ -251,9 +251,7 @@ def test():
         erp_name = 'CEZ'
         start_date = convert_date_to_utc('EET',form.start_date.data)   
         end_date = convert_date_to_utc('EET',form.end_date.data) 
-        end_date = convert_date_to_utc('EET',form.end_date.data) 
-        end_date = convert_date_to_utc('EET',form.end_date.data) 
-        end_date = convert_date_to_utc('EET',form.end_date.data) 
+        
         # start_date = convert_date_to_utc('EET','2020-10-01')   
         # end_date = convert_date_to_utc('EET','2020-10-31') 
         end_date = end_date + dt.timedelta(hours = 23)
