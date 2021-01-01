@@ -2409,7 +2409,7 @@ def modify_invoice(invoice_num):
 # @app.route('/modify', defaults={'key_word': None}, methods=['GET', 'POST'])
 @login_required
 def modify(key_word):
-    print(f'key_word -- {key_word}')
+    
     if request.method == "GET":
         form_dict = {}
         if key_word != 'none':
@@ -2419,17 +2419,16 @@ def modify(key_word):
         return render_template('modify.html', title='Readcting', form=form, header = 'Redacting',key_word = key_word)
     else:
         form = ModifyForm()   
+        key_word = form.search.data if form.search.data != '' else 'none'
         
         if form.validate_on_submit():
             if form.modify_contract.data:
-                contract_id = form.contracts.data[0].id
-                key_word = form.search.data
-                print(f'key_word validate_on_submit -- {key_word}')
+                contract_id = form.contracts.data[0].id                
                 return redirect(url_for('modify_selected_contract', contract_id = contract_id, key_word = key_word, **request.args))
         else:
             print(f'{form.errors}')       
-
-    return render_template('modify.html', title='Readcting', form=form, header = 'Redacting', key_word = key_word)
+        
+        return render_template('modify.html', title='Readcting', form=form, header = 'Redacting', key_word = key_word)
 
 @app.route('/modify_inv_group/<inv_name>/<key_word>', methods=['GET', 'POST'])
 # @app.route('/modify_inv_group/<inv_name>', defaults={'key_word': None}, methods=['GET', 'POST'])
