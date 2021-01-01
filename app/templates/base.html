@@ -188,23 +188,7 @@
                     }                     
                 };
             };           
-        }
-        function ala_bala(){
-            let counter = 7000
-            while(document.readyState === 'loading'){
-                console.log('The document is still loading.', document.readyState)
-                if(counter == 0){
-                    break;
-                }
-                counter--
-            };
-            document.onreadystatechange = function () {
-                if (document.readyState === 'interactive') {
-                    console.log('The document has finished loading. We can now access the DOM elements',document.readyState)                    
-                }
-            }            
-        }
-        
+        }       
         
     </script>
 
