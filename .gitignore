@@ -257,3 +257,4 @@ dist
 *.pdf
 *.xlsx
 *.csv
+*.flaskenv
