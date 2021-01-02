@@ -256,16 +256,10 @@ class EditSubForm(FlaskForm):
 class MonthlyReportForm(FlaskForm):
     
     search = StringField(id='search', validators = [Optional()])
-
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                    else int(dt.datetime.utcnow().year) - 1), day = 1, month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
-
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()],
-                                                                            default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                                                else int(dt.datetime.utcnow().year) - 1), day = calendar.monthrange(dt.datetime.utcnow().year,
-                                                                            int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
-                                                                            month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
-                                                                            
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 0 else 1))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 0 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 0 else 1))
     contracts = QuerySelectMultipleField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), 
         allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
@@ -356,14 +350,11 @@ class MailForm(FlaskForm):
     submit = SubmitField('Send selected')
 
 class TestForm(FlaskForm):
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                    else int(dt.datetime.utcnow().year) - 1), day = 1, month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
 
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()],
-                                                                            default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                                                else int(dt.datetime.utcnow().year) - 1), day = calendar.monthrange(dt.datetime.utcnow().year,
-                                                                            int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
-                                                                            month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
 
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})                                                                  
     # contracts = QuerySelectField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[DataRequired()], render_kw={'size':15})
@@ -428,16 +419,10 @@ class ModifyItn(FlaskForm):
 class ModifySubcontractEntryForm(FlaskForm):
     search = StringField(id='search', validators = [Optional()])
     search_by_itn = StringField(id='search_by_itn', validators = [Optional()])
-
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                    else int(dt.datetime.utcnow().year) - 1), day = 1, month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
-
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()],
-                                                                            default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                                                else int(dt.datetime.utcnow().year) - 1), day = calendar.monthrange(dt.datetime.utcnow().year,
-                                                                            int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
-                                                                            month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
-
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     subcontracts = NonValidatingSelectMultipleField(id = 'subcontracts',choices = [],validators=[DataRequired()])
     # itns = NonValidatingSelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
@@ -454,11 +439,7 @@ class MonthlyReportErpForm(FlaskForm):
     by_inv_group = BooleanField('Create invoice reference by Invoice Group', default = True)
     contracts = SelectMultipleField(choices = [],validators=[Optional()], render_kw={'size':15})
     # contracts = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
-    by_contract = BooleanField('Create invoice reference by Contract', default = False)   
-    submit = SubmitField('Create')
-    ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
-    delete_all = BooleanField('Delete all source files', default = False)
-    submit_delete = SubmitField('Delete files') 
+    by_contract = BooleanField('Create invoice reference by Contract', default = False)
 
     def validate_end_date(self, end_date):
 
@@ -467,29 +448,33 @@ class MonthlyReportErpForm(FlaskForm):
         if dt_start_obj > dt_end_obj:
                 raise ValidationError('Start Date must be before End Date')
 
-class MonthlyReportOptionsForm(FlaskForm):
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                    else int(dt.datetime.utcnow().year) - 1), day = 1, month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+    
+    
+    submit = SubmitField('Create')
+    ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
+    delete_all = BooleanField('Delete all source files', default = False)
+    submit_delete = SubmitField('Delete files') 
 
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()],
-                                                                            default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
-                                                                                else int(dt.datetime.utcnow().year) - 1), day = calendar.monthrange(dt.datetime.utcnow().year,
-                                                                            int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
-                                                                            month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+class MonthlyReportOptionsForm(FlaskForm):
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
 
     contract_type = SelectField(choices = ['Mass_Market','End_User','Procurement','All'], validators = [DataRequired()])
     erp = SelectField(choices = ['CEZ','E-PRO','EVN'], validators = [DataRequired()])
     include_all = BooleanField('Include invoice groups with ITN from different ERP', default = False)
+    # attachment_files = QuerySelectMultipleField(query_factory = lambda: Invoice.query.all(), allow_blank = False,get_label=Invoice.__str__, validators=[Optional()], render_kw={'size':15})  
     
+
     submit = SubmitField('Apply filters')
 
 class AdditionalReports(FlaskForm):
 
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
-                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, 
-                                                                            int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1], 
-                                                                            month = int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
+                                                                            if dt.datetime.utcnow().month != 1 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     bulk_creation = BooleanField('Select all files', default = False)
     ref_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':20})
     submit = SubmitField('Generate Full Report')
