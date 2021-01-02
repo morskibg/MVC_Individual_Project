@@ -22,43 +22,32 @@
 
     init()
 
+    contracts.onclick = () =>{
+        if(document.getElementById('msg_close') !== null){
+            document.getElementById('msg_close').click(); 
+        }   
+    }
+
     function init(){
         // document.getElementById('search').value = '' 
-        if(search_field.value !== ''){
+        if(search_field.value !== '' && search_field.value !== 'none'){
             searching()
         } 
+        else{
+            search_field.value = ''
+        }
         invoicing_group.style = 'display:none'     
     }
     search_field.onkeyup = () => searching()
-    // search_field.onkeyup = () =>{
-    //     // console.log(search_field.value)
-    //     let counter = 0;
-    //     const key_word = search_field.value.toLowerCase()
-    //     // values.forEach(value => value.style = 'block')        
-    //     values.forEach(value => {
-    //         counter++;
-    //         if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
-    //             value.style = 'display:none'
-    //             counter--;
-                
-    //         }else{
-    //             value.style = 'block'                
-    //         }
-    //     });
-    //     if(counter === 0){
-    //         contracts.value = ''
-    //     }
-    //     if(counter >15){
-    //         counter = 15;
-    //     }   
-    //     contracts.size = counter;
-    //     console.log(contracts.size)
-    //     console.log(key_word)
-    //     console.log(counter)
-    // };
-
+    
     contracts.ondblclick = () =>{        
         invoicing_group.style = 'block'       
+    }
+
+    search_field.onclick = () =>{
+        if(document.getElementById('msg_close') !== null){
+            document.getElementById('msg_close').click(); 
+        } 
     }
 
     function searching(){

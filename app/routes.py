@@ -1030,12 +1030,12 @@ def monthly_report(key_word = None):
     else:
         form = MonthlyReportForm()
         form.ref_files.choices = sorted([(x,x) for x in get_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']),'xlsx')])
-        key_word = form.search.data
+        key_word = form.search.data if form.search.data != '' else 'none'
         if form.validate_on_submit(): 
             if form.submit_delete.data:
 
                 delete_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']), form.ref_files.data, form.delete_all.data)
-                return redirect(url_for('monthly_report')) 
+                return redirect(url_for('monthly_report', key_word = key_word, **request.args)) 
                 
             elif form.submit.data:
                 counter = 0
@@ -1047,12 +1047,13 @@ def monthly_report(key_word = None):
                         start_date = convert_date_to_utc(time_zone, form.start_date.data)
                         end_date = convert_date_to_utc(time_zone, form.end_date.data) + dt.timedelta(hours = 23)
                         inv_groups = get_list_inv_groups_by_contract(curr_contract.internal_id, start_date, end_date)
-                        # print(f'start_date -- {start_date}')
-                        # print(f'end_date -- {end_date}')
-                        # print(f'inv_groups -- {inv_groups}')
+                        print(f'start_date -- {start_date}')
+                        print(f'end_date -- {end_date}')
+                        print(f'inv_groups -- {inv_groups}')
                         weighted_price = get_weighted_price(inv_groups, start_date, end_date)
                         print(f'weighted_price -- {weighted_price}')
                         counter += create_inv_refs_by_inv_groups(inv_groups, form.start_date.data, form.end_date.data, weighted_price)
+                        
                     flash(f'{counter} invoice references was created !','info')    
                 else:                
                     # inv_groups = get_all_inv_groups() if form.bulk_creation.data else [x.name for x in form.invoicing_group.data]      
