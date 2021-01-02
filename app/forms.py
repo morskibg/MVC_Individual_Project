@@ -256,10 +256,16 @@ class EditSubForm(FlaskForm):
 class MonthlyReportForm(FlaskForm):
     
     search = StringField(id='search', validators = [Optional()])
-    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 0 else 1))
-    end_date = StringField(id='end_datepicker', validators = [DataRequired()], 
-                                                                            default = dt.datetime.utcnow().replace(day = calendar.monthrange(dt.datetime.utcnow().year, int(dt.datetime.utcnow().month)-1 
-                                                                            if dt.datetime.utcnow().month != 0 else 12)[1], month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 0 else 1))
+
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
+                                                    else int(dt.datetime.utcnow().year) - 1), day = 1, month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()],
+                                                                            default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
+                                                                                else int(dt.datetime.utcnow().year) - 1), day = calendar.monthrange(dt.datetime.utcnow().year,
+                                                                            int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
+                                                                            month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+                                                                            
     contracts = QuerySelectMultipleField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), 
         allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
