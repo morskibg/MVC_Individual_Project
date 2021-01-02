@@ -190,7 +190,7 @@ def add_reports():
        
         
 
-    return render_template('quick_template_wider.html', title='Additional Reports', form=form, header = 'Additional Reports')
+    return render_template('quick_template_wider.html', title='Additional Reports', form=form, header = 'Additional Reports', need_dt_picker=True)
 
 @app.route('/monthly_erp', methods=['GET', 'POST'])
 def monthly_erp():
@@ -356,31 +356,31 @@ def test():
         #     .all()
         # )
 
-        rec = (
-            db.session.query( 
-                SubContract.itn,               
-                Contractor.name.label('contractor_name'),func.sum(ItnSchedule.consumption_vol).label('total_consumption'),
-                Contractor.acc_411, Contractor.eic.label('bulstat'),
-                Tariff.price_day,Contract.end_date
-            )
+        # rec = (
+        #     db.session.query( 
+        #         SubContract.itn,               
+        #         Contractor.name.label('contractor_name'),func.sum(ItnSchedule.consumption_vol).label('total_consumption'),
+        #         Contractor.acc_411, Contractor.eic.label('bulstat'),
+        #         Tariff.price_day,Contract.end_date
+        #     )
             
-            .join(Contract,Contract.id == SubContract.contract_id)
-            .join(Contractor,Contractor.id == Contract.contractor_id)           
-            .join(ContractType, ContractType.id == Contract.contract_type_id)            
-            .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
-            .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
-            .filter(ItnSchedule.utc >= '2020-09-30 21:00:00', ItnSchedule.utc <= '2020-11-30 21:00:00')
-            .filter(Contract.end_date > '2021-03-31 21:00:00')
-            # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))     
-            .filter(ContractType.name == 'Procurement')
-            .filter(ItnSchedule.consumption_vol > 0)
-            # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
-            # .limit(5)
-            .group_by(Contractor.name,Contractor.acc_411,Contractor.eic,Tariff.price_day,Contract.end_date)
-            .all()
-        )
-        temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
-        temp_df.to_excel('temp/zop_after_03_2021_.xlsx')
+        #     .join(Contract,Contract.id == SubContract.contract_id)
+        #     .join(Contractor,Contractor.id == Contract.contractor_id)           
+        #     .join(ContractType, ContractType.id == Contract.contract_type_id)            
+        #     .join(ItnSchedule,ItnSchedule.itn == SubContract.itn)
+        #     .join(Tariff,Tariff.id == ItnSchedule.tariff_id)
+        #     .filter(ItnSchedule.utc >= '2020-09-30 21:00:00', ItnSchedule.utc <= '2020-11-30 21:00:00')
+        #     .filter(Contract.end_date > '2021-03-31 21:00:00')
+        #     # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))     
+        #     .filter(ContractType.name == 'Procurement')
+        #     .filter(ItnSchedule.consumption_vol > 0)
+        #     # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+        #     # .limit(5)
+        #     .group_by(Contractor.name,Contractor.acc_411,Contractor.eic,Tariff.price_day,Contract.end_date)
+        #     .all()
+        # )
+        # temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
+        # temp_df.to_excel('temp/zop_after_03_2021_.xlsx')
         # print(f'{temp_df}')
         # rec = (
         #     db.session.query(
