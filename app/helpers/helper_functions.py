@@ -937,20 +937,19 @@ def update_ibex_data(start_date, end_date):
         ibex_df = IbexData.download_from_ibex_web_page(start_date, end_date)
     except:
         print(f'No IBEX data for chossen period : {start_date} - {end_date}')
+        return -1
     else:
         stringifyer(ibex_df)
         bulk_update_list = ibex_df.to_dict(orient='records')
         # print(f' IN IBEX {bulk_update_list}')
         db.session.bulk_update_mappings(IbexData, bulk_update_list)
         db.session.commit()
+        return 1
 
 
 
 def update_schedule_prices(start_date, end_date):
     
-    
-    
-    # valid_ibex_last_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
     spot_itns = (
         db.session
             .query(SubContract.itn.label('sub_itn'))                                 

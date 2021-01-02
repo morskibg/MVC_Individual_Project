@@ -7,7 +7,7 @@ from decimal import *
 from flask import  flash
 from app.models import *  
 from app import app
-from app.helpers.helper_functions import (convert_date_to_utc,)                                 
+from app.helpers.helper_functions import (convert_date_to_utc, update_ibex_data, update_schedule_prices)                                 
 
 from app.helpers.helper_functions_queries import (                                         
                                         get_grid_services_tech_records,                          
@@ -183,9 +183,11 @@ def appned_df(df, temp_df):
 
 # def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date, invoice_ref_path = None, inetgra_src_path, weighted_price = None):
 def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date, end_date, invoice_start_date, invoice_end_date,  weighted_price = None):    
+    
     df = pd.DataFrame()
     inv_group_str = None
     if len(summary_stp) != 0:
+        # print(f' in summary_stp > 0')
         try:
             temp_df = pd.DataFrame.from_records(summary_stp, columns = summary_stp[0].keys())                
                 
@@ -197,6 +199,7 @@ def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_dat
             df = appned_df(df, temp_df)      
                 
     if len(summary_non_stp) > 0:
+        # print(f' in summary_non_stp > 0')
         try:                     
             temp_df = pd.DataFrame.from_records(summary_non_stp, columns = summary_non_stp[0].keys())             
 
@@ -209,7 +212,8 @@ def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_dat
             df = appned_df(df, temp_df)        
 
     if df.empty:
-        print(f'There is not any non spot itn in this invoicing group  ')
+        print(f'There is not data for period {start_date} - {end_date} ')
+        return -1
     else:
         df = df.drop_duplicates(subset='Обект (ИТН №)', keep = 'first')     
         df.insert(loc=0, column = '№', value = [x for x in range(1,df.shape[0] + 1)])  
@@ -224,6 +228,7 @@ def create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_dat
             print(f'{inv_group_str} doesn\'t create integra file !')
         else:
             generate_integra_file(integra_df, start_date, end_date, ref_file_name)
+        return 1
        
 
 def create_report_from_grid(invoice_start_date, invoice_end_date):
@@ -329,8 +334,12 @@ def create_inv_refs_by_inv_groups(inv_groups, start_date, end_date, weighted_pri
         ibex_last_valid_date = (db.session.query(IbexData.utc, IbexData.price).filter(IbexData.price == 0).order_by(IbexData.utc).first()[0])
 
         if ibex_last_valid_date < dt.datetime.strptime(end_date, '%Y-%m-%d'):
-            update_ibex_data(start_date, end_date)
-            update_schedule_prices(start_date, end_date)
+            has_ibex_updated = update_ibex_data(start_date, end_date)            
+            if has_ibex_updated != -1:                
+                update_schedule_prices(start_date, end_date)
+            else:
+                print(f'skipping update_schedule_prices')
+
 
         if start_date_utc is None:
             print(f'There is not data for {inv_group_name}, for period {start_date} - {end_date}')
@@ -339,15 +348,16 @@ def create_inv_refs_by_inv_groups(inv_groups, start_date, end_date, weighted_pri
         is_spot = is_spot_inv_group([inv_group_name], start_date_utc, end_date_utc)
         
         if is_spot:
-            counter += 1
             
             summary_stp, summary_non_stp, grid_services_df, weighted_price= get_summary_spot_df([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, weighted_price)
-            create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, weighted_price)
-            
-        else:
-            counter += 1
-            
-            summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
-            create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
+            has_excel_created = create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date, weighted_price)
+            print(f'from has_excel_created {has_excel_created}')
+            counter = counter + 1 if has_excel_created != -1 else counter
+        else:  
 
+            summary_stp, summary_non_stp, grid_services_df= get_summary_df_non_spot([inv_group_name], start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
+            has_excel_created = create_excel_files(summary_stp, summary_non_stp, grid_services_df, start_date_utc, end_date_utc, invoice_start_date, invoice_end_date)
+            print(f'from has_excel_created {has_excel_created}')
+            counter = counter + 1 if has_excel_created != -1 else counter
+    print(f'from counter {counter}')
     return counter
