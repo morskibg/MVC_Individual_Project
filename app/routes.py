@@ -190,7 +190,7 @@ def add_reports():
        
         
 
-    return render_template('quick_template_wider.html', title='Additional Reports', form=form, header = 'Additional Reports')
+    return render_template('quick_template_wider.html', title='Additional Reports', form=form, header = 'Additional Reports', need_dt_picker=True)
 
 @app.route('/monthly_erp', methods=['GET', 'POST'])
 def monthly_erp():
