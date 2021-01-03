@@ -442,7 +442,7 @@ class ModifySubcontractEntryForm(FlaskForm):
     subcontracts = NonValidatingSelectMultipleField(id = 'subcontracts',choices = [],validators=[DataRequired()])
     # itns = NonValidatingSelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
     has_grid = BooleanField('Has Grid')
-    modify_subcontract = SubmitField('Modify Sub',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'submit'})
+    # modify_subcontract = SubmitField('Modify Sub',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'submit'})
     
 
 class MonthlyReportErpForm(FlaskForm):

@@ -160,15 +160,15 @@
         // document.addEventListener('readystatechange', function(ev) {
         //     console.log(document.readyState)
         // });        
-        function ask_confirm(form_id){
+        function ask_confirm(form_id){    
             
-            document.getElementById('showme').style.display = "block";
-            document.getElementsByClassName('blur')[0].style.filter = "blur(8px)";
             var msg_str = `Are You sure ?`;
             console.log('in base',msg_str);
             var form = document.getElementById(form_id); 
             var is_confirmed = confirm(msg_str);
             if (is_confirmed) {
+                document.getElementById('showme').style.display = "block";
+                document.getElementsByClassName('blur')[0].style.filter = "blur(8px)";
                 console.log('YES');                           
                 form.submit();          
             }
