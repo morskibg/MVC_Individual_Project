@@ -7,7 +7,8 @@
 <div class='col-md-12'>                      
     <h1>{{header|safe}}</h1> 
    
-    {{ wtf.quick_form(form, button_map={'modify_subcontract': 'primary'},id='mod_sub_form') }}    
+    {{ wtf.quick_form(form, button_map={'modify_subcontract': 'primary'},id='mod_sub_form') }} 
+    <input class="btn btn-primary" type="submit" value="Apply Changes" id="apply_changes" onclick="ask_confirm('mod_sub_form')">   
 
 </div> 
 
@@ -24,7 +25,7 @@
         const subcontracts = document.getElementById('subcontracts');
         const itns = document.getElementById('itns');
         const values = document.querySelectorAll('option');
-        const button = document.getElementById('modify_subcontract');
+        const button = document.getElementById('apply_changes');
         const has_grid = document.getElementById('has_grid');
         const labels = document.querySelectorAll('.control-label')
 
@@ -105,13 +106,20 @@
             has_grid.disabled = false;
             console.log(subcontracts.value)            
             has_grid.checked = !subcontracts.value.includes('NO GRID')             
-        }       
+        } 
+        
+        start_date.onblur = () =>{
+            console.log('in start date on change')
+            end_date.value = ''
+            searchByStartDate()
+        }
 
         function init(){
             search_by_itn.value = ''
             button.disabled = true;
             has_grid.disabled = true;
             search_field.value = ''
+            searchByStartDate()
         };
 
         function searching(){
@@ -137,6 +145,34 @@
             contracts.size = counter;     
             initBackground()                 
         }
+
+        function searchByStartDate(){
+            let counter = 0;            
+            console.log('in searching by start date')
+            const form_date = new Date(start_date.value)
+            values.forEach(value => {
+                counter++;
+                const tokens = value.firstChild.textContent.split(' - ')
+                let curr_date = new Date(tokens[tokens.length - 1])
+                // console.log(new Date(curr_date))
+                if(curr_date < form_date){
+                    value.style = 'display:none'
+                    counter--;                    
+                }else{
+                    value.style = 'block'                
+                }                
+            });
+            if(counter === 0){
+                contracts.value = ''
+            }
+            if(counter > 15){
+                counter = 15
+            }
+            contracts.size = counter;     
+            initBackground()
+
+        }
+        
 
 
 
