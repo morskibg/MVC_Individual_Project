@@ -1156,15 +1156,15 @@ def upload_initial_data():
         if request.files.get('file_stp').filename != '':
             print(f'in upload stp coeffs')
 
-            START_DATE = '01/01/2020 00:00:00'
-            END_DATE = '31/12/2020 23:00:00'
-            FORMAT = '%d/%m/%Y %H:%M:%S'
-            df = pd.read_excel(request.files.get('file_stp'),sheet_name='full')
-
-            # START_DATE = '01/01/2021 00:00:00'
-            # END_DATE = '31/12/2021 23:00:00'
+            # START_DATE = '01/01/2020 00:00:00'
+            # END_DATE = '31/12/2020 23:00:00'
             # FORMAT = '%d/%m/%Y %H:%M:%S'
-            # df = pd.read_excel(request.files.get('file_stp'),sheet_name='full_with_dates_2021')
+            # df = pd.read_excel(request.files.get('file_stp'),sheet_name='full')
+
+            START_DATE = '01/01/2021 00:00:00'
+            END_DATE = '31/12/2021 23:00:00'
+            FORMAT = '%d/%m/%Y %H:%M:%S'
+            df = pd.read_excel(request.files.get('file_stp'),sheet_name='2021')
 
             sDate = pd.to_datetime(START_DATE,format = FORMAT)
             eDate = pd.to_datetime(END_DATE,format = FORMAT)
@@ -1183,6 +1183,7 @@ def upload_initial_data():
             df_l = df_l[['utc','measuring_type_id','value']]
             
             update_or_insert(df_l, StpCoeffs.__table__.name)
+            flash(f'Uploading stp coefs from {START_DATE} till {END_DATE} has finished !','info')
 
         if request.files.get('file_inv_group').filename != '':
             if request.files.get('file_inv_group').filename == 'contractors_inv_groups_itn_old.xlsx':
@@ -2201,16 +2202,16 @@ def modify_selected_contractor(contractor_id):
         form_dict['acc_411'] = curr_contractor.acc_411
         form = ContarctorDataForm(formdata=MultiDict(form_dict))
 
-        par_names = [(x.name, x.name) for x in Contractor.query.all()]          
+        par_names = [(x.acc_411, x.name) for x in Contractor.query.all()]          
         par_names.insert(0,('none', 'none'))
-        names_tup =  [x for x in par_names if x[0] == curr_contractor.name][0]    
+        # names_tup =  [x for x in par_names if x[0] == curr_contractor.name][0]    
         parent_contractor_id = curr_contractor.parent_id
         
         if parent_contractor_id is not None:
         
-            parent_contractor_name = Contractor.query.filter(Contractor.id == parent_contractor_id).first().name        
-            par_names.remove((parent_contractor_name, parent_contractor_name))
-            par_names.insert(0,(parent_contractor_name, parent_contractor_name))
+            parent_contractor = Contractor.query.filter(Contractor.id == parent_contractor_id).first()      
+            par_names.remove((parent_contractor.acc_411, parent_contractor.name))
+            par_names.insert(0,(parent_contractor.acc_411, parent_contractor.name))
 
         form.parent_contractor.choices = par_names 
 
@@ -2221,15 +2222,17 @@ def modify_selected_contractor(contractor_id):
         
         if form.validate_on_submit(): 
             
-            for_modificaion_contractor = Contractor.query.filter(Contractor.id == form.acc_411.data).first()
+            for_modificaion_contractor = Contractor.query.filter(Contractor.acc_411 == form.acc_411.data).first()
             if for_modificaion_contractor is None:
                 flash(f'There isn\'t contractor with acc_411: {form.acc_411.data}! Aborting !','danger')
                 return redirect(url_for('modify_contractor'))
-            parent = Contractor.query.filter(Contractor.name == form.parent_contractor.data).first()
+            parent = Contractor.query.filter(Contractor.acc_411 == form.parent_contractor.data).first()
+            # print(f'form.parent_contractor.data ---> {form.parent_contractor.data}')
             parent_id = parent.id if parent is not None else parent
+            # print(f'for_modificaion_contractor {for_modificaion_contractor}')
             for_modificaion_contractor.update({'parent_id':parent_id,'name':form.name.data, 'eic':form.eic.data,
                                                 'address':form.address.data, 'vat_number':form.vat_number.data,'email': form.email.data})         
-            
+            flash(f'Contractor: {form.name.data} updated successifuly','info')
         return redirect(url_for('modify_contractor'))
     
     contr_name = curr_contractor.name if curr_contractor is not None else 'None'
@@ -2565,10 +2568,16 @@ def modify_subcontracts():
     form = ModifySubcontractEntryForm()
     if form.validate_on_submit():
         # print(f'{form.subcontracts.data[0]}')
-        tokens = form.subcontracts.data[0].split(' - ')
-        print(f'{tokens}')
-        subcontract = SubContract.query.filter(SubContract.itn == tokens[0], SubContract.start_date == tokens[1]).first()        
-        subcontract.update({'has_grid_services': form.has_grid.data})
+        # tokens = form.subcontracts.data[0].split(' - ')
+        # print(f'{tokens}')
+        # subcontract = SubContract.query.filter(SubContract.itn == tokens[0], SubContract.start_date == tokens[1]).first()        
+        # subcontract.update({'has_grid_services': form.has_grid.data})
+        
+        for sub in form.subcontracts.data:  
+            # print(f'{form.subcontracts.data[0]}')
+            tokens = sub.split(' - ')          
+            subcontract = SubContract.query.filter(SubContract.itn == tokens[0], SubContract.start_date == tokens[1]).first()
+            subcontract.update({'has_grid_services': form.has_grid.data})
         
         print(f'{form.has_grid.data}')
 

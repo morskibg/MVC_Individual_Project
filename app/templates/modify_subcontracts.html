@@ -110,7 +110,8 @@
         
         start_date.onblur = () =>{
             console.log('in start date on change')
-            end_date.value = ''
+            const start_date_obj = new Date(start_date.value)
+            end_date.value = (new Date(start_date_obj.setMonth(start_date_obj.getMonth() + 12))).toISOString().split('T')[0]
             searchByStartDate()
         }
 
@@ -147,18 +148,20 @@
         }
 
         function searchByStartDate(){
-            let counter = 0;            
-            console.log('in searching by start date')
+            let counter = 0;           
+            
             const form_date = new Date(start_date.value)
+            console.log('in searching by start date',form_date)
             values.forEach(value => {
                 counter++;
                 const tokens = value.firstChild.textContent.split(' - ')
-                let curr_date = new Date(tokens[tokens.length - 1])
-                // console.log(new Date(curr_date))
-                if(curr_date < form_date){
+                let curr_end_date = new Date(tokens[tokens.length - 1])
+                let curr_start_date = new Date(tokens[tokens.length - 2])
+                
+                if(curr_end_date < form_date || curr_start_date >  form_date){
                     value.style = 'display:none'
                     counter--;                    
-                }else{
+                }else{                    
                     value.style = 'block'                
                 }                
             });

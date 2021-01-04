@@ -4,11 +4,17 @@
 
 {% block app_content %} 
     <!-- <div class='col-md-2'></div>              -->
+
+    
+
     <div class='col-md-12'>        
         
         {{ wtf.quick_form(form,button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='ask_confirm_form') }} 
-        <!-- <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="test()"> -->
+        <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="test()"> 
     </div> 
+
+
+
     <!-- <div class='col-md-2'> </div>     -->
     <!-- <script>
         let contract_tk = document.getElementById('contract_tk');
@@ -91,4 +97,10 @@
 
         
     </script> -->
+{% endblock %}
+
+{% block form_scripts %}
+    <script>
+        
+    </script>
 {% endblock %}
