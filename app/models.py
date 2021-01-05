@@ -278,6 +278,21 @@ class MeasuringType(BaseModel):
     def __repr__(self):
         return f'<MeasuringType: id={self.id}_code={self.code}>'
 
+    def __str__(self):
+        return f'{self.code}'    
+
+class ForecastType(BaseModel):
+    id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
+    code = db.Column(db.String(16), nullable=False)
+    
+    sub_contracts = db.relationship("SubContract", back_populates="forecast_type", lazy="dynamic")
+    forecast_coeffs = db.relationship("ForecastCoeffs", back_populates="forecast_type", lazy="dynamic")
+
+    def __repr__(self):
+        return f'<ForecastType: id={self.id}_code={self.code}>'
+    def __str__(self):
+        return f'{self.code}'
+
 class InvoiceGroup(BaseModel):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(32), nullable=False, unique = True)
@@ -315,6 +330,7 @@ class SubContract(BaseModel):
     # price = db.Column(db.Numeric(8,7), nullable=False)
     invoice_group_id = db.Column(db.Integer, db.ForeignKey('invoice_group.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     measuring_type_id = db.Column(db.SmallInteger, db.ForeignKey('measuring_type.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
+    forecast_type_id = db.Column(db.SmallInteger, db.ForeignKey('forecast_type.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=True)
     start_date = db.Column(db.DateTime, primary_key = True)
     end_date = db.Column(db.DateTime, primary_key = True)    
     zko = db.Column(db.Numeric(8,7), nullable=False)
@@ -331,6 +347,7 @@ class SubContract(BaseModel):
     contract = db.relationship('Contract', back_populates = 'sub_contracts')   
     invoice_group = db.relationship('InvoiceGroup', back_populates = 'sub_contracts')
     measuring_type = db.relationship('MeasuringType', back_populates = 'sub_contracts')
+    forecast_type = db.relationship('ForecastType', back_populates = 'sub_contracts')
     meta = db.relationship('ItnMeta', back_populates = 'sub_contracts')
 
     def __repr__(self):
@@ -344,6 +361,17 @@ class StpCoeffs(BaseModel):
     value = db.Column(db.Numeric(9,7), nullable=False)
 
     measuring_type = db.relationship('MeasuringType', back_populates = 'stp_coeffs')
+    
+
+    def __repr__(self):
+        return '<Utc: {}, StpCoeffs {}>'.format(self.utc, self.value)
+
+class ForecastCoeffs(BaseModel):
+    utc = db.Column(db.DateTime, primary_key = True)
+    forecast_type_id = db.Column(db.SmallInteger, db.ForeignKey('forecast_type.id', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
+    value = db.Column(db.Numeric(9,7), nullable=False)
+
+    forecast_type = db.relationship('ForecastType', back_populates = 'forecast_coeffs')
     
 
     def __repr__(self):
@@ -596,6 +624,13 @@ class MeasuringTypeSchema(ma.SQLAlchemySchema):
     id = auto_field()
     code = auto_field()
     
+class ForecastTypeSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = ForecastType
+        include_relationships = True
+        load_instance = True
+    id = auto_field()
+    code = auto_field()
 
 class ContractorSchema(ma.SQLAlchemySchema):
     class Meta:
