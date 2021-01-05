@@ -383,6 +383,14 @@ class ModifyForm(FlaskForm):
     # contract_search = StringField(id='contract_search', validators=[Optional()]) 
     search = StringField(id='search', validators = [Optional()])
     search_by_itn = StringField(id='search_by_itn', validators = [Optional()])
+    start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
+                                                    else int(dt.datetime.utcnow().year) - 1), day = 1, month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
+
+    end_date = StringField(id='end_datepicker', validators = [DataRequired()],
+                                                                            default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
+                                                                                else int(dt.datetime.utcnow().year) - 1), day = calendar.monthrange(dt.datetime.utcnow().year,
+                                                                            int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
+                                                                            month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     modify_contract = SubmitField('Modify Contract',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px'})
     invoice_groups = NonValidatingSelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})    
