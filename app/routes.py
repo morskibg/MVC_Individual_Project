@@ -2429,7 +2429,7 @@ def modify(key_word):
             form_dict['search'] = key_word   
         
         form = ModifyForm(formdata=MultiDict(form_dict))       
-        return render_template('modify.html', title='Readcting', form=form, header = 'Redacting',key_word = key_word)
+        return render_template('modify.html', title='Readcting', form=form, header = 'Redacting',key_word = key_word, need_dt_picker = True)
     else:
         form = ModifyForm()   
         key_word = form.search.data if form.search.data != '' else 'none'
