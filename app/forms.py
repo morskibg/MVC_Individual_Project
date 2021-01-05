@@ -6,7 +6,7 @@ from wtforms import (
 # from wtforms.fields import DateField
 from wtforms.ext.sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional,NumberRange
-from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice,SubContract, Mail, ContractType
+from app.models import User, Contract, Contractor, MeasuringType, ItnMeta, InvoiceGroup, MeasuringType, TimeZone, Erp, Invoice,SubContract, Mail, ContractType,ForecastType
 import re
 import sys
 import datetime as dt
@@ -364,8 +364,9 @@ class TestForm(FlaskForm):
                                                                                 else int(dt.datetime.utcnow().year) - 1), day = calendar.monthrange(dt.datetime.utcnow().year,
                                                                             int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
                                                                             month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
-
-    contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})                                                                  
+    stp_profile = QuerySelectField(id = 'stp_profile',query_factory = lambda: MeasuringType.query.filter(~MeasuringType.code.in_(['DIRECT', 'UNDIRECT'])), allow_blank = False,get_label=MeasuringType.__str__, validators=[Optional()], render_kw={'size':9})
+    forecast_profile = QuerySelectField(id = 'forecast_profile',query_factory = lambda: ForecastType.query, allow_blank = False,get_label=ForecastType.__str__, validators=[Optional()], render_kw={'size':9})
+    # contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})                                                                  
     # contracts = QuerySelectField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__, validators=[DataRequired()], render_kw={'size':15})
     # modify_contract = SubmitField('Modify Contract')
     # # contracts = SelectField(id = 'contracts',choices = [], validators=[DataRequired()], render_kw={'size':15})
@@ -381,6 +382,7 @@ class ModifyForm(FlaskForm):
     # contract_tk =  StringField(id='contract_tk', validators=[Optional()], default = 'ТК') 
     # contract_search = StringField(id='contract_search', validators=[Optional()]) 
     search = StringField(id='search', validators = [Optional()])
+    search_by_itn = StringField(id='search_by_itn', validators = [Optional()])
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     modify_contract = SubmitField('Modify Contract',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px'})
     invoice_groups = NonValidatingSelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})    
