@@ -21,6 +21,8 @@
         
         const search_field = document.getElementById('search');
         const search_by_itn = document.getElementById('search_by_itn');
+        const start_date = document.getElementById('start_datepicker');
+        const end_date = document.getElementById('end_datepicker');
         // search_field.value = 'ТК'
         const contracts = document.getElementById('contracts');
         
@@ -185,35 +187,21 @@
             console.log(contracts.size)
         }
 
-        search_by_itn.onchange = () => {
-            
+        search_by_itn.onchange = () => { 
+                        
             mod_contract_button.disabled = true;
             const is_id = 0            
             
             fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${search_by_itn.value}/${is_id}`).then(function(response){                
-                response.json().then(function(data){                        
-                    let optionHTML = '';
-                    let count = 0;
-                    
-                    for(let sub of data){                               
-                        optionHTML += `<option value="${sub.itn} - ${sub.start_date} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.invoice_group.name}">${sub.itn} - 
-                            ${sub.invoice_group.name} - ${sub.has_grid_services ? 'GRID':'NO GRID'} - ${sub.start_date} - 
-                            ${sub.end_date} - ${sub.invoice_group.description} - ${sub.measuring_type.code}</option>`; 
-                        search_field.value = sub.contract.internal_id                                           
-                        count += 1;
-                    }
-                    if(count >30){
-                        count = 30;
-                    }  
-                    searching()                    
-                    subcontracts.size = count;
-                    subcontracts.innerHTML = optionHTML;  
-                        
+                response.json().then(function(data){             
+                    for(let sub of data){              
+                        search_field.value = sub.contract.internal_id              
+                    }                   
+                    searching()             
                     initBackground()                              
                 });
             })
-            .catch(error => console.log('in error',error) );
-                       
+            .catch(error => console.log('in error',error) );                       
         };
     </script>
 
