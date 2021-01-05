@@ -258,8 +258,17 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
 
-        
+        time_zone = 'EET'
 
+        stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == form.stp_profile.data.id, StpCoeffs.utc >= start_date, StpCoeffs.utc <= end_date  ).statement, db.session.bind)
+        stp_df['measuring_type_id'] = form.forecast_profile.data.id
+        stp_df.rename(columns={'measuring_type_id':'forecast_type_id'}, inplace=True)
+        update_or_insert(stp_df, ForecastCoeffs.__table__.name)
+        # stp_df.set_index('utc', inplace = True)
+        # stp_df.index = stp_df.index.tz_localize('UTC').tz_convert(time_zone)
+        # stp_df.reset_index(inplace = True) 
+        flash('success','info')
+        print(f'{stp_df}')
         
         # try:
         #     while(1):
@@ -401,7 +410,7 @@ def test():
         #     .limit(5)
         #     .all()
         # )
-        print(f'{len(rec)}')
+        # print(f'{len(rec)}')
         ##############################################################################################
         # alias_for_parent_contractor = aliased(Contractor)
         # rec = (
