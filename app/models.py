@@ -7,12 +7,14 @@ from flask import g, flash
 from app import db, ma
 from sqlalchemy.sql import func
 import sqlalchemy as sa
+from sqlalchemy.ext.hybrid import hybrid_property
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import login
 from app import app
 
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema, auto_field, fields
+
 import simplejson
 
 
@@ -368,14 +370,21 @@ class StpCoeffs(BaseModel):
 
 class ForecastCoeffs(BaseModel):
     utc = db.Column(db.DateTime, primary_key = True)
-    forecast_type_id = db.Column(db.SmallInteger, db.ForeignKey('forecast_type.id', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
-    value = db.Column(db.Numeric(9,7), nullable=False)
+    forecast_type_id = db.Column(db.SmallInteger, db.ForeignKey('forecast_type.id', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)    
+    value = db.Column(db.Numeric(9,7), nullable=False)   
+
+    @hybrid_property
+    def weekday(self):
+        
+        return self.utc.weekday()
+
+    
 
     forecast_type = db.relationship('ForecastType', back_populates = 'forecast_coeffs')
     
 
     def __repr__(self):
-        return '<Utc: {}, StpCoeffs {}>'.format(self.utc, self.value)
+        return '<Utc: {}, forecast_type_id {}, value {}, weekday {}>'.format(self.utc, self.forecast_type_id, self.value, self.weekday)
 
 class Mail(BaseModel):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -616,6 +625,8 @@ db.event.listen(SubContract, 'before_delete', ItnSchedule.before_delete)
 # db.event.listen(SubContract, 'before_update', ItnSchedule.autoupdate_existing)
 # db.event.listen(SubContract, 'before_update', ItnSchedule.test)
 
+
+
 class MeasuringTypeSchema(ma.SQLAlchemySchema):
     class Meta:
         model = MeasuringType
@@ -631,6 +642,17 @@ class ForecastTypeSchema(ma.SQLAlchemySchema):
         load_instance = True
     id = auto_field()
     code = auto_field()
+    # invoice_group = ma.Nested(InvoiceGroupSchema)
+
+class ForecastCoeffsSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = ForecastCoeffs
+        include_relationships = True
+        load_instance = True
+    utc = auto_field()
+    forecast_type_id = auto_field()
+    value = auto_field()    
+    forecast_type = ma.Nested(ForecastTypeSchema) 
 
 class ContractorSchema(ma.SQLAlchemySchema):
     class Meta:
