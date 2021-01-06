@@ -251,24 +251,32 @@ def test():
         erp_name = 'CEZ'
         start_date = convert_date_to_utc('EET',form.start_date.data)   
         end_date = convert_date_to_utc('EET',form.end_date.data) 
+
         
         # start_date = convert_date_to_utc('EET','2020-10-01')   
         # end_date = convert_date_to_utc('EET','2020-10-31') 
         end_date = end_date + dt.timedelta(hours = 23)
+
+        montly_start_date = start_date.replace(day = 1)
+        montly_end_date = end_date.replace(year = int(end_date.year) , day = calendar.monthrange(end_date.year,int(end_date.month))[1], month = int(end_date.month) )
+        print(f'{montly_start_date} - {montly_end_date}')
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
+        
 
-        time_zone = 'EET'
+        # forcast_df = pd.read_sql(ForecastCoeffs.query.filter(ForecastCoeffs.forecast_type_id == form.forecast_profile.data.id, ForecastCoeffs.utc >= montly_start_date, ForecastCoeffs.utc <= montly_end_date  ).statement, db.session.bind).head()
+        forcast_df = ForecastCoeffs.query.filter(ForecastCoeffs.forecast_type_id == form.forecast_profile.data.id).first()
+        # time_zone = 'EET'
 
-        stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == form.stp_profile.data.id, StpCoeffs.utc >= start_date, StpCoeffs.utc <= end_date  ).statement, db.session.bind)
-        stp_df['measuring_type_id'] = form.forecast_profile.data.id
-        stp_df.rename(columns={'measuring_type_id':'forecast_type_id'}, inplace=True)
-        update_or_insert(stp_df, ForecastCoeffs.__table__.name)
-        # stp_df.set_index('utc', inplace = True)
-        # stp_df.index = stp_df.index.tz_localize('UTC').tz_convert(time_zone)
-        # stp_df.reset_index(inplace = True) 
-        flash('success','info')
-        print(f'{stp_df}')
+        # stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == form.stp_profile.data.id, StpCoeffs.utc >= start_date, StpCoeffs.utc <= end_date  ).statement, db.session.bind)
+        # stp_df['measuring_type_id'] = form.forecast_profile.data.id
+        # stp_df.rename(columns={'measuring_type_id':'forecast_type_id'}, inplace=True)
+        # update_or_insert(stp_df, ForecastCoeffs.__table__.name)
+        # # stp_df.set_index('utc', inplace = True)
+        # # stp_df.index = stp_df.index.tz_localize('UTC').tz_convert(time_zone)
+        # # stp_df.reset_index(inplace = True) 
+        # flash('success','info')
+        print(f'{forcast_df}')
         
         # try:
         #     while(1):
@@ -2175,10 +2183,12 @@ def modify_selected_contract(contract_id,key_word):
                 if form.contractor.data != curr_contractor.id:
                     update_dict['contractor_id'] = form.contractor.data
 
-                curr_parent_contract_internal_id = parent_contract.internal_id if parent_contract is not None else None
+                curr_parent_contract_internal_id = parent_contract.internal_id if parent_contract is not None else 0
+                # print(f'form.parent_contract.data {form.parent_contract.data}')
                 
                 if form.parent_contract.data != curr_parent_contract_internal_id:
-                    update_dict['parent_id'] = Contract.query.filter(Contract.internal_id == form.parent_contract.data).first().id 
+                    
+                    update_dict['parent_id'] = 0 if form.parent_contract.data == 'none' else Contract.query.filter(Contract.internal_id == form.parent_contract.data).first().id 
                     # print(f'{form.parent_contract.data}')
                 print(f'{update_dict}')
                 curr_contract.update(update_dict)      
@@ -2777,7 +2787,7 @@ def _get_subcontracts(start_date, end_date, filter_arg, is_id):
 
     is_id = True if is_id != '0' else False
     filters = (Contract.id == filter_arg,) if is_id else (SubContract.itn == filter_arg,)
-    print(f'filters\n{is_id}')
+    # print(f'filters\n{is_id}')
 
     start_date = convert_date_to_utc('EET',start_date)   
     end_date = convert_date_to_utc('EET',end_date)
@@ -2790,3 +2800,21 @@ def _get_subcontracts(start_date, end_date, filter_arg, is_id):
     except:
         return jsonify([])
 
+
+@app.route('/_get_forecast/<start_date>/<end_date>/<forecast_id>', methods=['GET', 'POST'])
+@login_required
+def _get_forecast(start_date, end_date, forecast_id):     
+
+    start_date = convert_date_to_utc('EET',start_date)   
+    end_date = convert_date_to_utc('EET',end_date)
+    end_date = end_date + dt.timedelta(hours = 23)
+    montly_start_date = start_date.replace(day = 1)
+    montly_end_date = end_date.replace(year = int(end_date.year) , day = calendar.monthrange(end_date.year,int(end_date.month))[1], month = int(end_date.month) )
+
+    forecast_coeffs = ForecastCoeffs.query.filter(ForecastCoeffs.forecast_type_id == forecast_id, ForecastCoeffs.utc >= montly_start_date, ForecastCoeffs.utc <= montly_end_date).all()  
+    
+    forecast_schema = ForecastCoeffsSchema()
+    try:
+        return jsonify(forecast_schema.dump(forecast_coeffs, many = True))
+    except:
+        return jsonify([])

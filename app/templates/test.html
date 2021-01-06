@@ -10,8 +10,12 @@
     <div class='col-md-12'>        
         
         {{ wtf.quick_form(form,button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='ask_confirm_form') }} 
-        <!-- <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="test()">  -->
+        <!-- <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="test()">  -->        
+        
+        <div class="d-flex justify-content-center" id="tester" ></div>
+        
     </div> 
+    
 
 
 
@@ -101,6 +105,37 @@
 
 {% block form_scripts %}
     <script>
+        const plot_container = document.getElementById('tester');
+        var xValue = ['Product A', 'Product B', 'Product C'];
+
+        var yValue = [20, 14, 23];
+
+        var trace1 = {
+        x: xValue,
+        y: yValue,
+        type: 'bar',
+        text: yValue.map(String),
+        textposition: 'auto',
+        hoverinfo: 'none',
+        marker: {
+            color: 'rgb(158,202,225)',
+            opacity: 0.6,
+            line: {
+            color: 'rgb(8,48,107)',
+            width: 1.5
+            }
+        }
+        };
+
+        var data = [trace1];
+
+        var layout = {
+        title: 'January 2013 Sales Report',
+        barmode: 'stack'
+        };
+
+        Plotly.newPlot(plot_container, data, layout);
+        
         
     </script>
 {% endblock %}

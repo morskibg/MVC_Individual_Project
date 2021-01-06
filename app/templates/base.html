@@ -4,7 +4,8 @@
 {{super()}}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">  
     <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
-    <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>     
+    <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'> 
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>    
 {% endblock %}
 
 
@@ -125,12 +126,12 @@
 {% block scripts %}
     {{ super() }}
     {{ moment.include_moment() }}
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
     {% if need_dt_picker %}
         <script type="text/javascript"
-            src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.47/js/bootstrap-datetimepicker.min.js">
-            
-        </script>
+            src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.47/js/bootstrap-datetimepicker.min.js"></script>
+        
+        
         <script type="text/javascript">
             $(function () {
                 $('#sign_datepicker').datetimepicker({
