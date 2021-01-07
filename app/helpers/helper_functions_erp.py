@@ -1477,8 +1477,6 @@ def upload_to_incoming_itns(df, max_date, is_settelment = True, is_grid = None):
 
 def get_missing_extra_points_by_erp_for_period(erp_name, start_date, end_date):
 
-
-
     grid_db_itns = get_grid_itns_by_erp_for_period(erp_name, start_date, end_date)
     non_grid_db_itns = get_non_grid_itns_by_erp_for_period(erp_name, start_date, end_date)
     incomming_grid_itns = get_incomming_grid_itns(erp_name, start_date, end_date)
@@ -1509,6 +1507,24 @@ def get_missing_extra_points_by_erp_for_period(erp_name, start_date, end_date):
     
     log_writer(full_path, final_df, unique_columns)
 
+def update_itn_address(itn, address_info):
+
+    old_address = AddressMurs.query.join(ItnMeta, ItnMeta.address_id == AddressMurs.id).filter(ItnMeta.itn == itn).first()    
+    curr_addr = AddressMurs.query.filter(AddressMurs.name == address_info).first()    
+
+    if curr_addr is None:   
+        new_addr = AddressMurs(name = address_info)
+        new_addr.save()
+        curr_addr = AddressMurs.query.filter(AddressMurs.name == address_info).first()
+
+    print(f'address is ------> {curr_addr.name}')
+    if old_address.name != 'no data':
+        flash(f'itn: {itn} has address already: {old_address.name}. Skipping update !','info')
+
+    else:
+        curr_meta = ItnMeta.query.get(itn)        
+        curr_meta.update({'address_id': curr_addr.id})
+        flash(f'itn: {itn} address now is: {address_info}','success')
 
     
 

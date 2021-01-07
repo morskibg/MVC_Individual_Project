@@ -92,7 +92,7 @@ from app.helpers.helper_functions_queries import (
 from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus, get_distribution_stp_records,
                                       insert_settlment_cez, insert_settlment_e_pro, insert_settelment_eso,
                                       insert_settlment_evn, insert_settelment_nkji ,update_reported_volume,order_files_by_date,
-                                      get_missing_extra_points_by_erp_for_period, create_report_by_itn,                     
+                                      get_missing_extra_points_by_erp_for_period, create_report_by_itn, update_itn_address,                    
                                       
 )
 from app.helpers.helper_functions_reports import (create_report_from_grid, get_summary_df_non_spot, create_inv_refs_by_inv_groups,
@@ -1370,6 +1370,7 @@ def upload_initial_data():
             df = df[['name','contractor_id','description']]
             update_or_insert(df, InvoiceGroup.__table__.name)
             flash('upload was successiful','info')        
+    
     return render_template('upload_initial_data.html', title='Test', form=form)
 
 @app.route('/add_contract', methods=['GET', 'POST'])
@@ -1619,8 +1620,9 @@ def upload_itns():
                 curr_itn_meta = create_itn_meta(row)                    
                 if curr_itn_meta is None:
 
-                    flash(f'Itn: {row.itn} already exist ! Skipping !','info')
-                    print(f'Itn: {row.itn} already exist ! Skipping !')
+                    flash(f'Itn: {row.itn} already exist ! Going to address update !','info')
+                    print(f'Itn: {row.itn} already exist ! Going to address update !')
+                    update_itn_address(row.itn, row.address)
                     continue
                 else:
                     
@@ -1655,125 +1657,130 @@ def upload_contracts():
     
     form = UploadContractsForm()
     if form.validate_on_submit():
-        print(f'in upload_contracts')
-        df = pd.read_excel(request.files.get('file_'))
+        if request.files.get('file_').filename != '':
+            print(f'in upload_contracts')
+            df = pd.read_excel(request.files.get('file_'))
 
-        # tks = list(df.internal_id)
-        # contracts = Contract.query.filter(Contract.internal_id.in_(tks)).all()
-        # contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}
+            # tks = list(df.internal_id)
+            # contracts = Contract.query.filter(Contract.internal_id.in_(tks)).all()
+            # contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}
 
-        # # df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
-        # df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
-        # for c in contracts:
-        #     curr_idx = c.contract_type_id
-        #     print(f'curr contract type {curr_idx}')
-        #     input_idx = df[df['internal_id'] == c.internal_id].contract_type.values[0]
-        #     print(f'must be contract type {input_idx}')
-        #     c.update({'contract_type_id':int(input_idx)})
-        #     # c.update({'contract_type_id':3})
-        
-        template_cols = ['411-3', 'parent_contract_internal_id', 'internal_id', 'contractor',
-                                    'signing_date', 'start_date', 'end_date', 'duration',
-                                    'invoicing_interval', 'maturity_interval', 'contract_type',
-                                    'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
-                                    'notes', 'time_zone','parent_contractor_411']
-        
-        if set(df.columns).issubset(template_cols):
-
-            tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
-            parent_tks = df['parent_contract_internal_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
-            # print(f'{parent_tks}')    
-            all_cyr = tks.all()
-            all_cyr_parent = parent_tks.all()
-            # print(f'all_cyr ---> {all_cyr}')
-            # print(f'all_cyr_parent ---> {all_cyr_parent}')
-            if not (all_cyr & all_cyr_parent):
-                flash('There is tk in latin, aborting', 'danger')
-                return redirect(url_for('upload_contracts'))
-
+            # # df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
+            # df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
+            # for c in contracts:
+            #     curr_idx = c.contract_type_id
+            #     print(f'curr contract type {curr_idx}')
+            #     input_idx = df[df['internal_id'] == c.internal_id].contract_type.values[0]
+            #     print(f'must be contract type {input_idx}')
+            #     c.update({'contract_type_id':int(input_idx)})
+            #     # c.update({'contract_type_id':3})
             
-            df = df.fillna(0)
-
-            contractors = get_contractors_names_and_411()
-            contractors_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())
-            df = df.merge(contractors_df, on = '411-3', how = 'left' )            
+            template_cols = ['411-3', 'parent_contract_internal_id', 'internal_id', 'contractor',
+                                        'signing_date', 'start_date', 'end_date', 'duration',
+                                        'invoicing_interval', 'maturity_interval', 'contract_type',
+                                        'is_work_day', 'automatic_renewal_interval', 'collateral_warranty',
+                                        'notes', 'time_zone','parent_contractor_411']
             
-            df['parent_id_initial_zero'] = 0
-            df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
-            df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days, axis = 1)
-            df['time_zone'] = df['time_zone'].apply(lambda x: TimeZone.query.filter(TimeZone.code == x).first() if TimeZone.query.filter(TimeZone.code == x).first() is not None else x)
-            
-            renewal_dict = {'удължава се автоматично с още 12 м. ако никоя от страните не заяви писмено неговото прекратяване':12,
-                            'Подновява се автоматично за 1 година , ако никоя от страните не възрази писмено за прекратяването му поне 15 дни преди изтичането му':12,
-                            'удължава се автоматично с още 6 м. ако никоя от страните не заяви писмено неговото прекратяване':6,
-                            'удължава се автоматично за 3 м. ако никоя от страните не заяви писмено неговото прекратяване с допълнително споразумение.':3,
-                            'За срок от една година. Подновява се с ДС / не се изготвя справка към ф-ра':12,
-                            'За срок от една година. Подновява се с ДС.':12,
-                            'с неустойка, удължава се с доп. спораз-е': -1}
-                            
-            df['automatic_renewal_interval'] = df['notes'].apply(lambda x: renewal_dict[x.strip()] if(renewal_dict.get(str(x).strip())) else 0 )
+            if set(df.columns).issubset(template_cols):
 
-            invoicing_dict = {'до 12-то число, следващ месеца на доставката':42,'на 10 дни':10,'на 15 дни':15,'последно число':31,'конкретна дата':-1}
-            df['invoicing_interval'] = df['invoicing_interval'].apply(lambda x: invoicing_dict[x.strip()] if(invoicing_dict.get(str(x).strip())) else 0 )
-            contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}
+                tks = df['internal_id'].apply(lambda x: validate_ciryllic(x))            
+                parent_tks = df['parent_contract_internal_id'].apply(lambda x: validate_ciryllic(x) if x != 0 else True)
+                # print(f'{parent_tks}')    
+                all_cyr = tks.all()
+                all_cyr_parent = parent_tks.all()
+                # print(f'all_cyr ---> {all_cyr}')
+                # print(f'all_cyr_parent ---> {all_cyr_parent}')
+                if not (all_cyr & all_cyr_parent):
+                    flash('There is tk in latin, aborting', 'danger')
+                    return redirect(url_for('upload_contracts'))
 
-            # df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
-            df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
+                
+                df = df.fillna(0)
 
-            work_day_dict = {'календарни дни':0, 'работни дни':1}
-            df['is_work_day'] = df['is_work_day'].apply(lambda x: work_day_dict[x.strip()] if(work_day_dict.get(str(x).strip())) else 0 )
-            t_format = '%Y-%m-%dT%H:%M'
-            contracts = []
-            for index,row in df.iterrows():
-                #print(f'in rows --------------->>{row.internal_id}')
-                curr_contract = get_contract_by_internal_id(row['internal_id'])
-                if curr_contract is not None :
-                    internal_id = row['internal_id']
-                    flash(f'There is a contract with this internal id {internal_id} ! Skipping !','danger')
-                    print(f'There is a contract with this internal id {internal_id} ! Skipping !')
-                    continue
+                contractors = get_contractors_names_and_411()
+                contractors_df = pd.DataFrame.from_records(contractors, columns = contractors[0].keys())
+                df = df.merge(contractors_df, on = '411-3', how = 'left' )            
+                
+                df['parent_id_initial_zero'] = 0
+                df['end_date'] = df['end_date'] + dt.timedelta(hours = 23)
+                df['duration_in_days'] = df.apply(lambda x: (x['end_date'] - x['start_date']).days, axis = 1)
+                df['time_zone'] = df['time_zone'].apply(lambda x: TimeZone.query.filter(TimeZone.code == x).first() if TimeZone.query.filter(TimeZone.code == x).first() is not None else x)
+                
+                renewal_dict = {'удължава се автоматично с още 12 м. ако никоя от страните не заяви писмено неговото прекратяване':12,
+                                'Подновява се автоматично за 1 година , ако никоя от страните не възрази писмено за прекратяването му поне 15 дни преди изтичането му':12,
+                                'удължава се автоматично с още 6 м. ако никоя от страните не заяви писмено неговото прекратяване':6,
+                                'удължава се автоматично за 3 м. ако никоя от страните не заяви писмено неговото прекратяване с допълнително споразумение.':3,
+                                'За срок от една година. Подновява се с ДС / не се изготвя справка към ф-ра':12,
+                                'За срок от една година. Подновява се с ДС.':12,
+                                'с неустойка, удължава се с доп. спораз-е': -1}
+                                
+                df['automatic_renewal_interval'] = df['notes'].apply(lambda x: renewal_dict[x.strip()] if(renewal_dict.get(str(x).strip())) else 0 )
+
+                invoicing_dict = {'до 12-то число, следващ месеца на доставката':42,'на 10 дни':10,'на 15 дни':15,'последно число':31,'конкретна дата':-1}
+                df['invoicing_interval'] = df['invoicing_interval'].apply(lambda x: invoicing_dict[x.strip()] if(invoicing_dict.get(str(x).strip())) else 0 )
+                contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}
+
+                # df['contract_type'] = df['contract_type'].apply(lambda x: contract_type_dict[x.strip()] if(contract_type_dict.get(str(x).strip())) else 0 )
+                df['contract_type'] = df['contract_type'].apply(lambda x: ContractType.query.filter(ContractType.name == x).first().id if ContractType.query.filter(ContractType.name == x).first() is not None else x)
+
+                work_day_dict = {'календарни дни':0, 'работни дни':1}
+                df['is_work_day'] = df['is_work_day'].apply(lambda x: work_day_dict[x.strip()] if(work_day_dict.get(str(x).strip())) else 0 )
+                t_format = '%Y-%m-%dT%H:%M'
+                contracts = []
+                for index,row in df.iterrows():
+                    #print(f'in rows --------------->>{row.internal_id}')
+                    curr_contract = get_contract_by_internal_id(row['internal_id'])
+                    if curr_contract is not None :
+                        internal_id = row['internal_id']
+                        flash(f'There is a contract with this internal id {internal_id} ! Skipping !','danger')
+                        print(f'There is a contract with this internal id {internal_id} ! Skipping !')
+                        continue
+                    else:
+                        curr_contract = (
+                            Contract(internal_id = row['internal_id'], contractor_id = row['contractor_id'], subject = 'None', parent_id =  row['parent_id_initial_zero'],                                
+                                    signing_date =  convert_date_to_utc(row['time_zone'].code,row['signing_date'].strftime(t_format),t_format),
+                                    start_date = convert_date_to_utc(row['time_zone'].code, row['start_date'].strftime(t_format),t_format), 
+                                    end_date = convert_date_to_utc(row['time_zone'].code, row['end_date'].strftime(t_format),t_format), 
+                                    duration_in_days = row['duration_in_days'], invoicing_interval = row['invoicing_interval'], maturity_interval = row['maturity_interval'], 
+                                    contract_type_id = row['contract_type'], is_work_days = row['is_work_day'], automatic_renewal_interval = row['automatic_renewal_interval'], 
+                                    collateral_warranty = row['collateral_warranty'], notes =  row['notes'],time_zone_id = row['time_zone'].id) 
+                        )
+                        contracts.append(curr_contract)
+
+                nan_df = df[df.isna().any(axis=1)]
+                if not nan_df.empty:
+                    print(f'THERE IS CONTRACT WITH WRONG DATA ! ABORTING ! \n{nan_df}')
                 else:
-                    curr_contract = (
-                        Contract(internal_id = row['internal_id'], contractor_id = row['contractor_id'], subject = 'None', parent_id =  row['parent_id_initial_zero'],                                
-                                signing_date =  convert_date_to_utc(row['time_zone'].code,row['signing_date'].strftime(t_format),t_format),
-                                start_date = convert_date_to_utc(row['time_zone'].code, row['start_date'].strftime(t_format),t_format), 
-                                end_date = convert_date_to_utc(row['time_zone'].code, row['end_date'].strftime(t_format),t_format), 
-                                duration_in_days = row['duration_in_days'], invoicing_interval = row['invoicing_interval'], maturity_interval = row['maturity_interval'], 
-                                contract_type_id = row['contract_type'], is_work_days = row['is_work_day'], automatic_renewal_interval = row['automatic_renewal_interval'], 
-                                collateral_warranty = row['collateral_warranty'], notes =  row['notes'],time_zone_id = row['time_zone'].id) 
-                    )
-                    contracts.append(curr_contract)
+                    db.session.bulk_save_objects(contracts)
+                    db.session.commit()  
+                    for contract in contracts:
+                        flash(f'Contract {contract.internal_id} succesifully created !','success')  
 
-            nan_df = df[df.isna().any(axis=1)]
-            if not nan_df.empty:
-                print(f'THERE IS CONTRACT WITH WRONG DATA ! ABORTING ! \n{nan_df}')
+                    
+                    has_parent_contract_df = df[df['parent_contract_internal_id'] != 'none']
+                    
+                    for index, row in has_parent_contract_df.iterrows():
+                        child_contract = Contract.query.filter(Contract.internal_id == row['internal_id']).first()                    
+                        child_contract.update({'parent_id':Contract.query.filter(Contract.internal_id == row['parent_contract_internal_id']).first().id})
+                        flash(f'Parent contract {Contract.query.filter(Contract.id == child_contract.parent_id).first().internal_id} added to {child_contract.internal_id}','success')
+
+                    has_parent_contractor_df = df[df['parent_contractor_411'] != 'none']
+
+                    for index, row in has_parent_contractor_df.iterrows():
+                        parent_contractor = Contractor.query.filter(Contractor.acc_411 == row['parent_contractor_411']).first()
+                        child_contractor = Contractor.query.filter(Contractor.acc_411 == row['411-3']).first()
+                        child_contractor.update({'parent_id':parent_contractor.id})
+                        flash(f'Parent contractor {parent_contractor.name} added to {child_contractor.name}','success')           
             else:
-                db.session.bulk_save_objects(contracts)
-                db.session.commit()                
+                input_set = set(df['data'].columns)
+                expected_set = set(template_cols)
+                mismatched = list(expected_set - input_set)
+                print(f'Columns from input file mismatch {mismatched}')               
                 
-                has_parent_contract_df = df[df['parent_contract_internal_id'] != 'none']
+        
                 
-                for index, row in has_parent_contract_df.iterrows():
-                    child_contract = Contract.query.filter(Contract.internal_id == row['internal_id']).first()                    
-                    child_contract.update({'parent_id':Contract.query.filter(Contract.internal_id == row['parent_contract_internal_id']).first().id})
-                    flash(f'Parent contract {Contract.query.filter(Contract.id == child_contract.parent_id).first().internal_id} added to {child_contract.internal_id}','success')
-
-                has_parent_contractor_df = df[df['parent_contractor_411'] != 'none']
-
-                for index, row in has_parent_contractor_df.iterrows():
-                    parent_contractor = Contractor.query.filter(Contractor.acc_411 == row['parent_contractor_411']).first()
-                    child_contractor = Contractor.query.filter(Contractor.acc_411 == row['411-3']).first()
-                    child_contractor.update({'parent_id':parent_contractor.id})
-                    flash(f'Parent contractor {parent_contractor.name} added to {child_contractor.name}','success')           
         else:
-            input_set = set(df['data'].columns)
-            expected_set = set(template_cols)
-            mismatched = list(expected_set - input_set)
-            print(f'Columns from input file mismatch {mismatched}')               
-            
-    
-             
-
+            flash('Choose contractor file first','danger')
     return render_template('upload_contracts.html', title='Upload Contracts', form=form)
 
 
