@@ -2688,6 +2688,18 @@ def _get_contract(tk = ''):
     
     return jsonify({'contracts':contract_arr})
 
+@app.route('/_get_contract_by_date/<start_date>/<end_date>', methods=['GET', 'POST'])
+@login_required
+def _get_contract_by_date(start_date, end_date):
+    start_date = convert_date_to_utc('EET',start_date)   
+    end_date = convert_date_to_utc('EET',end_date)  
+    contracts = Contract.query.filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date))).all()
+    contract_schema = ContractSchema()
+    try:
+        return jsonify(contract_schema.dump(contracts, many = True))
+    except:
+        return jsonify([])
+
 @app.route('/_get_contracts/<contractor_id>', methods=['GET', 'POST'])
 @login_required
 def _get_contracts(contractor_id):
