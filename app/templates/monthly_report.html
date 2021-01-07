@@ -19,6 +19,8 @@
     const values = document.querySelectorAll('option')
     const contracts = document.getElementById('contracts')
     const invoicing_group = document.getElementById('invoicing_group')
+    const start_date = document.getElementById('start_datepicker');
+    const end_date = document.getElementById('end_datepicker');
 
     init()
 
@@ -29,14 +31,15 @@
     }
 
     function init(){
-        // document.getElementById('search').value = '' 
+        
         if(search_field.value !== '' && search_field.value !== 'none'){
             searching()
         } 
         else{
             search_field.value = ''
         }
-        invoicing_group.style = 'display:none'     
+        invoicing_group.style = 'display:none' 
+           
     }
     search_field.onkeyup = () => searching()
     
@@ -51,13 +54,18 @@
     }
 
     function searching(){
-        // console.log(search_field.value)
+        
         let counter = 0;
         const key_word = search_field.value.toLowerCase()
-        // values.forEach(value => value.style = 'block')        
+        const form_date = new Date(start_date.value)
+              
         values.forEach(value => {
+            const tokens = value.firstChild.textContent.split(' - ')
+            let curr_end_date = new Date(tokens[tokens.length - 1])
+            let curr_start_date = new Date(tokens[tokens.length - 2])
             counter++;
-            if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+            if(!value.firstChild.textContent.toLowerCase().includes(key_word) ||
+                (curr_end_date < form_date || curr_start_date >  form_date)){
                 value.style = 'display:none'
                 counter--;
                 
@@ -72,10 +80,12 @@
             counter = 15;
         }   
         contracts.size = counter;
-        console.log(contracts.size)
-        console.log(key_word)
-        console.log(counter)
+        initBackground()
+        // console.log(contracts.size)
+        // console.log(key_word)
+        // console.log(counter)
     };
+
 
 </script>
 {% endblock %}
