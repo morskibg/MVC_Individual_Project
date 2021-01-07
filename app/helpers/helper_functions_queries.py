@@ -584,6 +584,27 @@ def create_ibex_schedule(end_date):
     db.session.commit()
 
 # def update_ibex_data():
+def get_inv_gr_id_linked_conractors(start_date, end_date, parent_id):
+
+    erp_inv_ids =(
+            db.session.query(
+                InvoiceGroup.name,
+                InvoiceGroup.description,
+                Contract,
+                Contract.internal_id                     
+            )                     
+            .join(SubContract,SubContract.invoice_group_id == InvoiceGroup.id)
+            .join(Contract, Contract.id == SubContract.contract_id) 
+            .join(ContractType, ContractType.id == Contract.contract_type_id)         
+            .join(Contractor,Contractor.id == Contract.contractor_id)   
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn)                   
+            .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)      
+            .filter(or_( Contractor.id == parent_id,  Contractor.parent_id == parent_id))                
+            .distinct()
+            .all()
+        )
+    return erp_inv_ids
+
 def get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed):
 
     # contr_type_list
