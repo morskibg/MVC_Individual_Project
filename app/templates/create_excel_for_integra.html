@@ -3,10 +3,53 @@
 
 
 {% block app_content %} 
-    <div class='col-md-2'></div>             
-    <div class='col-md-8'>                      
+              
+    <div class='col-md-12'>                      
         <h1>Creation/Deletion of Integra summary excel file</h1>        
         {{ wtf.quick_form(form, button_map={'submit': 'primary','delete_integra':'danger','delete_upload_integra':'danger'})}}         
     </div> 
-    <div class='col-md-2'> </div>    
+    
+{% endblock %}
+
+{% block form_scripts %}
+    <script type="text/javascript">
+        const search_field = document.getElementById('search')
+        const integra_files = document.getElementById('integra_files')
+        const values = document.querySelectorAll('option')
+
+        search_field.onkeyup = () => searching()
+
+        search_field.onclick = () => searching()
+
+        function searching(){
+        
+            let counter = 0;
+            const key_word = search_field.value.toLowerCase()            
+                
+            values.forEach(value => {                
+                counter++;
+                if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                    value.style = 'display:none'
+                    counter--;
+                    
+                }else{
+                    value.style = 'block'                
+                }
+            });
+            if(counter === 0){
+                contracts.value = ''
+            }
+            if(counter >15){
+                counter = 15;
+            }   
+            contracts.size = counter;
+            initBackground()
+            // console.log(contracts.size)
+            // console.log(key_word)
+            // console.log(counter)
+        };
+        
+
+
+    </script>
 {% endblock %}

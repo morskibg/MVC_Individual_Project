@@ -17,6 +17,7 @@
         const search_by_itn = document.getElementById('itn');
         const invoice_group_name = document.getElementById('invoice_group_name');
         const contracts = document.getElementById('contracts');
+        const measuring_type = document.getElementById('measuring_type_id');
         const values = document.querySelectorAll('option') 
 
 
@@ -30,7 +31,10 @@
             fetch(`/_get_last_subcontract/${search_by_itn.value}/${is_id}`).then(function(response){                
                 response.json().then(function(data){             
                     for(let sub of data){              
-                        search_field.value = sub.contract.internal_id              
+                        search_field.value = sub.contract.internal_id  
+                        invoice_group_name.value = sub.invoice_group.name
+                        measuring_type = sub.measuring_type.id
+                        // getFirstAvailableName(sub.invoice_group.name)            
                     }                   
                     searching()             
                     initBackground()                              
@@ -39,30 +43,30 @@
             .catch(error => console.log('in error',error) );                       
         };
 
-        invoice_group_name.onkeyup = function(){
+        // invoice_group_name.onkeyup = function(){
         
-            const regex = new RegExp(/^411-[\d]{1,3}-[\d]{1,5}_$/);
-            if(regex.test(invoice_group_name.value)){
-                console.log('regex matched')
-                getFirstAvailableName(invoice_group_name.value)
-            }else{
-                console.log('regex not matched')
-            }
+            // const regex = new RegExp(/^411-[\d]{1,3}-[\d]{1,5}_$/);
+            // if(regex.test(invoice_group_name.value)){
+            //     console.log('regex matched')
+            //     getFirstAvailableName(invoice_group_name.value)
+            // }else{
+            //     console.log('regex not matched')
+            // }
 
-        };
+        // };
 
-        function getFirstAvailableName(inv_name){
-            console.log('getFirstAvailableName')
+        // function getFirstAvailableName(inv_name){
+        //     console.log('getFirstAvailableName')
 
-            fetch('/_get_first_empty_inv_group/' + inv_name)
-            .then((resp) => resp.json())
-            .then((data) => {               
-                if(data.groups[0] !== undefined){
-                    console.log(data.groups[0])
-                    invoice_group_name.value = data.groups[0].name                
-                }            
-            });
-        }
+        //     fetch('/_get_first_empty_inv_group/' + inv_name)
+        //     .then((resp) => resp.json())
+        //     .then((data) => {               
+        //         if(data.groups[0] !== undefined){
+        //             console.log(data.groups[0])
+        //             invoice_group_name.value = data.groups[0].name                
+        //         }            
+        //     });
+        // }
 
         function searching(){
             // mod_contract_button.disabled = true;
