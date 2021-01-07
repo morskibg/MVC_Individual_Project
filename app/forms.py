@@ -322,7 +322,8 @@ class UploadInitialForm(FlaskForm):
 
 
 class IntegraForm(FlaskForm):
-    
+
+    search = StringField(id='search', validators = [Optional()])
     delete_all = BooleanField('Delete all source files', default = False) 
     delete_integra = SubmitField('Delete Integra single files')
     integra_files = SelectMultipleField('Individual files',  validators=[Optional()], render_kw={'size':25})      
