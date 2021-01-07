@@ -2307,7 +2307,7 @@ def monthly_report_by_erp( erp, start_date, end_date, contract_type, parent_cont
         start = time.time()  
         if form.submit_delete.data:
             delete_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']), form.ref_files.data, form.delete_all.data)
-            return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, is_mixed = is_mixed, **request.args))
+            return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, parent_contractor = parent_contractor, is_mixed = is_mixed, **request.args))
            
 
         elif form.submit.data:
@@ -2330,12 +2330,12 @@ def monthly_report_by_erp( erp, start_date, end_date, contract_type, parent_cont
                 counter = create_inv_refs_by_inv_groups(inv_groups, start_date, end_date, weighted_price)   
                 flash(f'{counter} invoice references was created !','info')
             
-            return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, is_mixed = is_mixed, **request.args))     
+            return redirect(url_for('monthly_report_by_erp', erp = erp,start_date = start_date, end_date = end_date, contract_type = contract_type, parent_contractor = parent_contractor, is_mixed = is_mixed, **request.args))     
                 
         end = time.time()
         print(f'Time elapsed for generate excel file(s) : {end - start}  !')
 
-    return render_template('quick_template_wider.html', title=f'Monthly Report {erp}', form=form, header = f'Monthly Report {erp} - {contract_type} <br> Period: {start_date} / {end_date}<br> Included mixed groups - {is_mixed}')
+    return render_template('quick_template_wider.html', title=f'Monthly Report {erp}', form=form, header = f'Filtered Monthly Report')
 
 @app.route('/delete_itn_consumptions', methods=['GET', 'POST'])
 @login_required
