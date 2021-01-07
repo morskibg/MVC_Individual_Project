@@ -7,7 +7,7 @@ import sys, pytz, datetime as dt
 import pandas as pd
 from zipfile import ZipFile
 from flask import render_template, flash, redirect, url_for, request, send_file,send_from_directory, jsonify
-from sqlalchemy import extract, or_
+from sqlalchemy import extract, or_, desc
 from sqlalchemy.orm import aliased
 from app import app
 from app.forms import (
@@ -85,7 +85,8 @@ from app.helpers.helper_functions_queries import (
                                         get_non_grid_itns_by_erp_for_period,
                                         get_all_itns_by_erp_for_period,
                                         get_incomming_grid_itns, 
-                                        get_incomming_non_grid_itns
+                                        get_incomming_non_grid_itns,
+                                        get_inv_gr_id_linked_conractors
 )
 
 from app.helpers.helper_functions_erp import (reader_csv, insert_erp_invoice,insert_mrus, get_distribution_stp_records,
@@ -195,13 +196,14 @@ def add_reports():
 @app.route('/monthly_erp', methods=['GET', 'POST'])
 def monthly_erp():
     form = MonthlyReportOptionsForm()
-    if form.validate_on_submit():
-        if form.submit.data:
-            
+    if request.method == "POST":
+        if form.validate_on_submit():
+            # if form.submit.data:
+                
             return redirect(url_for('monthly_report_by_erp', erp = form.erp.data, start_date = form.start_date.data, 
-                            end_date = form.end_date.data, contract_type = form.contract_type.data, is_mixed = form.include_all.data,  **request.args))
+                            end_date = form.end_date.data, contract_type = form.contract_type.data, parent_contractor = form.linked_contractors.data,is_mixed = form.include_all.data,  **request.args))
 
-    return render_template('quick_template.html', title='Monthly reports filter', form=form, header = 'Monthly report filters', need_dt_picker = True)
+    return render_template('filter.html', title='Monthly reports filter', form=form, header = 'Monthly report filters', need_dt_picker = True)
 
 @app.route('/bgpost', methods=['GET', 'POST'])
 @login_required
@@ -257,15 +259,40 @@ def test():
         # end_date = convert_date_to_utc('EET','2020-10-31') 
         end_date = end_date + dt.timedelta(hours = 23)
 
-        montly_start_date = start_date.replace(day = 1)
-        montly_end_date = end_date.replace(year = int(end_date.year) , day = calendar.monthrange(end_date.year,int(end_date.month))[1], month = int(end_date.month) )
-        print(f'{montly_start_date} - {montly_end_date}')
+        # montly_start_date = start_date.replace(day = 1)
+        # montly_end_date = end_date.replace(year = int(end_date.year) , day = calendar.monthrange(end_date.year,int(end_date.month))[1], month = int(end_date.month) )
+        # print(f'{montly_start_date} - {montly_end_date}')
         invoice_start_date = start_date + dt.timedelta(hours = (10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours = (10 * 24))
-        
 
+        rec = Contractor.query.filter(Contractor.id.in_(Contractor.query.with_entities(Contractor.parent_id).filter(Contractor.parent_id.isnot(None)).distinct().subquery())).all()
+        
+        print(f'{rec}')
+        # cc = 301
+        # erp_inv_ids =(
+        #     db.session.query(
+        #         InvoiceGroup.name,
+        #         InvoiceGroup.description,
+        #         Contract,
+        #         Contract.internal_id                     
+        #     )                     
+        #     .join(SubContract,SubContract.invoice_group_id == InvoiceGroup.id)
+        #     .join(Contract, Contract.id == SubContract.contract_id) 
+        #     .join(ContractType, ContractType.id == Contract.contract_type_id)         
+        #     .join(Contractor,Contractor.id == Contract.contractor_id)   
+        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)                   
+        #     .filter(SubContract.start_date <= start_date, SubContract.end_date > start_date)      
+        #     .filter(or_( Contractor.id == cc,  Contractor.parent_id == cc))                
+        #     .distinct()
+        #     .all()
+        # )
+        # a = [x[1] for x in erp_inv_ids]
+        # # b = a[0]
+        # print(f'{a}')
+        # c =  Contractor.query.filter(Contractor.parent_id.isnot(None)).all()
+        # print(f'{c}')
         # forcast_df = pd.read_sql(ForecastCoeffs.query.filter(ForecastCoeffs.forecast_type_id == form.forecast_profile.data.id, ForecastCoeffs.utc >= montly_start_date, ForecastCoeffs.utc <= montly_end_date  ).statement, db.session.bind).head()
-        forcast_df = ForecastCoeffs.query.filter(ForecastCoeffs.forecast_type_id == form.forecast_profile.data.id).first()
+        # forcast_df = ForecastCoeffs.query.filter(ForecastCoeffs.forecast_type_id == form.forecast_profile.data.id).first()
         # time_zone = 'EET'
 
         # stp_df = pd.read_sql(StpCoeffs.query.filter(StpCoeffs.measuring_type_id == form.stp_profile.data.id, StpCoeffs.utc >= start_date, StpCoeffs.utc <= end_date  ).statement, db.session.bind)
@@ -276,7 +303,7 @@ def test():
         # # stp_df.index = stp_df.index.tz_localize('UTC').tz_convert(time_zone)
         # # stp_df.reset_index(inplace = True) 
         # flash('success','info')
-        print(f'{forcast_df}')
+        # print(f'{forcast_df}')
         
         # try:
         #     while(1):
@@ -1395,7 +1422,7 @@ def add_itn():
     form = AddItnForm()
     tz = "Europe/Sofia"
     form.measuring_type_id.choices = [(c.id, c.code) for c in MeasuringType.query.order_by(MeasuringType.id)]
-    form.internal_id.choices = [(c.id, (f'{c.internal_id}, {c.contractor.name}, {convert_date_from_utc(tz,c.signing_date,False).date()}')) for c in Contract.query.order_by(Contract.internal_id)]                              
+    # form.internal_id.choices = [(c.id, (f'{c.internal_id}, {c.contractor.name}, {convert_date_from_utc(tz,c.signing_date,False).date()}')) for c in Contract.query.order_by(Contract.internal_id)]                              
     form.erp_id.choices = [(c.id, c.name) for c in Erp.query.order_by(Erp.id)]
     form.grid_voltage.choices = [(x, x) for x in ['HV', 'MV', 'LV']]
     form.virtual_parent_id.choices = [(c.itn, c.itn) for c in ItnMeta.query.filter(ItnMeta.is_virtual == True).order_by(ItnMeta.itn)]
@@ -2258,15 +2285,20 @@ def modify_selected_contractor(contractor_id):
     return render_template('ask_confirm.html', title=f'Modify Contractor', form=form, header = f'Modify Contractor {contr_name}')
     
     
-@app.route('/monthly_report/<erp>/<contract_type>/<start_date>/<end_date>/<is_mixed>', methods=['GET', 'POST'])
+@app.route('/monthly_report/<erp>/<contract_type>/<start_date>/<end_date>/<parent_contractor>/<is_mixed>', methods=['GET', 'POST'])
 @login_required
-def monthly_report_by_erp( erp, start_date, end_date, contract_type, is_mixed):
+def monthly_report_by_erp( erp, start_date, end_date, contract_type, parent_contractor, is_mixed):
     form = MonthlyReportErpForm()
+    
     form.ref_files.choices = sorted([(x,x) for x in get_excel_files(os.path.join(app.root_path, app.config['INV_REFS_PATH']))])
-    filtered_records = get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed)
+    parent_id = Contractor.query.filter(Contractor.acc_411 == parent_contractor.rsplit(' - ',1)[-1]).first().id 
+    # print(f'parent_id -- {}')
+    if contract_type != 'none' and erp != 'none':   
+        filtered_records = get_inv_gr_id_single_erp(erp, contract_type, start_date, end_date, is_mixed)
+    else:
+        filtered_records =  get_inv_gr_id_linked_conractors(start_date, end_date, parent_id)
 
     form.invoicing_group.choices = sorted(list(set([ (x[0],f'{x[0]} - {x[1]} ') for x in filtered_records])),key = lambda y: y[1].split(' - ')[1])
-
     
     form.contracts.choices = sorted(list(set([(x[3],f'{x[2]}') for x in filtered_records] )) ,key = lambda y: y[1].split(' - ')[1]) 
 
@@ -2797,6 +2829,22 @@ def _get_subcontracts(start_date, end_date, filter_arg, is_id):
     sub_schema = SubContractSchema()
     try:
         return jsonify(sub_schema.dump(subs, many = True))
+    except:
+        return jsonify([])
+
+@app.route('/_get_last_subcontract/<filter_arg>/<is_id>', methods=['GET', 'POST'])
+@login_required
+def _get_last_subcontract(filter_arg, is_id): 
+
+    is_id = True if is_id != '0' else False
+    filters = (Contract.id == filter_arg,) if is_id else (SubContract.itn == filter_arg,)
+    
+    sub = SubContract.query.join(Contract,Contract.id == SubContract.contract_id).filter(*filters).order_by(desc(SubContract.end_date)).limit(1).all()
+    print(f'sub {sub}')
+    
+    sub_schema = SubContractSchema()
+    try:
+        return jsonify(sub_schema.dump(sub, many = True))
     except:
         return jsonify([])
 

@@ -53,14 +53,18 @@ class AddInvGroupForm(FlaskForm):
     
 
 class AddItnForm(FlaskForm):
+
+    search = StringField(id='search', validators = [Optional()])
     itn = StringField('ITN', validators=[DataRequired()])
+    contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     activation_date = StringField(id='start_datepicker', validators = [DataRequired()])
-    internal_id = SelectField('Contract Internal Number, Contractor, Signing Date', validators=[DataRequired()])
+    # internal_id = SelectField('Contract Internal Number, Contractor, Signing Date', validators=[DataRequired()])
+
     measuring_type_id = SelectField('Measuring Type', validators=[DataRequired()])
     # measuring_type_id = QuerySelectField(query_factory = lambda: MeasuringType.query, allow_blank = False,get_label='code', validators=[DataRequired()])
 
 
-    invoice_group_name = SelectField('Invoicing Group Name', validators=[DataRequired()])    
+    invoice_group_name = StringField('Invoicing Group Name', validators=[DataRequired()])    
     price = DecimalField('Price',validators=[NumberRange(min = 0.01, max = 300),DataRequired()])
     zko = DecimalField('Zko',validators=[NumberRange(min = 0.01, max = 100),DataRequired()], default = 21.47)
     akciz = DecimalField('Akciz',validators=[NumberRange(min = 0.01, max = 100),DataRequired()],default = 2.00)    
@@ -487,11 +491,15 @@ class MonthlyReportOptionsForm(FlaskForm):
                                                                             int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
                                                                             month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
 
-    contract_type = SelectField(choices = ['Mass_Market','End_User','Procurement','All'], validators = [DataRequired()])
-    erp = SelectField(choices = ['CEZ','E-PRO','EVN'], validators = [DataRequired()])
-    include_all = BooleanField('Include invoice groups with ITN from different ERP', default = False)
+    contract_type = SelectField(choices = ['Mass_Market','End_User','Procurement','none'], validators = [Optional()])
+    erp = SelectField(choices = ['CEZ','E-PRO','EVN','none'], validators = [Optional()])
+    # linked_contractors = QuerySelectField('Parent contractors',query_factory = lambda: Contractor.query.filter(Contractor.parent_id.isnot(None)).all(), validators=[Optional()], get_label='name', allow_blank = True, default = None)
+    linked_contractors = QuerySelectField('Parent contractors',query_factory = lambda: Contractor.query.filter(Contractor.id.in_(Contractor.query.with_entities(Contractor.parent_id).filter(Contractor.parent_id.isnot(None)).distinct().subquery())).all(), validators=[Optional()], get_label='name', allow_blank = True, default = None)
     
-    submit = SubmitField('Apply filters')
+    include_all = BooleanField('Include invoice groups with ITN from different ERP', default = True)
+    
+    # submit = SubmitField('Apply filters', render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:200px', 'type':'button'}) 
+    
 
 class AdditionalReports(FlaskForm):
 
