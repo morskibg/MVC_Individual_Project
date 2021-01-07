@@ -1154,9 +1154,7 @@ def create_integra_excel():
         elif form.delete_upload_integra.data:
             
             delete_excel_files(os.path.join(app.root_path, app.config['INTEGRA_FOR_UPLOAD_PATH']), form.integra_upload_files.data, form.delete_all_upload.data)
-            return redirect(url_for('create_integra_excel')) 
-
-        
+            return redirect(url_for('create_integra_excel'))         
 
     return render_template('create_excel_for_integra.html', title='Integra file', form=form)
      
@@ -1435,30 +1433,31 @@ def add_itn():
         # activation_date_utc =  convert_date_to_utc("Europe/Sofia",form.activation_date.data)
         
         #1. ADDRESS
-        form_addr = form.address.data.lower() if form.address.data.lower() != '' else 'none'
-        curr_address = AddressMurs.query.filter(AddressMurs.name == form_addr).first()
-        if(curr_address is None):            
-            curr_address = AddressMurs(name = form_addr)
-                 
+        # form_addr = form.address.data.lower() if form.address.data.lower() != '' else 'none'
+        # curr_address = AddressMurs.query.filter(AddressMurs.name == form_addr).first()
+        # if(curr_address is None):            
+        #     curr_address = AddressMurs(name = form_addr)
+        curr_addr = update_itn_address(form.itn.data, form.address.data)         
         
         #2. ITN META
+
         curr_itn_meta = ItnMeta.query.filter(ItnMeta.itn == form.itn.data).first()
         if curr_itn_meta is  None:
             curr_itn_meta = ItnMeta(itn = form.itn.data, 
             description = form.description.data, 
             grid_voltage = form.grid_voltage.data, 
-            address = curr_address, 
+            address = curr_addr.id, 
             erp_id = form.erp_id.data, 
             is_virtual = form.is_virtual.data, 
             virtual_parent_itn = form.virtual_parent_id.data)
         
         else:
-            flash('Such an ITN already exist !','info')
-            return redirect(url_for('add_itn'))
-            # curr_itn_meta.update({'description': request.form['description'],'grid_voltage': request.form['grid_voltage'],
-            #                       'address': curr_address,'erp_id': request.form['erp_id'],'is_virtual':request.form['is_virtual'],
-            #                       'virtual_parent_itn': request.form['virtual_parent_id']})
-            # flash(f'ITN <{form.itn.data}> was successifuly updated !','success')
+            # flash('Such an ITN already exist !','info')
+            # return redirect(url_for('add_itn'))
+            curr_itn_meta.update({'description': form.description.data,'grid_voltage': form.grid_voltage.data,
+                                  'address': curr_addr.id,'erp_id': form.erp_id.data,'is_virtual': form.is_virtual.data,
+                                  'virtual_parent_itn': form.virtual_parent_id.data})
+            flash(f'ITN {form.itn.data} was successifuly updated !','success')
         
         #3. INVOICING GROUP
         curr_inv_group = InvoiceGroup.query.filter(InvoiceGroup.id == form.invoice_group_name.data).first()       
@@ -1484,7 +1483,7 @@ def add_itn():
             else:
                 if form.forecast_vol.data is None:
                     flash('No forcasted volume provided or measuring type mismatch.','danger')
-                    return redirect(url_for('add_itn'))
+                    return redirect(url_for('add_itn', need_dt_picker = True))
                 else:
                     forecasted_vol = Decimal(str(form.forecast_vol.data))
             
@@ -1511,7 +1510,7 @@ def add_itn():
                 curr_sub_contract.save()  
                 flash(f'Subcontract <{form.itn.data}> was successifuly created !','success')
 
-    return render_template('add_itn.html', title='Add ITN', form=form)
+    return render_template('add_itn.html', title='Add ITN', form=form, need_dt_picker = True)
 
 @app.route('/add_invoicing_group', methods=['GET', 'POST'])
 @login_required
@@ -1659,8 +1658,8 @@ def upload_contracts():
     if form.validate_on_submit():
         if request.files.get('file_').filename != '':
             print(f'in upload_contracts')
-            df = pd.read_excel(request.files.get('file_'))
-
+            raw_df = pd.read_excel(request.files.get('file_'))
+            df = validate_input_df(raw_df)  
             # tks = list(df.internal_id)
             # contracts = Contract.query.filter(Contract.internal_id.in_(tks)).all()
             # contract_type_dict = {'OTC':'End_User','ОП':'Procurement','Mass_Market':'Mass_Market'}

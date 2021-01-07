@@ -1526,7 +1526,7 @@ def update_itn_address(itn, address_info):
         curr_meta.update({'address_id': curr_addr.id})
         flash(f'itn: {itn} address now is: {address_info}','success')
 
-    
+    return curr_addr
 
     
 

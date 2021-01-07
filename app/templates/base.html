@@ -58,12 +58,12 @@
                                     <ul class="dropdown-menu">
                                         <li><a class="dropdown-item" href="{{ url_for('monthly_report') }}"> Monthly Reports </a></li>
                                         <li><a class="dropdown-item" href="{{ url_for('monthly_erp') }}">Filtered Monthly Reports</a></li>
-                                        <li><a class="dropdown-item" href="{{ url_for('add_reports') }}">Additional Reports</a></li>
+                                        <li><a class="dropdown-item" href="{{ url_for('add_reports') }}">Additional Reports</a></li>                                      
                                         <!-- <li><a class="dropdown-item" href="{{ url_for('monthly_erp') }}">Filtered Monthly Reports</a></li> -->
                                     </ul>
                                 </li>
                                 {% if current_user.username == 'dpetkov' %}
-                                    
+                                    <li><a class="nav-link"  href="{{ url_for('add_itn') }}">Add ITN</a></li>
                                     <li><a class="nav-link"  href="{{ url_for('create_integra_excel') }}">Integra files</a></li>
                                     <li><a class="nav-link"  href="{{ url_for('create_invoice') }}">Invoices</a></li>
                                     <li><a class="nav-link"  href="{{ url_for('mailing') }}">Mails</a></li>
