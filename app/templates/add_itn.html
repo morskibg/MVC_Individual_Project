@@ -3,10 +3,96 @@
 
 
 {% block app_content %} 
-    <div class='col-md-4'></div>             
-    <div class='col-md-4'>                      
+                
+    <div class='col-md-12'>                      
         <h1>Add ITN</h1> 
         {{ wtf.quick_form(form) }} 
     </div> 
-    <div class='col-md-4'> </div>    
+       
+{% endblock %}
+
+{% block form_scripts %}
+    <script>
+        const search_field = document.getElementById('search');
+        const search_by_itn = document.getElementById('itn');
+        const invoice_group_name = document.getElementById('invoice_group_name');
+        const contracts = document.getElementById('contracts');
+        const values = document.querySelectorAll('option') 
+
+
+
+        search_by_itn.onchange = () => { 
+            console.log(search_by_itn)
+                        
+            // mod_contract_button.disabled = true;
+            const is_id = 0          
+            
+            fetch(`/_get_last_subcontract/${search_by_itn.value}/${is_id}`).then(function(response){                
+                response.json().then(function(data){             
+                    for(let sub of data){              
+                        search_field.value = sub.contract.internal_id              
+                    }                   
+                    searching()             
+                    initBackground()                              
+                });
+            })
+            .catch(error => console.log('in error',error) );                       
+        };
+
+        invoice_group_name.onkeyup = function(){
+        
+            const regex = new RegExp(/^411-[\d]{1,3}-[\d]{1,5}_$/);
+            if(regex.test(invoice_group_name.value)){
+                console.log('regex matched')
+                getFirstAvailableName(invoice_group_name.value)
+            }else{
+                console.log('regex not matched')
+            }
+
+        };
+
+        function getFirstAvailableName(inv_name){
+            console.log('getFirstAvailableName')
+
+            fetch('/_get_first_empty_inv_group/' + inv_name)
+            .then((resp) => resp.json())
+            .then((data) => {               
+                if(data.groups[0] !== undefined){
+                    console.log(data.groups[0])
+                    invoice_group_name.value = data.groups[0].name                
+                }            
+            });
+        }
+
+        function searching(){
+            // mod_contract_button.disabled = true;
+            // console.log(search_field.value)
+            let counter = 0;
+            const key_word = search_field.value.toLowerCase()
+            // values.forEach(value => value.style = 'block')        
+            values.forEach(value => {
+                counter++;
+                if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                    value.style = 'display:none'
+                    counter--;
+                    // if(counter === 0){
+                    //     contracts.value = ''
+                    // }
+                }else{
+                    value.style = 'block'                
+                }
+                
+            });
+            if(counter === 1){                
+                contracts.value = ''
+            };
+            if(counter >15){
+                counter = 15;
+            }   
+            contracts.size = counter;
+            console.log(contracts.size)
+        }
+
+        
+    </script>
 {% endblock %}
