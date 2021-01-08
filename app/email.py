@@ -1,4 +1,5 @@
 import os
+import time
 from threading import Thread
 from flask import current_app, flash
 from flask_mail import Message
@@ -37,7 +38,11 @@ def send_email(recipients, file_data, subject = "From GED automated invoice send
         except:
             flash(f'Missing file: {curr_file[1]}. Not sending !','danger')
             return
-        
+            
+    for recipient in recipients:   
+        if recipient.find('abv.bg') != -1:
+            flash(f'in 1 second delay','danger')
+            time.sleep(1)
 
     Thread(target=send_async_email,args=(current_app._get_current_object(), msg)).start()
 

@@ -42,7 +42,7 @@
 
         console.log('on loading', labels[1].textContent)
 
-        init()           
+        window.onload = init()           
 
         from_contractor.onchange = function(){
             updateInvName(from_contractor, from_group, from_description)   
@@ -246,8 +246,8 @@
         }
         
         function init(){
-            window.onload = updateItns()
-            window.onload = updateInvGroups()
+            updateItns()
+            updateInvGroups()
             apply_button.disabled = true;  
             
             labels.forEach((label) => {               
