@@ -259,4 +259,4 @@ dist
 *.csv
 *.flaskenv
 .flaskenv
-/migrations
+migrations/
