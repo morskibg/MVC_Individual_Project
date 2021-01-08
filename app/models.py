@@ -123,6 +123,7 @@ class Contract(BaseModel):
     collateral_warranty = db.Column(db.String(256), nullable=True)
     notes = db.Column(db.String(512), nullable=True)
     last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
+    invoicing_label = db.Column(db.String(32), unique=True, nullable = True)
 
     contractor = db.relationship('Contractor', back_populates = 'contracts')
     contract_type = db.relationship('ContractType', back_populates = 'contracts')
