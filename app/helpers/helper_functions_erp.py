@@ -433,7 +433,7 @@ def insert_settlment_e_pro(zip_obj, separator):
 
                 min_date = min(df_for_db['utc']).to_pydatetime()                    
                 max_date = max(df_for_db['utc']).to_pydatetime()
-                print(f'min,maxdate --- {min_date} --- {max_date}')
+                # print(f'min,maxdate --- {min_date} --- {max_date}')
                 
                 if(not df_for_db.empty):
                     # is_settelment = True
@@ -469,6 +469,7 @@ def insert_settlment_e_pro(zip_obj, separator):
             proceed_e_pro_stp_excel_file(zip_obj, file_name)
 
     get_missing_extra_points_by_erp_for_period(ERP, min_date, max_date)
+
     # print(f'FROM NON stp E-Pro')
     
     
@@ -1260,13 +1261,14 @@ def order_files_by_date(zip_obj):
         raw_dict[dt.datetime(*info.date_time)] = info.filename   
     ordered_dict = collections.OrderedDict(sorted(raw_dict.items()))
     # for k, v in ordered_dict.items(): print(f' key: {k} ----> value {v}', file = sys.stdout)
-    xlsx_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'xlsx'}
+    xlsx_dict = {k:v for (k,v) in ordered_dict.items() if v.find('xlsx') != -1}
+    # print(f'ORDERED DICT xlsx_dict --- > \n{xlsx_dict}\n####################################')
     if xlsx_dict:        
-        csv_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'csv'}
-        zip_dict = {k:v for (k,v) in ordered_dict.items() if v.split('.')[1] == 'zip'}
+        csv_dict = {k:v for (k,v) in ordered_dict.items() if v.find('csv') != -1}
+        zip_dict = {k:v for (k,v) in ordered_dict.items() if v.find('zip') != -1}
         csv_dict.update(zip_dict)
         csv_dict.update(xlsx_dict)
-        for k, v in csv_dict.items(): print(f' from xlsx --> key: {k} ----> value {v}', file = sys.stdout)
+        # for k, v in csv_dict.items(): print(f' from xlsx --> key: {k} ----> value {v}', file = sys.stdout)
         # return csv_dict
     else:
         csv_dict = {}
@@ -1282,7 +1284,8 @@ def order_files_by_date(zip_obj):
                 non_csv_dict[k] = v
 
         csv_dict.update(non_csv_dict)
-        for k, v in csv_dict.items(): print(f' key: {k} ----> value {v}', file = sys.stdout)
+        # for k, v in csv_dict.items(): print(f' key: {k} ----> value {v}', file = sys.stdout)
+    
     return csv_dict
 
     ################# no excel ########################
