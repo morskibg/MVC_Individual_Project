@@ -438,7 +438,13 @@ class ModifyItn(FlaskForm):
     itn_addr = StringField('Address', validators=[Optional()])
     itn_descr = StringField('Description', validators=[Optional()])
     grid_voltage = SelectField(choices = ['HV','MV','LV'], validators = [DataRequired()])
-    erp = SelectField(choices = ['CEZ','E-PRO','EVN'], validators = [DataRequired()])
+    erp = SelectField(choices = ['CEZ','E-PRO','EVN'], validators = [DataRequired()])    
+    modify_consumption = BooleanField('Modify hourly consumption for period.', default = False)
+    
+    start_date = StringField(id='start_datepicker', validators = [Optional()]) 
+    end_date = StringField(id='end_datepicker', validators = [Optional()])
+    hourly_consumption = DecimalField('Hourly consumption MWh',validators=[NumberRange(min = 0, max = 100),Optional()], default = 0)
+
 
 class ModifySubcontractEntryForm(FlaskForm):
     search = StringField(id='search', validators = [Optional()])
