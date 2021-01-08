@@ -260,3 +260,4 @@ dist
 *.flaskenv
 .flaskenv
 .migrations/
+.migrations
