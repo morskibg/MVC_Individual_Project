@@ -2606,6 +2606,20 @@ def modify_itn(itn,key_word):
             curr_meta = ItnMeta.query.get(form.itn.data)
             erp = Erp.query.filter(Erp.name == form.erp.data).first()
             curr_meta.update({'address_id': curr_addr.id,'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
+            if form.modify_consumption.data:
+                start_date = convert_date_to_utc('EET', form.start_date.data)   
+                end_date = convert_date_to_utc('EET', form.end_date.data)
+                end_date = end_date + dt.timedelta(hours = 23)
+                schedule_df = pd.read_sql(ItnSchedule.query.filter(ItnSchedule.itn == form.itn.data, ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date).statement, db.session.bind) 
+                schedule_df['consumption_vol'] = form.hourly_consumption.data * 1000
+                schedule_df['settelment_vol'] = form.hourly_consumption.data * 1000
+                stringifyer(schedule_df)
+                print(f'schedule_df {schedule_df.head()}')
+                bulk_update_list = schedule_df.to_dict(orient='records')    
+                db.session.bulk_update_mappings(ItnSchedule, bulk_update_list)
+                db.session.commit()
+
+
             flash('success','info')
             return redirect(url_for('modify', key_word = key_word))
 
@@ -2617,7 +2631,7 @@ def modify_itn(itn,key_word):
             # itn_meta.update({'description':form.itn_descr.data, 'grid_voltage':form.grid_voltage.data, 'erp_id':erp.id})
             # print('------ {0}'.format(request.form))
         
-    return render_template('ask_confirm.html', title='Redacting Itn', form=form, header = 'Redacting ITN')
+    return render_template('modify_itn.html', title='Redacting Itn', form=form, header = 'Redacting ITN', need_dt_picker = True)
 
 @app.route('/modify_subcontracts', methods=['GET', 'POST'])
 @login_required

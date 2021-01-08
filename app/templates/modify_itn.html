@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+<div class='col-md-1'></div>             
+<div class='col-md-10'>                      
+    <h1>{{header|safe}}</h1> 
+   
+    {{ wtf.quick_form(form, button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='ask_confirm_form') }}
+    <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="ask_confirm('ask_confirm_form')">
+
+</div> 
+<div class='col-md-1'> </div> 
+ 
+{% endblock %}
+{% block form_scripts %}
+<script type="text/javascript">
+    const start_date = document.getElementById('start_datepicker');
+    const end_date = document.getElementById('end_datepicker');
+    const consumption = document.getElementById('hourly_consumption');
+    const need_correction = document.getElementById('modify_consumption');
+    // const end_date = document.getElementById('end_datepicker');
+    const labels = document.querySelectorAll('.control-label')
+
+    window.onload = init() 
+
+    need_correction.onchange = () =>{
+        console.log(need_correction.checked)
+        switch_consumption() 
+    }    
+
+
+    function init(){
+        switch_consumption()  
+    }
+
+    function switch_consumption(){
+
+        start_date.style = need_correction.checked ? 'blocked' : 'display:none'
+        end_date.style = need_correction.checked ? 'blocked' : 'display:none'
+        consumption.style = need_correction.checked ? 'blocked' : 'display:none'
+        labels.forEach((label) => {               
+            if(label.textContent == 'Start Date' || 
+                label.textContent == 'End Date' ||
+                label.textContent == 'Hourly consumption MWh'){  
+
+                label.style = need_correction.checked ? 'blocked' : 'display:none'
+            }
+        });
+    }
+
+</script>
+{% endblock %}

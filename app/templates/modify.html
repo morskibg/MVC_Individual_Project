@@ -97,40 +97,86 @@
                 response.json().then(function(data){
                     let optionHTML = ''
                     let count = 0;
-                    for(let group of data.groups){                    
+                    for(let group of data.groups){ 
+
+                        if(search_by_itn.value !== ''){
+                            updateItns(group.invoice_group)                            
+                        }                                          
                         optionHTML += '<option value="' + group.invoice_group + '">' + group.invoice_group + ' - ' + group.invoice_group_description + ' - ' + group.email + '</option>';
                         count += 1;
                     }                                  
                     invoice_groups.size = count;
-                    invoice_groups.innerHTML = optionHTML; 
+                    invoice_groups.innerHTML = optionHTML;                     
                     initBackground()               
-                });
-                
-            });
-            
+                });               
+            });            
         };
+
+        // function filter_inv_by_itn(){
+        //     console.log('in filter_inv_by_itn', invoice_groups.value)
+        //     fetch('/_get_itns/' + invoice_groups.value).then(function(response){
+                
+        //         response.json().then(function(data){
+        //             for(let itn of data.itns){
+        //                 values.forEach(value => {
+        //                     console.log('itn ->',itn, 'value -->', value)
+        //                 })
+        //             }
+                                     
+        //         });
+        //     }); 
+
+        // }
 
         function updateItns(invoice_group_name){
 
             console.log('in updateItns')
-        
+            
             fetch('/_get_itns/' + invoice_group_name).then(function(response){
                 
                 response.json().then(function(data){
+                    
                     let optionHTML = '';
                     let count = 0;
-                    for(let itn of data.itns){                                                  
-                        optionHTML += '<option value="' + itn.itn + '">' + itn.itn + ' - ' + itn.address + ' - ' + itn.invoice_group + ' - ' + itn.type + '</option>';
-                        count += 1;
+                    for(let itn of data.itns){ 
+                        if(search_by_itn.value !== ''){ 
+                            if(search_by_itn.value === itn.itn){ 
+                                console.log('in itn === itn', itn.itn)                                               
+                                optionHTML += '<option value="' + itn.itn + '">' + itn.itn + ' - ' + itn.address + ' - ' + itn.invoice_group + ' - ' + itn.type + '</option>';
+                                count += 1; 
+                                values.forEach(value => {
+                                    console.log(value.firstChild.textContent)
+                                    // if(!value.firstChild.textContent.toLowerCase().includes(key_word)){
+                                    //     value.style = 'display:none'
+                                    //     counter--;
+                                    //     // if(counter === 0){
+                                    //     //     contracts.value = ''
+                                    //     // }
+                                    // }else{
+                                    //     value.style = 'block'                
+                                    // }
+
+                                })                   
+                                
+                            }
+                        }else{
+                            console.log('in else ') 
+                            optionHTML += '<option value="' + itn.itn + '">' + itn.itn + ' - ' + itn.address + ' - ' + itn.invoice_group + ' - ' + itn.type + '</option>';
+                            count += 1;
+                        }
                     }
                     if(count >30){
                         count = 30;
                     }                    
                     itns.size = count;
-                    itns.innerHTML = optionHTML; 
-                    initBackground()                  
-                });
-            }); 
+                    console.log('in innerHTML ',optionHTML)
+                    if(optionHTML !== ''){
+                        itns.innerHTML = optionHTML; 
+                        
+                    }   
+                    initBackground()                             
+                });              
+            });            
         }; 
 
         function modifyInvGroup(){
