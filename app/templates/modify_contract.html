@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+          
+<div class='col-md-12'>                      
+    <h1>{{header|safe}}</h1> 
+   
+    {{ wtf.quick_form(form, button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='ask_confirm_form') }}
+    <input class="btn btn-danger" type="submit" value="Apply Changes" id="apply_changes" onclick="ask_confirm('ask_confirm_form')">
+
+</div> 
+ 
+{% endblock %}
+
+{% block form_scripts %}
+
+<script type="text/javascript">
+    const invoicing_label = document.getElementById('invoicing_label');
+    const new_invoicing_label = document.getElementById('new_invoicing_label');
+    const need_new_invoicing_label = document.getElementById('new_label');
+    const tk = document.getElementById('internal_id');
+    const labels = document.querySelectorAll('.control-label')
+
+    window.onload = init() 
+
+
+    function init(){
+        toggle_new_label()
+        // console.log()
+        fetch(`/_get_contract/${tk.value}`).then(function(response){                
+            response.json().then(function(data){
+                
+                for(let contract of data.contracts){
+                    set_inv_label_value(contract.invoicing_label)                    
+                }                         
+            });
+        })
+        .catch(error => console.log('in error',error) );  
+    }
+
+    need_new_invoicing_label.onchange = () =>{
+        console.log('on change')
+        toggle_new_label()
+        set_inv_label_value('')
+    }
+
+    function set_inv_label_value(value){
+        console.log(value)
+        const lbls = invoicing_label.options.length;
+        for (let i = 0; i < lbls; i++){            
+            if (invoicing_label.options[i].text === value){                
+                invoicing_label.options[i].selected = true;
+                break;
+            }
+        }
+    }
+
+    function toggle_new_label() {
+        
+        new_invoicing_label.style = need_new_invoicing_label.checked ? 'blocked' : 'display:none'
+        labels.forEach((label) => {  
+            if(label.textContent == 'New Invoicing Label' ){  
+
+                label.style = need_new_invoicing_label.checked ? 'blocked' : 'display:none'                
+            }            
+        });
+    }
+
+</script>
+{% endblock %}

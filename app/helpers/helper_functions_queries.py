@@ -160,29 +160,6 @@ def get_summary_records(consumption_for_period_sub, grid_services_sub, itns, sta
     )
     return summary_records
 
-# def get_spot_itns(inv_group_name, start_date, end_date):
-
-#     itn_records = (
-#         db.session
-#             .query(
-#                 SubContract.itn.label('sub_itn'), 
-#                 SubContract.zko.label('zko'),
-#                 SubContract.akciz.label('akciz') , 
-#                 Contractor.name.label('contractor_name'), 
-#                 InvoiceGroup.description.label('invoice_group_description'), 
-#                 InvoiceGroup.name.label('invoice_group_name')       
-#             )
-#             .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id) 
-#             .join(MeasuringType)  
-#             .join(Contractor)                    
-#             .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))) 
-#             .filter(SubContract.has_spot_price) #!!!!!!!!!!!!!!!!!!!!!!
-#             .filter(InvoiceGroup.name == inv_group_name)            
-#             .distinct(SubContract.itn) 
-#             .subquery())
-
-#     return itn_records
-
 def get_spot_itns(inv_group_names, start_date, end_date):
 
     itn_records = (
@@ -470,21 +447,6 @@ def get_total_money_by_grid(invoice_start_date, invoice_end_date):
             .all()
     )    
     return total_sum_records
-
-# def get_tariff_limits(inv_group_name, start_date, end_date):
-
-#     itns = [x[0] for x in db.session.query(get_spot_itns(inv_group_name, start_date, end_date)).all()]
-    
-#     tariff_records = (
-#         db.session
-#             .query(Tariff.lower_limit,Tariff.upper_limit)            
-#             .filter(ItnSchedule.itn.in_(itns))
-#             .filter(ItnSchedule.utc >= start_date, ItnSchedule.utc <= end_date)  
-#             .group_by(Tariff.lower_limit,Tariff.upper_limit)          
-#             .all()
-#     )
-    
-#     return tariff_records
 
 def get_tariff_limits(itns, start_date, end_date):
 
@@ -854,19 +816,3 @@ def get_all_incomming_itns(erp_name, start_date, end_date):
     )
     incomming_itns = [x[0] for x in incomming_itns]
     return incomming_itns
-# def get_incomming_itns_by_type(erp_name, start_date, end_date, is_grid, is_settlement):
-#     incomming_grid_itns = (
-#         db.session.query(
-#             IncomingItn.itn
-#         )
-#         .join(ItnMeta, ItnMeta.itn == IncomingItn.itn) 
-#         .join(Erp, Erp.id == ItnMeta.erp_id)  
-#         .filter(Erp.name == erp_name) 
-#         .filter(IncomingItn.as_grid == is_grid)   
-#         .filter(IncomingItn.as_settelment == is_settlement)        
-#         .filter(IncomingItn.date >= start_date, IncomingItn.date <= end_date)
-#         .all()
-
-#     )
-#     incomming_grid_itns = [x[0] for x in incomming_grid_itns]
-#     return incomming_grid_itns

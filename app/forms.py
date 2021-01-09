@@ -13,7 +13,7 @@ import datetime as dt
 import pandas as pd
 import calendar
 
-from app.helpers.helper_functions import convert_date_to_utc
+from app.helpers.helper_functions import convert_date_to_utc, get_invoicing_labels
 
 class NonValidatingSelectMultipleField(SelectMultipleField):
 
@@ -40,7 +40,6 @@ class UploadInvGroupsForm(FlaskForm):
     file_ = FileField('Browse')
     submit = SubmitField('Upload Invoice Group')
 
-
 class AddInvGroupForm(FlaskForm):
 
     # date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
@@ -51,7 +50,6 @@ class AddInvGroupForm(FlaskForm):
     invoice_group_emails = StringField('Invoicing Group Emails', validators=[DataRequired()])
     submit = SubmitField('Add New Invoice Group')
     
-
 class AddItnForm(FlaskForm):
 
     search = StringField(id='search', validators = [Optional()])
@@ -86,9 +84,6 @@ class AddItnForm(FlaskForm):
     def validate_itn(self, itn):
         if len(itn.data) > 33 | len(itn.data) < 16:
             raise ValidationError('Wrong ITN number of digits')
-
-
-
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -226,7 +221,6 @@ class CreateSubForm(FlaskForm):
         if dt_start_obj > dt_end_obj:
                 raise ValidationError('Start Date must be before End Date')
 
-
 class EditSubForm(FlaskForm):
 
     contract_data = QuerySelectField(query_factory = lambda: Contract.query, allow_blank = False,get_label=Contract.__str__  , validators=[DataRequired()])
@@ -256,10 +250,11 @@ class EditSubForm(FlaskForm):
     #     if dt_start_obj > dt_end_obj:
     #             raise ValidationError('Start Date must be before End Date')
 
-
 class MonthlyReportForm(FlaskForm):
     
     search = StringField(id='search', validators = [Optional()])
+
+    invoicing_label = QuerySelectField(id = 'invoicing_label',query_factory = get_invoicing_labels, allow_blank = True,get_label=Contract.__inv_label_name__, default = None,validators=[Optional()], render_kw={'size':6})
 
     start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
                                                     else int(dt.datetime.utcnow().year) - 1), day = 1, month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
@@ -270,7 +265,7 @@ class MonthlyReportForm(FlaskForm):
                                                                             int(dt.datetime.utcnow().month) if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1)[1],
                                                                             month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
                                                                             
-    contracts = QuerySelectMultipleField(query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name), 
+    contracts = QuerySelectMultipleField(query_factory = lambda: Contract.query.order_by(Contract.id), 
         allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     # erp = QuerySelectField(query_factory = lambda: Erp.query, allow_blank = False,get_label='name', validators=[DataRequired()])
     # invoicing_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()])
@@ -303,8 +298,6 @@ class ErpForm(FlaskForm):
 
     submit = SubmitField('Upload')
 
-
-
 class UploadInitialForm(FlaskForm):
 
     
@@ -319,7 +312,6 @@ class UploadInitialForm(FlaskForm):
     file_hum_itn = FileField('Browse for Humne Itn File')
 
     submit = SubmitField('Upload')
-
 
 class IntegraForm(FlaskForm):
 
@@ -381,6 +373,7 @@ class TestForm(FlaskForm):
     # invoice_groups = SelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})
     # modify_inv_group = SubmitField('Modify Invoicing Group')
     # itns = SelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
+    file_ = FileField('Browse for invoice labels file')
     submit = SubmitField('Test', id='tt')
 
 class ModifyForm(FlaskForm):
@@ -445,7 +438,6 @@ class ModifyItn(FlaskForm):
     end_date = StringField(id='end_datepicker', validators = [Optional()])
     hourly_consumption = DecimalField('Hourly consumption MWh',validators=[NumberRange(min = 0, max = 100),Optional()], default = 0)
 
-
 class ModifySubcontractEntryForm(FlaskForm):
     search = StringField(id='search', validators = [Optional()])
     search_by_itn = StringField(id='search_by_itn', validators = [Optional()])
@@ -465,7 +457,6 @@ class ModifySubcontractEntryForm(FlaskForm):
     has_grid = BooleanField('Has Grid')
     # modify_subcontract = SubmitField('Modify Sub',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'submit'})
     
-
 class MonthlyReportErpForm(FlaskForm):
     
     bulk_creation = BooleanField('Create invoice reference for all Invoice Groups', default = False)
@@ -507,7 +498,6 @@ class MonthlyReportOptionsForm(FlaskForm):
     
     # submit = SubmitField('Apply filters', render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:200px', 'type':'button'}) 
     
-
 class AdditionalReports(FlaskForm):
 
     start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(year = int(dt.datetime.utcnow().year if int(dt.datetime.utcnow().month) != 1 
@@ -534,28 +524,6 @@ class PostForm(FlaskForm):
     # # invoicing_list = StringField('Select records for invoice creation',  validators=[Optional()], render_kw={'size':25})
     # create_invoice = SubmitField('Create invoices')
 
-# class RedactEmailForm(FlaskForm):   
-
-#     # def __init__(self, *args, **kwargs):
-#     #     super().__init__(*args, **kwargs)
-#     #     self.contract_type_id = contract_type_id
-        
-
-#     # inv_goups_mails = QuerySelectField(query_factory = lambda: InvoiceGroup.query.join(Mail, Mail.id == InvoiceGroup.email_id).order_by(InvoiceGroup.description).all(), allow_blank = False,get_label=InvoiceGroup.__str__, validators=[Optional()], render_kw={'size':65})
-#     # inv_goups_mails = QuerySelectField(query_factory = lambda: InvoiceGroup.query
-#     #                                         .join(Mail, Mail.id == InvoiceGroup.email_id)
-#     #                                         .join(Contractor,Contractor.id == InvoiceGroup.contractor_id)
-#     #                                         .join(Contract,Contract.contractor_id == Contractor.id)
-#     #                                         .join(ContractType, ContractType.id == Contract.contract_type_id)
-#     #                                         .filter(ContractType.id == self.contract_type_id)
-#     #                                         .order_by(InvoiceGroup.description)
-#     #                                         .all(), allow_blank = False,get_label=InvoiceGroup.__rep_for_mails__, validators=[Optional()], render_kw={'size':65})
-#     # inv_goups_mails = SelectField( 'Available contractors/emails',validators=[DataRequired()])
-#     # inv_goups_mails = QuerySelectField('trans_id', validators=[DataRequired()], get_label='name')
-#     new_mail = StringField(id='New Email', validators = [DataRequired()], default = '')
-
-#     submit = SubmitField('Apply changes')
-
 class RedactContractForm(FlaskForm):
 
     
@@ -576,8 +544,12 @@ class ContarctDataForm(FlaskForm):
     parent_contract = SelectField(choices = [], coerce=str, validators = [Optional()])
     end_date = StringField(id='end_datepicker', validators = [DataRequired()])
     contract_type = SelectField(choices = [], coerce=str, validators = [DataRequired()])
-    delete_subs = BooleanField('Delete selected subcontracts', default = False)
+    invoicing_label = QuerySelectField(id = 'invoicing_label',query_factory = get_invoicing_labels, allow_blank = True,get_label=Contract.__inv_label_name__, default = None,validators=[Optional()], render_kw={'size':1})
+    new_invoicing_label = StringField(validators = [Optional()],render_kw={'style':'display:none'})
+    new_label = BooleanField('Create New invoicing label', default = False)
+    file_ = FileField('Browse for invoice labels file')
     subs = SelectMultipleField(choices = [], coerce=str, validators=[Optional()], render_kw={'size':25})
+    delete_subs = BooleanField('Delete selected subcontracts', default = False)
     delete_contract = BooleanField('Delete contract', default = False)
 
     def validate_end_date(self, end_date):
@@ -618,8 +590,6 @@ class ItnCosumptionDeletion(FlaskForm):
     start_date = StringField(id='start_datepicker', validators = [DataRequired()], default = dt.datetime.utcnow().replace(day = 1, month = int(dt.datetime.utcnow().month)-1 if dt.datetime.utcnow().month != 1 else 12))
     itn = StringField('ITN', validators=[DataRequired()])
     submit = SubmitField('Apply changes')
-
-
 
 class RedactEmailForm(FlaskForm):   
 

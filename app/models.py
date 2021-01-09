@@ -123,14 +123,15 @@ class Contract(BaseModel):
     collateral_warranty = db.Column(db.String(256), nullable=True)
     notes = db.Column(db.String(512), nullable=True)
     last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
-    invoicing_label = db.Column(db.String(32), unique=True, nullable = True)
+    invoicing_label = db.Column(db.String(32), unique=False, nullable = True)
 
     contractor = db.relationship('Contractor', back_populates = 'contracts')
     contract_type = db.relationship('ContractType', back_populates = 'contracts')
     sub_contracts = db.relationship("SubContract", back_populates="contract", lazy="dynamic",cascade="all, delete")
     time_zone = db.relationship("TimeZone", back_populates="contracts")
 
-
+    def __inv_label_name__(self):
+        return self.invoicing_label
     
     def __str__(self):
         from app.helpers.helper_functions import convert_date_from_utc
@@ -689,6 +690,7 @@ class ContractSchema(ma.SQLAlchemySchema):
     start_date = ma.DateTime('%Y-%m-%d %H:%M:%S')
     end_date = ma.DateTime('%Y-%m-%d %H:%M:%S')  
     contractor = ma.Nested(ContractorSchema) 
+    invoicing_label = auto_field()
 
 class InvoiceGroupSchema(ma.SQLAlchemySchema):
     class Meta:

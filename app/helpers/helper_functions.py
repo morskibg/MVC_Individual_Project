@@ -9,6 +9,7 @@ from decimal import Decimal,ROUND_HALF_UP
 import calendar
 
 from sqlalchemy.exc import ProgrammingError
+from sqlalchemy import func
 from flask import g, flash
 from app.models import *  #(Contract, Erp, AddressMurs, InvoiceGroup, MeasuringType, ItnMeta, SubContract, )
 # from app.helpers.helper_function_excel_writer import (INV_REFS_PATH, INTEGRA_INDIVIDUAL_PATH, INTEGRA_FOR_UPLOAD_PATH)
@@ -977,6 +978,10 @@ def update_schedule_prices(start_date, end_date):
     db.session.bulk_update_mappings(ItnSchedule, bulk_update_list)
     db.session.commit()
 
+def get_invoicing_labels():
+    rec_sub = db.session.query(func.min(Contract.id).label('sub_id'), Contract.invoicing_label.label('sub_label')).filter(Contract.invoicing_label.isnot(None)).group_by(Contract.invoicing_label).subquery()
+    rec = Contract.query.join(rec_sub, rec_sub.c.sub_id == Contract.id).all()
+    return rec
 
 
 

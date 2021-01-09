@@ -241,7 +241,7 @@
             fetch(`/_get_subcontracts/${start_date.value}/${end_date.value}/${search_by_itn.value}/${is_id}`).then(function(response){                
                 response.json().then(function(data){             
                     for(let sub of data){              
-                        search_field.value = sub.contract.internal_id              
+                        search_field.value = sub.contract.invoicing_label              
                     }                   
                     searching()             
                     initBackground()                              
