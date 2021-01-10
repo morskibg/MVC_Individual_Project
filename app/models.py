@@ -52,8 +52,6 @@ class BaseModel(db.Model):
         else:
             print(f'{self} delete successifuly')
 
-
-
 class User(UserMixin,BaseModel):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), index=True, unique=True)
@@ -94,7 +92,6 @@ class Contractor(BaseModel):
     def __str__(self):
         return f'{self.name} - {self.acc_411}'
     
-
 class TimeZone(BaseModel):
     id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
     code = db.Column(db.String(32), unique=True, nullable = False)
@@ -123,14 +120,15 @@ class Contract(BaseModel):
     collateral_warranty = db.Column(db.String(256), nullable=True)
     notes = db.Column(db.String(512), nullable=True)
     last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
-    invoicing_label = db.Column(db.String(32), unique=True, nullable = True)
+    invoicing_label = db.Column(db.String(32), unique=False, nullable = True)
 
     contractor = db.relationship('Contractor', back_populates = 'contracts')
     contract_type = db.relationship('ContractType', back_populates = 'contracts')
     sub_contracts = db.relationship("SubContract", back_populates="contract", lazy="dynamic",cascade="all, delete")
     time_zone = db.relationship("TimeZone", back_populates="contracts")
 
-
+    def __inv_label_name__(self):
+        return self.invoicing_label
     
     def __str__(self):
         from app.helpers.helper_functions import convert_date_from_utc
@@ -143,8 +141,6 @@ class Contract(BaseModel):
         .format(self.internal_id, self.contractor_id, self.subject, self.parent_id, self.signing_date, 
         self.start_date, self.end_date, self.invoicing_interval, self.maturity_interval, 
         self.contract_type_id, self.is_work_days)   
-
-
 
 class ContractType(BaseModel):
     id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
@@ -174,8 +170,6 @@ class ItnMeta(BaseModel):
 
     def __repr__(self):
         return '<ItnMeta : {}, {}, {}, {}, {}, {}, {}>'.format(self.itn,self.description,  self.grid_voltage,self.address_id,self.erp_id,self.is_virtual,self.virtual_parent_itn)
-
-
 
 class AddressMurs(BaseModel):
     id = db.Column(db.SmallInteger, primary_key=True, autoincrement=True)
@@ -325,7 +319,6 @@ class InvoiceGroup(BaseModel):
     def __repr__(self):
         return '<InvoiceGroup:{}, {}, Contractor_id {}>'.format(self.id, self.name, self.contractor_id)
 
-
 class SubContract(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     contract_id = db.Column(db.Integer, db.ForeignKey('contract.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
@@ -404,7 +397,6 @@ class ItnScheduleTemp(BaseModel):
     def __repr__(self):
         return '<itn: {}, utc: {}, forecast_vol: {}, consumption_vol: {}, price: {}>'.format(self.itn, self.utc, self.forecast_vol, self.consumption_vol, self.price)
    
-
 class ItnSchedule(BaseModel):
     itn = db.Column(db.String(33), db.ForeignKey('itn_meta.itn', ondelete='CASCADE', onupdate = 'CASCADE'), primary_key = True)
     utc = db.Column(db.DateTime, primary_key = True)
@@ -508,8 +500,6 @@ class LeavingItn(BaseModel):
     def __repr__(self):
         return '<itn: {}, check-out date: {}>'.format(self.itn, self.date)
 
-
-
 class IncomingItn(BaseModel):
     itn = db.Column(db.String(33), primary_key = True)
     as_settelment = db.Column(db.Boolean, nullable = False, default = 0)
@@ -559,9 +549,7 @@ class IbexData(BaseModel):
         ibex_df.reset_index(inplace = True)
         ibex_df.rename(columns = {ibex_df.columns[1]:'price', ibex_df.columns[2]:'volume'}, inplace = True)
         return ibex_df
-
-        
-        
+     
 class Tariff(BaseModel):
 
     id = db.Column(db.Integer, primary_key = True, autoincrement=True, nullable = False)  
@@ -626,8 +614,6 @@ db.event.listen(SubContract, 'before_delete', ItnSchedule.before_delete)
 # db.event.listen(SubContract, 'before_update', ItnSchedule.autoupdate_existing)
 # db.event.listen(SubContract, 'before_update', ItnSchedule.test)
 
-
-
 class MeasuringTypeSchema(ma.SQLAlchemySchema):
     class Meta:
         model = MeasuringType
@@ -679,6 +665,8 @@ class ContractSchema(ma.SQLAlchemySchema):
         include_relationships = True
         load_instance = True
 
+    from app.helpers.helper_functions import convert_date_from_utc
+
     id = auto_field()
     internal_id = auto_field()
     # contractor_id = auto_field()
@@ -689,6 +677,7 @@ class ContractSchema(ma.SQLAlchemySchema):
     start_date = ma.DateTime('%Y-%m-%d %H:%M:%S')
     end_date = ma.DateTime('%Y-%m-%d %H:%M:%S')  
     contractor = ma.Nested(ContractorSchema) 
+    invoicing_label = auto_field()
 
 class InvoiceGroupSchema(ma.SQLAlchemySchema):
     class Meta:
@@ -707,14 +696,14 @@ class InvoiceGroupSchema(ma.SQLAlchemySchema):
 class SubContractSchema(ma.SQLAlchemySchema):
     class Meta:
         model = SubContract
-        json_module = simplejson
+        # json_module = simplejson
         include_relationships = True
         load_instance = True
     itn = auto_field()
     # contract_id = auto_field()
-    object_name = auto_field()    
-    # invoice_group_id = auto_field()
-    # measuring_type_id = auto_field()
+    # object_name = auto_field()    
+    # # invoice_group_id = auto_field()
+    # # measuring_type_id = auto_field()
     start_date = ma.DateTime('%Y-%m-%d %H:%M:%S')
     end_date = ma.DateTime('%Y-%m-%d %H:%M:%S')   
     zko = auto_field()
@@ -723,13 +712,11 @@ class SubContractSchema(ma.SQLAlchemySchema):
     has_spot_price = auto_field()
     has_balancing = auto_field()    
     make_invoice = auto_field()    
-    last_updated = ma.DateTime('%Y-%m-%d %H:%M:%S')
+    # last_updated = ma.DateTime('%Y-%m-%d %H:%M:%S')
     contract = ma.Nested(ContractSchema)   
     invoice_group = ma.Nested(InvoiceGroupSchema)
     measuring_type = ma.Nested(MeasuringTypeSchema)
-    # meta = auto_field()
-
-
+    # # meta = auto_field()
 
 class ItnMetaSchema(ma.SQLAlchemySchema):
     class Meta:

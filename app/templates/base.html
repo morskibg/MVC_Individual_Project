@@ -5,7 +5,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">  
     <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
     <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'> 
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>    
+    <!-- <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>     -->
 {% endblock %}
 
 
@@ -63,7 +63,7 @@
                                     </ul>
                                 </li>
                                 {% if current_user.username == 'dpetkov' %}
-                                    <li><a class="nav-link"  href="{{ url_for('add_itn') }}">Add ITN</a></li>
+                                    <li><a class="nav-link"  href="{{ url_for('create_subcontract') }}">Add ITN to contract</a></li>
                                     <li><a class="nav-link"  href="{{ url_for('create_integra_excel') }}">Integra files</a></li>
                                     <li><a class="nav-link"  href="{{ url_for('create_invoice') }}">Invoices</a></li>
                                     <li><a class="nav-link"  href="{{ url_for('mailing') }}">Mails</a></li>

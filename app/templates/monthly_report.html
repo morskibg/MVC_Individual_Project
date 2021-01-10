@@ -15,14 +15,79 @@
 
 {% block form_scripts %}
 <script type="text/javascript">
-    const search_field = document.getElementById('search')    
-    const values = document.querySelectorAll('option')
+    const search_field = document.getElementById('search')  
+    const invoicing_label = document.getElementById('invoicing_label')   
+    
     const contracts = document.getElementById('contracts')
+    const contracts_options = contracts.querySelectorAll('option')
+    const contracts_arr = Array.prototype.slice.call(contracts_options)
+    const inv_labels_arr = Array.prototype.slice.call(invoicing_label.querySelectorAll('option'))
     const invoicing_group = document.getElementById('invoicing_group')
     const start_date = document.getElementById('start_datepicker');
-    const end_date = document.getElementById('end_datepicker');
+    const end_date = document.getElementById('end_datepicker');  
+    const labels = document.querySelectorAll('.control-label')    
 
     init()
+
+    const binary_search = (array, target) => {
+        let startIndex = 0;
+        let endIndex = array.length - 1;
+        while(startIndex <= endIndex) {
+            let middleIndex = Math.floor((startIndex + endIndex) / 2);
+            // console.log('target--->',target,'----->',array[middleIndex].value)
+            if(target === parseInt(array[middleIndex].value)) {
+                return  middleIndex
+            }
+            if(target > parseInt(array[middleIndex].value)) {
+                // console.log("Searching the right side of Array")
+                startIndex = middleIndex + 1;
+            }
+            if(target < parseInt(array[middleIndex].value)) {
+                // console.log("Searching the left side of array")
+                endIndex = middleIndex - 1;
+            }            
+        }
+        return  -1        
+    }
+
+    invoicing_label.ondblclick = () =>{
+
+        let selected_lbl = ''
+        const lbls = invoicing_label.options.length;
+        for (let i = 0; i < lbls; i++){            
+            if (invoicing_label.options[i].selected === true){                
+                selected_lbl = invoicing_label.options[i].text
+                break;
+            }            
+        }        
+        contracts_arr.forEach(display_all);
+        fetch(`/_get_contracts_by_label/${selected_lbl}`).then(function (response) {
+            response.json().then(function (data) {                
+                
+                for (let contract of data) {
+                    // console.log('contract.id',contract.id)
+                    const contr = contracts_options.length;                     
+                    const idx = binary_search(contracts_arr,contract.id)
+                    if(idx !== -1){
+                        contracts_options[idx].selected = true
+                    }                    
+                }
+                let counter = 0           
+                for (let contract of contracts_arr) {
+                    if(contract.selected !== true){
+                        contract.style = 'display:none'
+                    }else{
+                        counter++
+                    }
+                }
+                contracts.size = counter
+                // contracts_arr.forEach(hide_unselected);
+                
+            });
+        });
+        
+        searching()
+    }
 
     contracts.onclick = () =>{
         if(document.getElementById('msg_close') !== null){
@@ -30,6 +95,17 @@
         }   
     }
 
+    function hide_unselected(item,counter) {
+        if(item.selected !== true){
+            item.style = 'display:none'
+        }
+    }
+
+    function display_all(item) {        
+        item.style = 'block'
+        item.selected = false      
+    }
+    
     function init(){
         
         if(search_field.value !== '' && search_field.value !== 'none'){
@@ -39,8 +115,11 @@
             search_field.value = ''
         }
         invoicing_group.style = 'display:none' 
-           
+        contracts_arr.forEach(display_all);
+        inv_labels_arr.forEach(display_all);
+        initBackground()           
     }
+
     search_field.onkeyup = () => searching()
     
     contracts.ondblclick = () =>{        
@@ -59,31 +138,30 @@
         const key_word = search_field.value.toLowerCase()
         const form_date = new Date(start_date.value)
               
-        values.forEach(value => {
-            const tokens = value.firstChild.textContent.split(' - ')
+        contracts_options.forEach(opt => {
+            const tokens = opt.firstChild.textContent.split(' - ')
+            
             let curr_end_date = new Date(tokens[tokens.length - 1])
             let curr_start_date = new Date(tokens[tokens.length - 2])
             counter++;
-            if(!value.firstChild.textContent.toLowerCase().includes(key_word) ||
+            if(!opt.firstChild.textContent.toLowerCase().includes(key_word) ||
                 (curr_end_date < form_date || curr_start_date >  form_date)){
-                value.style = 'display:none'
+                    opt.style = 'display:none'
                 counter--;
                 
             }else{
-                value.style = 'block'                
+                opt.style = 'block'                
             }
         });
         if(counter === 0){
-            contracts.value = ''
+            contracts.opt = ''
         }
         if(counter >15){
             counter = 15;
         }   
         contracts.size = counter;
         initBackground()
-        // console.log(contracts.size)
-        // console.log(key_word)
-        // console.log(counter)
+
     };
 
 
