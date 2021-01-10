@@ -2159,7 +2159,7 @@ def create_subcontract():
 
     if form.validate_on_submit():
         curr_contract = get_contract_by_internal_id(
-            form.contract_data.data.internal_id)
+            form.contracts.data.internal_id)
 
         if curr_contract.start_date is None:
             set_contarct_dates(curr_contract, form.start_date.data)
@@ -2201,7 +2201,7 @@ def create_subcontract():
 
         else:
             new_sub_contract = (SubContract(itn=form.itn.data,
-                                            contract_id=form.contract_data.data.id,
+                                            contract_id=form.contracts.data.id,
                                             object_name=form.object_name.data,
                                             invoice_group_id=form.invoice_group.data.id,
                                             measuring_type_id=form.measuring_type.data.id,
@@ -2260,7 +2260,7 @@ def create_subcontract():
 
             # forecasted_vol = check_and_load_hourly_schedule(form)
             # new_sub_contract = SubContract(itn = form.itn.data.itn,
-            #                         contract_id = form.contract_data.data.id, \
+            #                         contract_id = form.contracts.data.id, \
             #                         object_name = form.object_name.data,\
             #                         price = form_price, \
             #                         invoice_group_id = form.invoice_group.data.id, \
@@ -2303,7 +2303,7 @@ def create_subcontract():
             # flash(f'form_sub_end_date: {form_sub_end_date}', 'info')
             # flash(f'old_sub_end_date: {old_sub_end_date}', 'info')
 
-    return render_template('create_subcontract.html', title='Create SubContract', form=form)
+    return render_template('create_subcontract.html', title='Create SubContract', form=form, need_dt_picker=True)
 
 
 @app.route('/modify_contractor', methods=['GET', 'POST'])
@@ -2867,11 +2867,11 @@ def modify(key_word):
         if form.validate_on_submit():
             if form.modify_contract.data:
                 contract_id = form.contracts.data[0].id
-                return redirect(url_for('modify_selected_contract', contract_id=contract_id, key_word=key_word, **request.args))
+                return redirect(url_for('modify_selected_contract', contract_id=contract_id, key_word=key_word, need_dt_picker=True, **request.args))
         else:
             print(f'{form.errors}')
 
-        return render_template('modify.html', title='Readcting', form=form, header='Redacting', key_word=key_word)
+        return render_template('modify.html', title='Readcting', form=form, header='Redacting', key_word=key_word, need_dt_picker=True)
 
 
 @app.route('/modify_inv_group/<inv_name>/<key_word>', methods=['GET', 'POST'])
@@ -3268,6 +3268,7 @@ def _get_itn_data(itn):
 def _get_subcontracts(start_date, end_date, filter_arg, is_id):
 
     is_id = True if is_id != '0' else False
+    print(f'is_id {is_id}')
     filters = (Contract.id == filter_arg,) if is_id else (
         SubContract.itn == filter_arg,)
     # print(f'filters\n{is_id}')
@@ -3279,6 +3280,32 @@ def _get_subcontracts(start_date, end_date, filter_arg, is_id):
         ~((SubContract.start_date > end_date) | (SubContract.end_date < start_date))).filter(*filters).all()
 
     sub_schema = SubContractSchema()
+    print(f'subs {subs}')
+    try:
+        return jsonify(sub_schema.dump(subs, many=True))
+    except:
+        return jsonify([])
+
+@app.route('/_get_all_subcontracts/<filter_arg>/<is_id>', methods=['GET', 'POST'])
+@login_required
+def _get_all_subcontracts(filter_arg, is_id):
+
+    is_id = True if is_id != '0' else False
+
+    if not is_id:
+        subs = SubContract.query.filter(SubContract.itn == filter_arg).all()
+    else:
+        subs = SubContract.query.join(Contract, Contract.id == SubContract.contract_id).filter(Contract.id == filter_arg).all()
+
+
+    
+    # filters = (Contract.id == filter_arg,) if is_id else (
+    #     SubContract.itn == filter_arg,)
+    # # print(f'filters\n{is_id}')    
+    # subs = SubContract.query.join(Contract, Contract.id == SubContract.contract_id).filter(*filters).all()
+
+    sub_schema = SubContractSchema()
+    # print(f'subs {subs}')
     try:
         return jsonify(sub_schema.dump(subs, many=True))
     except:
@@ -3315,6 +3342,30 @@ def _get_contracts_by_label(label_name):
     except:
         return jsonify([])
 
+@app.route('/_get_all_inv_group_for_contractor/<contract_id>', methods=['GET', 'POST'])
+@login_required
+def _get_all_inv_group_for_contractor(contract_id):
+    all_groups_for_contractor = (InvoiceGroup.query.join(Contractor, Contractor.id == InvoiceGroup.contractor_id)
+                                .filter(Contractor.id == (Contract.query.filter(Contract.id == contract_id))
+                                .first().contractor.id)
+                                .all())
+    # groups = InvoiceGroup.query.join(Contract).filter(InvoiceGroup.contractor_id == contractor_id).all()
+    group_schema = InvoiceGroupSchema()
+    try:
+        return jsonify(group_schema.dump(all_groups_for_contractor, many=True))
+    except:
+        return jsonify([])
+
+@app.route('/_get_contract_by_id/<contract_id>', methods=['GET', 'POST'])
+@login_required
+def _get_contract_by_id(contract_id):
+    contract = Contract.query.filter(Contract.id == contract_id).all()
+    # groups = InvoiceGroup.query.join(Contract).filter(InvoiceGroup.contractor_id == contractor_id).all()
+    contract_schema = ContractSchema()
+    try:
+        return jsonify(contract_schema.dump(contract, many=True))
+    except:
+        return jsonify([])
 
 @app.route('/_get_forecast/<start_date>/<end_date>/<forecast_id>', methods=['GET', 'POST'])
 @login_required

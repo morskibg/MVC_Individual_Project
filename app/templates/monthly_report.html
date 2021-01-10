@@ -140,6 +140,7 @@
               
         contracts_options.forEach(opt => {
             const tokens = opt.firstChild.textContent.split(' - ')
+            
             let curr_end_date = new Date(tokens[tokens.length - 1])
             let curr_start_date = new Date(tokens[tokens.length - 2])
             counter++;

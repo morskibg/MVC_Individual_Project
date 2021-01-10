@@ -74,6 +74,7 @@ def update_or_insert(df, table_name, remove_nan = False):
 
 
 def convert_date_from_utc(time_zone, dt_obj, is_string = True, t_format = "%Y-%m-%d %H:%M:%S", str_format = "%Y-%m-%d"):
+    # print(f'from convert_date_from_utc --- > {dt_obj}')
     if(dt_obj is None):
         return None
     if isinstance(dt_obj, str):

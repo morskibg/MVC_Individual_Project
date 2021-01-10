@@ -3,10 +3,229 @@
 
 
 {% block app_content %} 
-    <div class='col-md-3'></div>             
-    <div class='col-md-6'>                      
-        <h1>Create SubContract</h1> 
+                
+    <div class='col-md-12'>                      
+        <h1>Create Subcontract</h1> 
         {{ wtf.quick_form(form) }} 
     </div> 
-    <div class='col-md-3'> </div>    
+       
+{% endblock %}
+
+{% block form_scripts %}
+    <script>
+        const search_field = document.getElementById('search');
+        const itn = document.getElementById('itn');
+        const contracts = document.getElementById('contracts');
+        const contracts_arr = Array.prototype.slice.call(contracts.querySelectorAll('option'))
+
+        const inv_groups = document.getElementById('invoice_group');
+        const inv_groups_arr = Array.prototype.slice.call(inv_groups.querySelectorAll('option'))
+
+        const start_date = document.getElementById('start_datepicker');
+        const end_date = document.getElementById('end_datepicker');  
+        // const invoice_group_name = document.getElementById('invoice_group_name');
+        // const contracts = document.getElementById('contracts');
+        // const measuring_type = document.getElementById('measuring_type_id');
+        // const values = document.querySelectorAll('option') 
+
+        init()
+
+        search_field.onchange = () =>{
+            searching()
+        }
+
+        // itn.onkeyup = () =>{
+        //     select_empty_for_contract()
+        //     search_for_contract()
+        // }
+
+        // itn.onchange = () => { 
+        //     select_empty_for_contract()
+        //     search_for_contract()                            
+        // };
+        
+        // function searching(key_word){            
+        //     let counter = 1;                   
+        //     contracts_arr.forEach(value => {
+                
+        //         if(value.firstChild !== null){
+        //             if(!value.firstChild.textContent.toLowerCase().includes(key_word.toLowerCase())){                        
+        //                 value.style = 'display:none'
+        //                 counter++;                        
+        //             }else{                        
+        //                 value.style = 'block'      
+        //                 value.selected = true          
+        //             }
+        //         }
+        //         if(contracts_arr.length === counter){
+        //             value.firstChild = null 
+        //         }                
+        //     });            
+        // }
+        contracts.ondblclick = () =>{
+            
+            hide_all_inv_groups() 
+                     
+            // const item = inv_groups_arr[binary_search(contracts_arr,parseInt(contracts.value))]
+            // console.log(item)
+            // const tokens = item.firstChild.textContent.split(' - ')
+            // console.log(tokens)
+            // end_date.value = new Date(tokens[tokens.length - 1]).toISOString().split('T')[0]
+            // start_date.value = new Date(tokens[tokens.length - 2]).toISOString().split('T')[0]
+            fetch(`/_get_contract_by_id/${contracts.value}`).then(function(response){                
+                response.json().then(function(data){
+                   
+                    let date = new Date(data[0].start_date); // Or the date you'd like converted.
+                    start_date.value = new Date(date.getTime() - (date.getTimezoneOffset() * 120000)).toISOString().split('T')[0];
+                    // console.log(date.getTimezoneOffset())
+                    date = new Date(data[0].end_date); 
+                    end_date.value = new Date(date.getTime() - (date.getTimezoneOffset() * 120000)).toISOString().split('T')[0];
+                                                             
+                });
+            })
+            .catch(error => console.log('in error',error) );
+
+            fetch(`/_get_all_inv_group_for_contractor/${contracts.value}`).then(function(response){                
+                response.json().then(function(data){
+                    let inner_c = 1                                       
+                    for(let inv_gr of data){                                
+                        const idx = binary_search(inv_groups_arr,inv_gr.id)
+                        if(idx !== -1){                                    
+                            inv_groups_arr[idx].style = 'block'
+                            inner_c++
+                        }  
+                    } 
+                    inv_groups.size = inner_c
+                    initBackground()                                                   
+                });
+            })
+            .catch(error => console.log('in error',error) );
+        }
+
+        function searching(){
+            unselect_all_contracts()
+            hide_all_inv_groups()            
+            let counter = 1;
+            const key_word = search_field.value.toLowerCase()
+                
+            contracts_arr.forEach(item => {
+                
+                counter++;
+                if(!item.firstChild.textContent.toLowerCase().includes(key_word)){
+                    item.style = 'display:none'
+                    counter--;                    
+                }else{                    
+                    item.style = 'block' 
+                    // item.selected = true                      
+                    // const tokens = item.firstChild.textContent.split(' - ')
+                    // end_date.value = new Date(tokens[tokens.length - 1]).toISOString().split('T')[0]
+                    // start_date.value = new Date(tokens[tokens.length - 2]).toISOString().split('T')[0]
+                    
+                    // fetch(`/_get_all_inv_group_for_contractor/${item.value}`).then(function(response){                
+                    //     response.json().then(function(data){
+                    //         let inner_c = 0                                         
+                    //         for(let inv_gr of data){                                
+                    //             const idx = binary_search(inv_groups_arr,inv_gr.id)
+                    //             if(idx !== -1){                                    
+                    //                 inv_groups_arr[idx].style = 'block'
+                    //                 inner_c++
+                    //             }  
+                    //         } 
+                    //         inv_groups.size = inner_c
+                    //         initBackground()                                                   
+                    //     });
+                    // })
+                    // .catch(error => console.log('in error',error) );
+                }                
+            });
+           
+            contracts.size = counter;              
+        }
+
+        function init(){
+            search_field.value = ''
+            itn.value = ''
+            unselect_all_contracts()
+            initBackground()
+            hide_all_inv_groups()
+            
+                        
+        }
+
+        // function show_selected_inv_groups(){
+        //     inv_groups_arr.forEach(item =>{
+        //         if(item.selected !== true){
+        //             item.style = 'display:none'
+        //         }
+        //     })
+        // }
+
+        function hide_all_inv_groups(){
+            console.log('in hiding')
+            inv_groups_arr.forEach(item =>{
+                
+                item.style = 'display:none'
+                item.selected = false
+                
+            })
+        }
+
+        function unselect_all_contracts(){
+            contracts_arr.forEach(item =>{
+                
+                item.style = 'block'
+                item.selected = false
+                
+            })
+        }
+
+        function select_empty_for_contract(){
+            contracts_arr.forEach(item => {                
+                if(item.firstChild === null){                    
+                    item.selected = true
+                }
+            })
+        }
+
+        function search_for_contract(){            
+            fetch(`/_get_last_subcontract/${itn.value}/${0}`).then(function(response){                
+                response.json().then(function(data){             
+                    for(let sub of data){                         
+                        invoice_group_name.value = sub.invoice_group.name 
+
+
+
+
+                        searching(sub.contract.internal_id)                           
+                    }                              
+                    initBackground()                              
+                });
+            })
+            .catch(error => console.log('in error',error) );
+        }
+
+        const binary_search = (array, target) => {
+            let startIndex = 0;
+            let endIndex = array.length - 1;
+            while(startIndex <= endIndex) {
+                let middleIndex = Math.floor((startIndex + endIndex) / 2);
+                // console.log('target--->',target,'----->',array[middleIndex].value)
+                if(target === parseInt(array[middleIndex].value)) {
+                    // console.log("returning")
+                    return  middleIndex
+                }
+                if(target > parseInt(array[middleIndex].value)) {
+                    // console.log("Searching the right side of Array")
+                    startIndex = middleIndex + 1;
+                }
+                if(target < parseInt(array[middleIndex].value)) {
+                    // console.log("Searching the left side of array")
+                    endIndex = middleIndex - 1;
+                }            
+            }
+            return  -1        
+        }
+        
+        
+    </script>
 {% endblock %}

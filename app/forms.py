@@ -188,12 +188,13 @@ class StpCoeffsForm(FlaskForm):
 
 class CreateSubForm(FlaskForm):
 
-    # itn = QuerySelectField(query_factory = lambda: ItnMeta.query, allow_blank = False,get_label='itn', validators=[DataRequired()])
+    search = StringField(id='search', validators = [Optional()])
     itn = StringField(id='itn', validators = [DataRequired()])
-    contract_data = QuerySelectField(query_factory = lambda: Contract.query.join(Contractor, Contractor.id == Contract.contractor_id).order_by(Contractor.name), allow_blank = False,get_label=Contract.__str__  , validators=[DataRequired()])
+    contracts = QuerySelectField(query_factory = lambda: Contract.query.order_by(Contract.id), allow_blank = False,get_label=Contract.__str__  , validators=[DataRequired()], render_kw={'size':15})
     start_date = StringField(id='start_datepicker', validators = [DataRequired()])
     end_date = StringField(id='end_datepicker', validators = [DataRequired()])
-    invoice_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[DataRequired()])
+    # invoice_group_name = StringField('Invoicing Group Name', validators=[DataRequired()])
+    invoice_group = QuerySelectField(query_factory = lambda: InvoiceGroup.query, allow_blank = False,get_label=InvoiceGroup.__str__, validators=[DataRequired()], render_kw={'size':3})
     # price = DecimalField('Price',validators=[NumberRange(min = 0.01, max = 300),DataRequired()], default = 100)
     tariff_name = SelectField( 'Tariff Type',validators=[DataRequired()])
     single_tariff_price = DecimalField('Single Tariff Price',validators=[NumberRange(min = 0.01, max = 300),DataRequired()], default = 100)
@@ -391,10 +392,13 @@ class ModifyForm(FlaskForm):
                                                                             month = 12 if int(dt.datetime.utcnow().month) == 1 else int(dt.datetime.utcnow().month) - 1))
     contracts = QuerySelectMultipleField(id = 'contracts',query_factory = lambda: Contract.query.join(Contractor).order_by(Contractor.name).all(), allow_blank = False,get_label=Contract.__str__, validators=[Optional()], render_kw={'size':15})
     modify_contract = SubmitField('Modify Contract',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px'})
+    
     invoice_groups = NonValidatingSelectMultipleField(id = 'invoice_groups',choices = [],validators=[Optional()], render_kw={'size':10})    
     modify_inv_group = SubmitField('Modify Invoicing Group',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px', 'type':'button', 'onclick':'modifyInvGroup()'})
     itns = NonValidatingSelectMultipleField(id = 'itns',choices = [],validators=[Optional()])
     modify_itn = SubmitField('Modify ITN',render_kw={'style': 'margin-bottom:30px ; font-size:150% ; width:400px','type':'button', 'onclick':'modifyItn()'})
+    sub_contracts = NonValidatingSelectField('Sub Contracts for selected contract based in search ITN')
+    sub_contracts_all = NonValidatingSelectField('All Subcontracts for selected ITN')
 
 class ModifyInvGroupForm(FlaskForm):
     from_contractor = NonValidatingSelectField(id = 'from_contractor',choices = [],validators=[Optional()])
