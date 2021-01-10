@@ -1,8 +1,8 @@
-"""added invoicing_label to contracts _ test
+"""added invoicing label__production
 
-Revision ID: e0e880ea5480
-Revises: cdf312632e16
-Create Date: 2021-01-08 10:29:32.700644
+Revision ID: 38711a333691
+Revises: fedbcb1df714
+Create Date: 2021-01-08 12:24:40.531038
 
 """
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'e0e880ea5480'
-down_revision = 'cdf312632e16'
+revision = '38711a333691'
+down_revision = 'fedbcb1df714'
 branch_labels = None
 depends_on = None
 
