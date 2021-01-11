@@ -258,5 +258,6 @@ dist
 *.xlsx
 *.csv
 migrations/**
+.migrations/**
 .static
 .flaskenv
