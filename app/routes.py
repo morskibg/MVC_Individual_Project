@@ -282,8 +282,6 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours=(10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours=(10 * 24))
 
-        
-
         # if request.files.get('file_').filename != '':
         #     df = pd.read_excel(request.files.get('file_'), sheet_name=None)
         #     if df.get('data') is None:
@@ -292,7 +290,6 @@ def test():
         #         return redirect(url_for('modify', key_word=key_word))
         #     if set(df['data'].columns).issubset(['acc_411', 'invoicing_label', 'internal_id']):
         #         input_df = validate_input_df(df['data'])
-
         #         grouped_dict = dict(tuple(input_df.groupby('invoicing_label')))
         #         for key in grouped_dict.keys():
         #             df = grouped_dict[key]
@@ -309,6 +306,7 @@ def test():
         #                 .all()
         #             )
         #             if(len(contracts) > len(acc_411_list)):
+r
 
         #                 df.duplicated(keep='last')
         #                 # print('haha')
