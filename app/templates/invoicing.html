@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+{% block app_content %} 
+<div class='col-md-1'></div>             
+<div class='col-md-10'>                      
+    <h1>{{header|safe}}</h1> 
+   
+    {{ wtf.quick_form(form,button_map={'submit': 'primary','submit_delete':'danger','modify_invoice':'danger','create_invoice':'primary'},id='tet') }}
+    
+
+</div> 
+<div class='col-md-1'> </div> > 
+ 
+{% endblock %}
+{% block form_scripts %}
+<script type="text/javascript">
+
+    const search_field = document.getElementById('search')
+    const invoices = document.getElementById('invoicing_list')
+    const invoices_arr = Array.prototype.slice.call(invoices.querySelectorAll('option'))
+
+    search_field.onkeyup = () => searching()
+
+
+    function searching(){
+        
+        let counter = 0;
+        const key_word = search_field.value.toLowerCase()
+        // values.forEach(value => value.style = 'block')        
+        invoices_arr.forEach(item => {
+            counter++;
+            if(!item.firstChild.textContent.toLowerCase().includes(key_word)){
+                item.style = 'display:none'
+                counter--;
+                // if(counter === 0){
+                //     contracts.value = ''
+                // }
+            }else{
+                item.style = 'block'                
+            }
+            
+        });
+        // if(counter === 1){                
+        //     contracts.value = ''
+        // };
+        if(counter >60){
+            counter = 60;
+        }   
+        invoices.size = counter;
+        // console.log(contracts.size)
+        initBackground() 
+    }
+</script>
+{% endblock %}
