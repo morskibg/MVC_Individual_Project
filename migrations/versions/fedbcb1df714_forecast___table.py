@@ -1,8 +1,8 @@
-"""forecast type table
+"""forecast__ table
 
-Revision ID: cdf312632e16
+Revision ID: fedbcb1df714
 Revises: 07612b4fc718
-Create Date: 2021-01-04 16:02:07.486954
+Create Date: 2021-01-05 13:45:19.158789
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'cdf312632e16'
+revision = 'fedbcb1df714'
 down_revision = '07612b4fc718'
 branch_labels = None
 depends_on = None
