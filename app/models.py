@@ -589,6 +589,7 @@ class Invoice(BaseModel):
     price = db.Column(db.Numeric(7,4), nullable=False, default = 0)
     invoice_group_id = db.Column(db.Integer, db.ForeignKey('invoice_group.id', ondelete='CASCADE', onupdate = 'CASCADE'), nullable=False)
     last_updated = db.Column(db.DateTime, default = dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
+    mailing_date = db.Column(db.DateTime, default = None)
 
     def __repr__(self):
         # contractor = Contractor.query.filter(Contractor.id == self.contractor_id).all()

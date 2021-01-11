@@ -1,10 +1,12 @@
 import os
 import time
+import datetime as dt
 from threading import Thread
 from flask import current_app, flash
 from flask_mail import Message
 from app import app
 from app import mail
+from app.models import Invoice, Mail
 
 
 def send_async_email(app, msg):
@@ -45,8 +47,16 @@ def send_email(recipients, file_data, subject = "From GED automated invoice send
             time.sleep(1)
 
     Thread(target=send_async_email,args=(current_app._get_current_object(), msg)).start()
+    try:
+        sent_inv = Invoice.query.filter(Invoice.id == int(file_data[0][1].split('.')[0])).first()
+        sent_inv.update({'mailing_date':dt.datetime.utcnow()})
 
-    if len(file_data) > 1:
-        flash(f'Invoice {file_data[0][1]} and {file_data[1][1]} were sent to: {recipients} has been sent ', 'success')
-    else:
-        flash(f'File {file_data[0][1]} was sent to: {recipients} ', 'info')
+    except:
+        print(f'Unable to update invoicing table: {file_data[0][1]}') 
+
+    finally:  
+        if len(file_data) > 1:       
+            flash(f'Invoice {file_data[0][1]} and {file_data[1][1]} were sent to: {recipients} has been sent ', 'success')        
+        else:
+            flash(f'File {file_data[0][1]} was sent to: {recipients} ', 'info')
+        
