@@ -121,6 +121,7 @@ def inject_is_test_base():
     # base_name = base_name.split('/')[3]
     # base_name = base_name.split('?')[0]
     is_test_base = False if base_name.find('Ged_EU_v1') != -1 else True
+    # print(f'is_test_base {is_test_base}' )
 
     return dict(is_test_base=is_test_base)
 
@@ -274,6 +275,7 @@ def test():
         # end_date = convert_date_to_utc('EET','2020-10-31')
         end_date = end_date + dt.timedelta(hours=23)
 
+
         # montly_start_date = start_date.replace(day = 1)
         # montly_end_date = end_date.replace(year = int(end_date.year) , day = calendar.monthrange(end_date.year,int(end_date.month))[1], month = int(end_date.month) )
         # print(f'{montly_start_date} - {montly_end_date}')
@@ -288,9 +290,6 @@ def test():
         #         return redirect(url_for('modify', key_word=key_word))
         #     if set(df['data'].columns).issubset(['acc_411', 'invoicing_label', 'internal_id']):
         #         input_df = validate_input_df(df['data'])
-
-        #         # grouped_df = input_df.groupby('invoicing_label')
-        #         # print(f'{grouped_df.groups.keys()}')
         #         grouped_dict = dict(tuple(input_df.groupby('invoicing_label')))
         #         for key in grouped_dict.keys():
         #             df = grouped_dict[key]
@@ -307,39 +306,42 @@ def test():
         #                 .all()
         #             )
         #             if(len(contracts) > len(acc_411_list)):
-        #                 # print('haha')
-        #                 to_remove_internal = []
-        #                 internal_id_list = df[df['internal_id'].notnull()]['internal_id']
-        #                 for tk in internal_id_list:
-        #                     # print(f' tk {tk}')
-        #                     all_internals = (
-        #                         db.session.query(
-        #                             Contract.internal_id
-        #                         )
-        #                         .join(Contractor, Contractor.id == Contract.contractor_id)
-        #                         .filter(Contractor.id == (Contract.query.join(Contractor, Contractor.id == Contract.contractor_id).filter(Contract.internal_id == tk).first().contractor_id))
-        #                         .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
-        #                         .all()
-        #                     )
-        #                     to_remove_internal += [x[0] for x in all_internals if x[0] != tk ] 
-                            
-        #                     # print(f'{key} \n{to_remove_internal}')
-        #                 contracts = (
-        #                     db.session.query(
-        #                         Contract.id
-        #                     )
-        #                     .join(Contractor, Contractor.id == Contract.contractor_id)
-        #                     .filter(Contractor.acc_411.in_(acc_411_list))
-        #                     .filter(~Contract.internal_id.in_(to_remove_internal))
-        #                     .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
-        #                     .all()
-        #                 )
-        #             contract_ids = [x[0] for x in contracts]
-        #             for contract_id in contract_ids:
-        #                 curr_contract = Contract.query.filter(Contract.id == contract_id).first()
-        #                 curr_contract.update({'invoicing_label':key})
+r
 
-        #             print(f'++++++++++++++++++++++ {contract_ids} ++++++++++++++++++++')
+        #                 df.duplicated(keep='last')
+        #                 # print('haha')
+        #             #     to_remove_internal = []
+        #             #     internal_id_list = df[df['internal_id'].notnull()]['internal_id']
+        #             #     for tk in internal_id_list:
+        #             #         # print(f' tk {tk}')
+        #             #         all_internals = (
+        #             #             db.session.query(
+        #             #                 Contract.internal_id
+        #             #             )
+        #             #             .join(Contractor, Contractor.id == Contract.contractor_id)
+        #             #             .filter(Contractor.id == (Contract.query.join(Contractor, Contractor.id == Contract.contractor_id).filter(Contract.internal_id == tk).first().contractor_id))
+        #             #             .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
+        #             #             .all()
+        #             #         )
+        #             #         to_remove_internal += [x[0] for x in all_internals if x[0] != tk ] 
+                            
+        #             #         # print(f'{key} \n{to_remove_internal}')
+        #             #     contracts = (
+        #             #         db.session.query(
+        #             #             Contract.id
+        #             #         )
+        #             #         .join(Contractor, Contractor.id == Contract.contractor_id)
+        #             #         .filter(Contractor.acc_411.in_(acc_411_list))
+        #             #         .filter(~Contract.internal_id.in_(to_remove_internal))
+        #             #         .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
+        #             #         .all()
+        #             #     )
+        #             # contract_ids = [x[0] for x in contracts]
+        #             # for contract_id in contract_ids:
+        #             #     curr_contract = Contract.query.filter(Contract.id == contract_id).first()
+        #             #     curr_contract.update({'invoicing_label':key})
+
+        #             # print(f'++++++++++++++++++++++ {contract_ids} ++++++++++++++++++++')
 
         # contractors_411 = ['411-3-247','411-3-268','411-3-267','411-4-46']
         # contracts = (
