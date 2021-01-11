@@ -257,6 +257,6 @@ dist
 *.pdf
 *.xlsx
 *.csv
-migrations
+migrations/versions
 .static
 .flaskenv
