@@ -280,66 +280,66 @@ def test():
         invoice_start_date = start_date + dt.timedelta(hours=(10 * 24 + 1))
         invoice_end_date = end_date + dt.timedelta(hours=(10 * 24))
 
-        if request.files.get('file_').filename != '':
-            df = pd.read_excel(request.files.get('file_'), sheet_name=None)
-            if df.get('data') is None:
-                flash(
-                    f'Upload failed from missing data spreadsheet in excel file', 'danger')
-                return redirect(url_for('modify', key_word=key_word))
-            if set(df['data'].columns).issubset(['acc_411', 'invoicing_label', 'internal_id']):
-                input_df = validate_input_df(df['data'])
+        # if request.files.get('file_').filename != '':
+        #     df = pd.read_excel(request.files.get('file_'), sheet_name=None)
+        #     if df.get('data') is None:
+        #         flash(
+        #             f'Upload failed from missing data spreadsheet in excel file', 'danger')
+        #         return redirect(url_for('modify', key_word=key_word))
+        #     if set(df['data'].columns).issubset(['acc_411', 'invoicing_label', 'internal_id']):
+        #         input_df = validate_input_df(df['data'])
 
-                # grouped_df = input_df.groupby('invoicing_label')
-                # print(f'{grouped_df.groups.keys()}')
-                grouped_dict = dict(tuple(input_df.groupby('invoicing_label')))
-                for key in grouped_dict.keys():
-                    df = grouped_dict[key]
-                    # print(f'{key} \n{df}')
-                    acc_411_list = [x for x in df['acc_411']]
+        #         # grouped_df = input_df.groupby('invoicing_label')
+        #         # print(f'{grouped_df.groups.keys()}')
+        #         grouped_dict = dict(tuple(input_df.groupby('invoicing_label')))
+        #         for key in grouped_dict.keys():
+        #             df = grouped_dict[key]
+        #             # print(f'{key} \n{df}')
+        #             acc_411_list = [x for x in df['acc_411']]
                     
-                    contracts = (
-                        db.session.query(
-                            Contract.id
-                        )
-                        .join(Contractor, Contractor.id == Contract.contractor_id)
-                        .filter(Contractor.acc_411.in_(acc_411_list))
-                        .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
-                        .all()
-                    )
-                    if(len(contracts) > len(acc_411_list)):
-                        # print('haha')
-                        to_remove_internal = []
-                        internal_id_list = df[df['internal_id'].notnull()]['internal_id']
-                        for tk in internal_id_list:
-                            # print(f' tk {tk}')
-                            all_internals = (
-                                db.session.query(
-                                    Contract.internal_id
-                                )
-                                .join(Contractor, Contractor.id == Contract.contractor_id)
-                                .filter(Contractor.id == (Contract.query.join(Contractor, Contractor.id == Contract.contractor_id).filter(Contract.internal_id == tk).first().contractor_id))
-                                .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
-                                .all()
-                            )
-                            to_remove_internal += [x[0] for x in all_internals if x[0] != tk ] 
+        #             contracts = (
+        #                 db.session.query(
+        #                     Contract.id
+        #                 )
+        #                 .join(Contractor, Contractor.id == Contract.contractor_id)
+        #                 .filter(Contractor.acc_411.in_(acc_411_list))
+        #                 .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
+        #                 .all()
+        #             )
+        #             if(len(contracts) > len(acc_411_list)):
+        #                 # print('haha')
+        #                 to_remove_internal = []
+        #                 internal_id_list = df[df['internal_id'].notnull()]['internal_id']
+        #                 for tk in internal_id_list:
+        #                     # print(f' tk {tk}')
+        #                     all_internals = (
+        #                         db.session.query(
+        #                             Contract.internal_id
+        #                         )
+        #                         .join(Contractor, Contractor.id == Contract.contractor_id)
+        #                         .filter(Contractor.id == (Contract.query.join(Contractor, Contractor.id == Contract.contractor_id).filter(Contract.internal_id == tk).first().contractor_id))
+        #                         .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
+        #                         .all()
+        #                     )
+        #                     to_remove_internal += [x[0] for x in all_internals if x[0] != tk ] 
                             
-                            # print(f'{key} \n{to_remove_internal}')
-                        contracts = (
-                            db.session.query(
-                                Contract.id
-                            )
-                            .join(Contractor, Contractor.id == Contract.contractor_id)
-                            .filter(Contractor.acc_411.in_(acc_411_list))
-                            .filter(~Contract.internal_id.in_(to_remove_internal))
-                            .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
-                            .all()
-                        )
-                    contract_ids = [x[0] for x in contracts]
-                    for contract_id in contract_ids:
-                        curr_contract = Contract.query.filter(Contract.id == contract_id).first()
-                        curr_contract.update({'invoicing_label':key})
+        #                     # print(f'{key} \n{to_remove_internal}')
+        #                 contracts = (
+        #                     db.session.query(
+        #                         Contract.id
+        #                     )
+        #                     .join(Contractor, Contractor.id == Contract.contractor_id)
+        #                     .filter(Contractor.acc_411.in_(acc_411_list))
+        #                     .filter(~Contract.internal_id.in_(to_remove_internal))
+        #                     .filter(~((Contract.start_date > end_date) | (Contract.end_date < start_date)))
+        #                     .all()
+        #                 )
+        #             contract_ids = [x[0] for x in contracts]
+        #             for contract_id in contract_ids:
+        #                 curr_contract = Contract.query.filter(Contract.id == contract_id).first()
+        #                 curr_contract.update({'invoicing_label':key})
 
-                    print(f'++++++++++++++++++++++ {contract_ids} ++++++++++++++++++++')
+        #             print(f'++++++++++++++++++++++ {contract_ids} ++++++++++++++++++++')
 
         # contractors_411 = ['411-3-247','411-3-268','411-3-267','411-4-46']
         # contracts = (
@@ -504,26 +504,33 @@ def test():
         # temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
         # temp_df.to_excel('temp/zop_after_03_2021_.xlsx')
         # print(f'{temp_df}')
-        # rec = (
-        #     db.session.query(
-        #         SubContract.itn, MeasuringType.code.label('measuring_type'), Erp.name.label('erp'),
-        #         Contractor.name.label('contractor_name'), Contractor.acc_411, Contractor.eic.label('bulstat'),
-        #         ContractType.name.label('contract_type'),Contract.end_date
-        #     )
-        #     .join(Contract,Contract.id == SubContract.contract_id)
-        #     .join(Contractor,Contractor.id == Contract.contractor_id)
-        #     .join(ItnMeta, ItnMeta.itn == SubContract.itn)
-        #     .join(Erp, Erp.id == ItnMeta.erp_id)
-        #     .join(MeasuringType, MeasuringType.id == SubContract.measuring_type_id)
-        #     .join(ContractType, ContractType.id == Contract.contract_type_id)
-        #     .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
-        #     .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
-        #     .filter(ContractType.name == 'Procurement')
-        #     # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
-        #     .limit(5)
-        #     .all()
-        # )
-        # print(f'{len(rec)}')
+        ##################################### za 40k0 ###################################################################
+        rec = (
+            db.session.query(
+                SubContract.itn, MeasuringType.code.label('measuring_type'), Erp.name.label('erp'),
+                Contractor.name.label('contractor_name'), Contractor.acc_411, Contractor.eic.label('bulstat'),
+                ContractType.name.label('contract_type'),InvoiceGroup.name.label('invoicing_group_code'),
+                InvoiceGroup.description.label('invoicing_group_description'), AddressMurs.name.label('address_db'),
+                Contractor.address.label('address_bulstat'), Contract.start_date, Contract.end_date,
+                Contract.invoicing_label
+            )
+            .join(Contract,Contract.id == SubContract.contract_id)
+            .join(Contractor,Contractor.id == Contract.contractor_id)
+            .join(ItnMeta, ItnMeta.itn == SubContract.itn)
+            .join(AddressMurs, AddressMurs.id == ItnMeta.address_id)
+            .join(Erp, Erp.id == ItnMeta.erp_id)
+            .join(MeasuringType, MeasuringType.id == SubContract.measuring_type_id)
+            .join(ContractType, ContractType.id == Contract.contract_type_id)
+            .join(InvoiceGroup, InvoiceGroup.id == SubContract.invoice_group_id)
+            .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+            # .filter(ContractType.name == 'Procurement')
+            # .filter(~((SubContract.start_date > end_date) | (SubContract.end_date < start_date)))
+            # .limit(5)
+            .all()
+        )
+        temp_df = pd.DataFrame.from_records(rec, columns = rec[0].keys())
+        temp_df.to_excel('temp/itns_actual_to_12_2020.xlsx')
+        print(f'{len(rec)}')
         ##############################################################################################
         # alias_for_parent_contractor = aliased(Contractor)
         # rec = (
