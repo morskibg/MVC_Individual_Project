@@ -306,7 +306,7 @@ def test():
         #                 .all()
         #             )
         #             if(len(contracts) > len(acc_411_list)):
-r
+
 
         #                 df.duplicated(keep='last')
         #                 # print('haha')
