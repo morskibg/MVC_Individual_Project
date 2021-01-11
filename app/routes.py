@@ -1070,7 +1070,7 @@ def create_invoice():
                 form.invoicing_list.choices = parse_integra_csv(invoice_df)
 
     # return render_template('create_invoice.html', title='Invoice Creation', form=form)
-    return render_template('quick_template_wider.html', title='Invoice Creation', form=form)
+    return render_template('invoicing.html', title='Invoice Creation', form=form)
 
 
 @app.route('/erp', methods=['GET', 'POST'])
