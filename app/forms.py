@@ -335,7 +335,7 @@ class InvoiceForm(FlaskForm):
 
     file_integra_csv = FileField('Browse for Integra CSV File')
     upload_csv = SubmitField('Upload CSV')
-
+    search = StringField(id='search', validators = [Optional()])
     invoicing_list = SelectMultipleField('Select records for invoice creation',coerce=int, choices=[],  render_kw={'size':65})
     # invoicing_list = StringField('Select records for invoice creation',  validators=[Optional()], render_kw={'size':25})
     modify_invoice = SubmitField('Modify invoice')
