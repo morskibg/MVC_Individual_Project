@@ -22,6 +22,7 @@
     const contracts_options = contracts.querySelectorAll('option')
     const contracts_arr = Array.prototype.slice.call(contracts_options)
     const inv_labels_arr = Array.prototype.slice.call(invoicing_label.querySelectorAll('option'))
+    const refs_arr = Array.prototype.slice.call(document.getElementById('ref_files').querySelectorAll('option'))
     const invoicing_group = document.getElementById('invoicing_group')
     const start_date = document.getElementById('start_datepicker');
     const end_date = document.getElementById('end_datepicker');  
@@ -117,6 +118,7 @@
         invoicing_group.style = 'display:none' 
         contracts_arr.forEach(display_all);
         inv_labels_arr.forEach(display_all);
+        refs_arr.forEach(display_all);
         initBackground()           
     }
 
